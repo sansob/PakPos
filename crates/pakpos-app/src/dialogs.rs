@@ -28,10 +28,12 @@ impl PakPosApp {
             Dialog::ImportCurl { text, error } => {
                 let r = egui::Modal::new(Id::new("import_curl")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(620.0);
-                    title(ui, "Import cURL");
+                    title(ui, crate::i18n::tr("Import cURL"));
                     ui.label(
-                        RichText::new("Paste a command from your terminal or a browser's “Copy as cURL”.")
-                            .color(p.text_weak),
+                        RichText::new(crate::i18n::tr(crate::i18n::tr(
+                            "Paste a command from your terminal or a browser's “Copy as cURL”.",
+                        )))
+                        .color(p.text_weak),
                     );
                     ui.add_space(6.0);
                     ui.add(
@@ -39,7 +41,9 @@ impl PakPosApp {
                             .code_editor()
                             .desired_rows(10)
                             .desired_width(f32::INFINITY)
-                            .hint_text("curl https://api.example.com/users -H 'Accept: application/json'"),
+                            .hint_text(crate::i18n::tr(
+                                "curl https://api.example.com/users -H 'Accept: application/json'",
+                            )),
                     );
                     if let Some(e) = error {
                         ui.label(RichText::new(e.as_str()).color(theme::RED));
@@ -47,10 +51,10 @@ impl PakPosApp {
                     ui.add_space(8.0);
                     let mut result = None;
                     ui.horizontal(|ui| {
-                        if widgets::primary_button(ui, "Import").clicked() {
+                        if widgets::primary_button(ui, crate::i18n::tr("Import")).clicked() {
                             result = Some(codegen::parse_curl(text));
                         }
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(crate::i18n::tr("Cancel")).clicked() {
                             keep = false;
                         }
                     });
@@ -64,7 +68,7 @@ impl PakPosApp {
                         self.active = self.push_tab(req, None);
                         self.tabs[self.active].dirty = true;
                         keep = false;
-                        self.toast("cURL imported into a new tab");
+                        self.toast(crate::i18n::tr("cURL imported into a new tab"));
                     }
                     Some(Err(e)) => *error = Some(e.to_string()),
                     None => {}
@@ -73,8 +77,8 @@ impl PakPosApp {
             Dialog::SaveRequest { tab, collection, new_collection, name } => {
                 let r = egui::Modal::new(Id::new("save_request")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(440.0);
-                    title(ui, "Save request");
-                    ui.label("Name");
+                    title(ui, crate::i18n::tr("Save request"));
+                    ui.label(crate::i18n::tr("Name"));
                     ui.add(
                         egui::TextEdit::singleline(name)
                             .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
@@ -82,27 +86,27 @@ impl PakPosApp {
                             .desired_width(f32::INFINITY),
                     );
                     ui.add_space(8.0);
-                    ui.label("Collection");
+                    ui.label(crate::i18n::tr("Collection"));
                     egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
                         for c in &self.ws.collections {
                             ui.radio_value(collection, Some(c.id.clone()), &c.name);
                         }
-                        ui.radio_value(collection, None, "New collection…");
+                        ui.radio_value(collection, None, crate::i18n::tr("New collection…"));
                     });
                     if collection.is_none() {
                         ui.add(
                             egui::TextEdit::singleline(new_collection)
                                 .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                                 .vertical_align(egui::Align::Center)
-                                .hint_text("Collection name")
+                                .hint_text(crate::i18n::tr("Collection name"))
                                 .desired_width(f32::INFINITY),
                         );
                     }
                     ui.add_space(10.0);
                     let mut save = false;
                     ui.horizontal(|ui| {
-                        save = widgets::primary_button(ui, "Save").clicked();
-                        if ui.button("Cancel").clicked() {
+                        save = widgets::primary_button(ui, crate::i18n::tr("Save")).clicked();
+                        if ui.button(crate::i18n::tr("Cancel")).clicked() {
                             keep = false;
                         }
                     });
@@ -115,8 +119,11 @@ impl PakPosApp {
                     let cid = match collection.clone() {
                         Some(id) => id,
                         None => {
-                            let n =
-                                if new_collection.trim().is_empty() { "My collection" } else { new_collection.trim() };
+                            let n = if new_collection.trim().is_empty() {
+                                crate::i18n::tr("My collection")
+                            } else {
+                                new_collection.trim()
+                            };
                             let c = Collection::new(n);
                             let id = c.id.clone();
                             self.open_nodes.insert(id.clone());
@@ -130,7 +137,11 @@ impl PakPosApp {
                     let t = &mut self.tabs[*tab];
                     let mut req = t.request.clone();
                     req.id = pakpos_core::model::new_id();
-                    req.name = if name.trim().is_empty() { "Untitled request".into() } else { name.trim().to_string() };
+                    req.name = if name.trim().is_empty() {
+                        crate::i18n::tr("Untitled request").into()
+                    } else {
+                        name.trim().to_string()
+                    };
                     clean_request(&mut req);
                     t.request.id = req.id.clone();
                     t.request.name = req.name.clone();
@@ -140,27 +151,27 @@ impl PakPosApp {
                         c.items.push(Item::Request(req));
                     }
                     self.persist_collection(&cid);
-                    self.toast("Request saved");
+                    self.toast(crate::i18n::tr("Request saved"));
                     keep = false;
                 }
             }
             Dialog::NewCollection { name } => {
                 let r = egui::Modal::new(Id::new("new_collection")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(380.0);
-                    title(ui, "New collection");
+                    title(ui, crate::i18n::tr("New collection"));
                     let resp = ui.add(
                         egui::TextEdit::singleline(name)
                             .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                             .vertical_align(egui::Align::Center)
-                            .hint_text("e.g. Payments API")
+                            .hint_text(crate::i18n::tr("e.g. Payments API"))
                             .desired_width(f32::INFINITY),
                     );
                     resp.request_focus();
                     ui.add_space(10.0);
                     let mut ok = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.horizontal(|ui| {
-                        ok |= widgets::primary_button(ui, "Create").clicked();
-                        if ui.button("Cancel").clicked() {
+                        ok |= widgets::primary_button(ui, crate::i18n::tr("Create")).clicked();
+                        if ui.button(crate::i18n::tr("Cancel")).clicked() {
                             keep = false;
                         }
                     });
@@ -183,7 +194,7 @@ impl PakPosApp {
             Dialog::Rename { target, name } => {
                 let r = egui::Modal::new(Id::new("rename")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(380.0);
-                    title(ui, "Rename");
+                    title(ui, crate::i18n::tr("Rename"));
                     let resp = ui.add(
                         egui::TextEdit::singleline(name)
                             .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
@@ -194,8 +205,8 @@ impl PakPosApp {
                     ui.add_space(10.0);
                     let mut ok = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.horizontal(|ui| {
-                        ok |= widgets::primary_button(ui, "Rename").clicked();
-                        if ui.button("Cancel").clicked() {
+                        ok |= widgets::primary_button(ui, crate::i18n::tr("Rename")).clicked();
+                        if ui.button(crate::i18n::tr("Cancel")).clicked() {
                             keep = false;
                         }
                     });
@@ -212,18 +223,20 @@ impl PakPosApp {
             Dialog::ConfirmDelete { target, label } => {
                 let r = egui::Modal::new(Id::new("confirm_delete")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(380.0);
-                    title(ui, "Delete?");
-                    ui.label(format!("“{label}” will be deleted permanently."));
+                    title(ui, crate::i18n::tr("Delete?"));
+                    ui.label(crate::i18n::trf("“{label}” will be deleted permanently.", &[("label", label)]));
                     ui.add_space(12.0);
                     let mut ok = false;
                     ui.horizontal(|ui| {
                         ok = ui
                             .add(
-                                egui::Button::new(RichText::new("Delete").color(egui::Color32::WHITE).strong())
-                                    .fill(theme::RED),
+                                egui::Button::new(
+                                    RichText::new(crate::i18n::tr("Delete")).color(egui::Color32::WHITE).strong(),
+                                )
+                                .fill(theme::RED),
                             )
                             .clicked();
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(crate::i18n::tr("Cancel")).clicked() {
                             keep = false;
                         }
                     });
@@ -246,25 +259,41 @@ impl PakPosApp {
             Dialog::Settings => {
                 let r = egui::Modal::new(Id::new("settings")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(480.0);
-                    title(ui, "Settings");
+                    title(ui, crate::i18n::tr("Settings"));
                     let mut changed = false;
                     let s = &mut self.ws.settings;
                     egui::Grid::new("settings_grid").num_columns(2).spacing([16.0, 10.0]).show(ui, |ui| {
-                        ui.label("Theme");
+                        ui.label(crate::i18n::tr("Theme"));
                         ui.horizontal(|ui| {
-                            changed |= ui.selectable_value(&mut s.theme, Theme::Dark, "🌙 Dark").changed();
-                            changed |= ui.selectable_value(&mut s.theme, Theme::Light, "☀ Light").changed();
+                            changed |=
+                                ui.selectable_value(&mut s.theme, Theme::Dark, crate::i18n::tr("🌙 Dark")).changed();
+                            changed |=
+                                ui.selectable_value(&mut s.theme, Theme::Light, crate::i18n::tr("☀ Light")).changed();
                         });
                         ui.end_row();
-                        ui.label("Font size");
+                        ui.label(crate::i18n::tr("Language"));
+                        let current = crate::i18n::current();
+                        let mut lang = current;
+                        egui::ComboBox::from_id_salt("language").selected_text(lang.name()).show_ui(ui, |ui| {
+                            for l in crate::i18n::Lang::ALL {
+                                ui.selectable_value(&mut lang, l, l.name());
+                            }
+                        });
+                        if lang != current {
+                            crate::i18n::set(lang);
+                            s.language = Some(lang.code().to_string());
+                            changed = true;
+                        }
+                        ui.end_row();
+                        ui.label(crate::i18n::tr("Font size"));
                         changed |= ui.add(egui::Slider::new(&mut s.font_scale_percent, 80..=160).suffix("%")).changed();
                         ui.end_row();
-                        ui.label("Request timeout");
+                        ui.label(crate::i18n::tr("Request timeout"));
                         changed |= ui
                             .add(egui::DragValue::new(&mut s.http.timeout_secs).range(1..=600).suffix(" s"))
                             .changed();
                         ui.end_row();
-                        ui.label("Follow redirects");
+                        ui.label(crate::i18n::tr("Follow redirects"));
                         ui.horizontal(|ui| {
                             changed |= ui.checkbox(&mut s.http.follow_redirects, "").changed();
                             changed |= ui
@@ -275,21 +304,21 @@ impl PakPosApp {
                                 .changed();
                         });
                         ui.end_row();
-                        ui.label("Verify TLS certificates");
+                        ui.label(crate::i18n::tr("Verify TLS certificates"));
                         changed |= ui.checkbox(&mut s.http.verify_tls, "").changed();
                         ui.end_row();
-                        ui.label("Proxy");
+                        ui.label(crate::i18n::tr("Proxy"));
                         changed |= ui
                             .add(
                                 egui::TextEdit::singleline(&mut s.http.proxy)
                                     .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                                     .vertical_align(egui::Align::Center)
-                                    .hint_text("http://127.0.0.1:8080")
+                                    .hint_text(crate::i18n::tr("http://127.0.0.1:8080"))
                                     .desired_width(260.0),
                             )
                             .changed();
                         ui.end_row();
-                        ui.label("User-Agent");
+                        ui.label(crate::i18n::tr("User-Agent"));
                         changed |= ui
                             .add(
                                 egui::TextEdit::singleline(&mut s.http.user_agent)
@@ -302,26 +331,33 @@ impl PakPosApp {
                     });
                     if !s.http.verify_tls {
                         ui.label(
-                            RichText::new("⚠ TLS verification is off: only use this for local development.")
-                                .small()
-                                .color(theme::YELLOW),
+                            RichText::new(crate::i18n::tr(crate::i18n::tr(
+                                "⚠ TLS verification is off: only use this for local development.",
+                            )))
+                            .small()
+                            .color(theme::YELLOW),
                         );
                     }
                     ui.add_space(8.0);
                     changed |= client_certs_editor(ui, &mut s.http.client_certs, &p);
                     ui.add_space(8.0);
                     ui.label(
-                        RichText::new(format!("Workspace folder: {}", self.ws.root.display()))
-                            .small()
-                            .color(p.text_weak),
+                        RichText::new(crate::i18n::trf(
+                            "Workspace folder: {path}",
+                            &[("path", &self.ws.root.display().to_string())],
+                        ))
+                        .small()
+                        .color(p.text_weak),
                     );
                     ui.label(
-                        RichText::new("Set PAKPOS_HOME to use another folder (e.g. a git repo shared with your team).")
-                            .small()
-                            .color(p.text_weak),
+                        RichText::new(crate::i18n::tr(crate::i18n::tr(
+                            "Set PAKPOS_HOME to use another folder (e.g. a git repo shared with your team).",
+                        )))
+                        .small()
+                        .color(p.text_weak),
                     );
                     ui.add_space(10.0);
-                    if widgets::primary_button(ui, "Done").clicked() {
+                    if widgets::primary_button(ui, crate::i18n::tr("Done")).clicked() {
                         keep = false;
                     }
                     changed
@@ -345,7 +381,7 @@ impl PakPosApp {
                 };
                 let r = egui::Modal::new(Id::new("snippet")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(680.0);
-                    title(ui, "Code snippet");
+                    title(ui, crate::i18n::tr("Code snippet"));
                     ui.horizontal(|ui| {
                         for l in SnippetLang::ALL {
                             ui.selectable_value(lang, l, l.label());
@@ -364,12 +400,12 @@ impl PakPosApp {
                             egui_extras::syntax_highlighting::code_view_ui(ui, &theme, &code, syntax);
                         });
                     });
-                    ui.label(RichText::new("Variables are resolved with the active environment. Secrets are included — share with care.").small().color(p.text_weak));
+                    ui.label(RichText::new(crate::i18n::tr("Variables are resolved with the active environment. Secrets are included — share with care.")).small().color(p.text_weak));
                     ui.add_space(8.0);
                     let mut copy = false;
                     ui.horizontal(|ui| {
-                        copy = widgets::primary_button(ui, "Copy").clicked();
-                        if ui.button("Close").clicked() {
+                        copy = widgets::primary_button(ui, crate::i18n::tr("Copy")).clicked();
+                        if ui.button(crate::i18n::tr("Close")).clicked() {
                             keep = false;
                         }
                     });
@@ -377,7 +413,7 @@ impl PakPosApp {
                 });
                 if r.inner {
                     ctx.copy_text(code);
-                    self.toast("Snippet copied");
+                    self.toast(crate::i18n::tr("Snippet copied"));
                 }
                 if r.should_close() {
                     keep = false;
@@ -400,13 +436,17 @@ impl PakPosApp {
                                 theme::NAVY_700
                             }));
                         });
-                        ui.label(format!("Version {}", pakpos_core::VERSION));
+                        ui.label(crate::i18n::trf("Version {v}", &[("v", pakpos_core::VERSION)]));
                         ui.add_space(6.0);
-                        ui.label("A fast, native, open-source API client written in Rust.");
+                        ui.label(crate::i18n::tr("A fast, native, open-source API client written in Rust."));
                         ui.hyperlink_to("github.com/sansob/PakPos", "https://github.com/sansob/PakPos");
-                        ui.label(RichText::new("Licensed under MIT or Apache-2.0").small().color(p.text_weak));
+                        ui.label(
+                            RichText::new(crate::i18n::tr("Licensed under MIT or Apache-2.0"))
+                                .small()
+                                .color(p.text_weak),
+                        );
                         ui.add_space(10.0);
-                        if ui.button("Close").clicked() {
+                        if ui.button(crate::i18n::tr("Close")).clicked() {
                             keep = false;
                         }
                     });
@@ -428,7 +468,7 @@ impl PakPosApp {
         let mut open = true;
         let mut changed = false;
         let mut new_env = false;
-        egui::Window::new("Environments")
+        egui::Window::new(crate::i18n::tr("Environments"))
             .id(Id::new("env_window"))
             .open(&mut open)
             .default_size([760.0, 460.0])
@@ -440,8 +480,8 @@ impl PakPosApp {
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
                         ui.set_width(180.0);
-                        widgets::section_title(ui, "Scopes");
-                        if ui.selectable_label(selected.is_none(), "🌐 Globals").clicked() {
+                        widgets::section_title(ui, crate::i18n::tr("Scopes"));
+                        if ui.selectable_label(selected.is_none(), crate::i18n::tr("🌐 Globals")).clicked() {
                             *selected = None;
                         }
                         ui.separator();
@@ -453,7 +493,7 @@ impl PakPosApp {
                             }
                         }
                         ui.add_space(6.0);
-                        if ui.button("+ New environment").clicked() {
+                        if ui.button(crate::i18n::tr("+ New environment")).clicked() {
                             new_env = true;
                         }
                     });
@@ -462,14 +502,20 @@ impl PakPosApp {
                         let scope = pakpos_core::vars::VarScope::new();
                         match selected.clone() {
                             None => {
-                                ui.label(RichText::new("Globals").strong().size(16.0));
+                                ui.label(RichText::new(crate::i18n::tr("Globals")).strong().size(16.0));
                                 ui.label(
-                                    RichText::new("Available in every request, lowest priority.")
+                                    RichText::new(crate::i18n::tr("Available in every request, lowest priority."))
                                         .small()
                                         .color(p.text_weak),
                                 );
                                 ui.add_space(6.0);
-                                changed |= widgets::kv_table(ui, "globals", &mut self.ws.globals, &scope, "Variable");
+                                changed |= widgets::kv_table(
+                                    ui,
+                                    "globals",
+                                    &mut self.ws.globals,
+                                    &scope,
+                                    crate::i18n::tr("Variable"),
+                                );
                             }
                             Some(id) => {
                                 let active_id = self.ws.settings.active_environment.clone();
@@ -485,7 +531,7 @@ impl PakPosApp {
                                             )
                                             .changed();
                                         if active_id.as_deref() != Some(env.id.as_str())
-                                            && ui.button("Set active").clicked()
+                                            && ui.button(crate::i18n::tr("Set active")).clicked()
                                         {
                                             self.actions
                                                 .push(crate::app::Action::SetActiveEnvironment(Some(env.id.clone())));
@@ -493,8 +539,13 @@ impl PakPosApp {
                                     });
                                     ui.add_space(6.0);
                                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                                        changed |=
-                                            widgets::kv_table(ui, "env_vars", &mut env.variables, &scope, "Variable");
+                                        changed |= widgets::kv_table(
+                                            ui,
+                                            "env_vars",
+                                            &mut env.variables,
+                                            &scope,
+                                            crate::i18n::tr("Variable"),
+                                        );
                                     });
                                 } else {
                                     *selected = None;
@@ -505,7 +556,10 @@ impl PakPosApp {
                 });
             });
         if new_env {
-            let env = pakpos_core::Environment::new(format!("Environment {}", self.ws.environments.len() + 1));
+            let env = pakpos_core::Environment::new(crate::i18n::trf(
+                "Environment {n}",
+                &[("n", &(self.ws.environments.len() + 1).to_string())],
+            ));
             *selected = Some(env.id.clone());
             self.ws.environments.push(env);
             changed = true;
@@ -534,7 +588,7 @@ impl PakPosApp {
         let mut open = true;
         let mut changed = false;
         let mut trust = None;
-        let title = format!("Collection — {}", self.ws.collections[idx].name);
+        let title = crate::i18n::trf("Collection — {name}", &[("name", &self.ws.collections[idx].name)]);
         egui::Window::new(title)
             .id(Id::new("collection_window"))
             .open(&mut open)
@@ -549,34 +603,34 @@ impl PakPosApp {
                     ui,
                     tab,
                     &[
-                        (CollectionTab::General, "General".into()),
+                        (CollectionTab::General, crate::i18n::tr("General").into()),
                         (CollectionTab::Variables, widgets::counted("Variables", c.variables.iter().filter(|v| !v.is_blank()).count())),
-                        (CollectionTab::Scripts, if c.scripts.is_empty() { "Scripts".into() } else { "Scripts ●".into() }),
+                        (CollectionTab::Scripts, if c.scripts.is_empty() { crate::i18n::tr("Scripts").into() } else { format!("{} ●", crate::i18n::tr("Scripts")) }),
                     ],
                 );
                 egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| match tab {
                     CollectionTab::General => {
-                        ui.label("Name");
+                        ui.label(crate::i18n::tr("Name"));
                         changed |= ui.add(egui::TextEdit::singleline(&mut c.name).min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT)).vertical_align(egui::Align::Center).desired_width(f32::INFINITY)).changed();
                         ui.add_space(6.0);
-                        ui.label("Description (Markdown)");
+                        ui.label(crate::i18n::tr("Description (Markdown)"));
                         changed |= ui
                             .add(egui::TextEdit::multiline(&mut c.description).desired_rows(8).desired_width(f32::INFINITY))
                             .changed();
                         ui.add_space(6.0);
-                        ui.label(RichText::new(format!("{} requests · id {}", c.request_count(), c.id)).small().color(p.text_weak));
+                        ui.label(RichText::new(crate::i18n::trf("{n} requests · id {id}", &[("n", &c.request_count().to_string()), ("id", &c.id)])).small().color(p.text_weak));
                     }
                     CollectionTab::Variables => {
                         ui.label(
-                            RichText::new("Collection variables are shared by every request here and overridden by the active environment.")
+                            RichText::new(crate::i18n::tr("Collection variables are shared by every request here and overridden by the active environment."))
                                 .small()
                                 .color(p.text_weak),
                         );
                         ui.add_space(4.0);
-                        changed |= widgets::kv_table(ui, "coll_vars", &mut c.variables, &pakpos_core::vars::VarScope::new(), "Variable");
+                        changed |= widgets::kv_table(ui, "coll_vars", &mut c.variables, &pakpos_core::vars::VarScope::new(), crate::i18n::tr("Variable"));
                     }
                     CollectionTab::Scripts => {
-                        ui.label(RichText::new("These run around every request in the collection, before the request's own scripts.").small().color(p.text_weak));
+                        ui.label(RichText::new(crate::i18n::tr("These run around every request in the collection, before the request's own scripts.")).small().color(p.text_weak));
                         ui.add_space(4.0);
                         let mut action = None;
                         let trust_state = Some(trusted || !c.has_scripts());
@@ -594,12 +648,12 @@ impl PakPosApp {
                         }
                         ui.add_space(8.0);
                         ui.add_enabled_ui(trusted, |ui| {
-                            ui.checkbox(&mut network, "Allow network access for scripts (pm.sendRequest)")
-                                .on_disabled_hover_text("Trust the collection first");
+                            ui.checkbox(&mut network, crate::i18n::tr("Allow network access for scripts (pm.sendRequest)"))
+                                .on_disabled_hover_text(crate::i18n::tr("Trust the collection first"));
                         });
                         ui.label(
                             RichText::new(
-                                "Lets this collection's scripts send their own HTTP requests (e.g. to fetch a token). Stored in your settings, not in the collection file.",
+                                crate::i18n::tr("Lets this collection's scripts send their own HTTP requests (e.g. to fetch a token). Stored in your settings, not in the collection file."),
                             )
                             .small()
                             .color(p.text_weak),
@@ -706,7 +760,7 @@ impl PakPosApp {
         let Some(setup) = &mut self.runner_setup else { return };
         let mut open = true;
         let mut start = false;
-        egui::Window::new(format!("Run — {}", setup.collection))
+        egui::Window::new(crate::i18n::trf("Run — {name}", &[("name", &setup.collection)]))
             .id(Id::new("runner_setup"))
             .open(&mut open)
             .default_width(520.0)
@@ -717,7 +771,7 @@ impl PakPosApp {
             .frame(modal_frame(&p))
             .show(ctx, |ui| {
                 egui::Grid::new("runner_setup_grid").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
-                    ui.label("Data file");
+                    ui.label(crate::i18n::tr("Data file"));
                     ui.horizontal(|ui| {
                         let name = setup
                             .data_path
@@ -730,20 +784,22 @@ impl PakPosApp {
                             })
                             .unwrap_or_else(|| "none".into());
                         ui.label(RichText::new(name).monospace());
-                        if ui.button("Choose CSV / JSON…").clicked() {
+                        if ui.button(crate::i18n::tr("Choose CSV / JSON…")).clicked() {
                             if let Some(path) = rfd::FileDialog::new().add_filter("Data", &["csv", "json"]).pick_file()
                             {
                                 setup.load_data(path.display().to_string());
                             }
                         }
-                        if setup.data_path.is_some() && ui.button("×").on_hover_text("No data file").clicked() {
+                        if setup.data_path.is_some()
+                            && ui.button("×").on_hover_text(crate::i18n::tr("No data file")).clicked()
+                        {
                             setup.data_path = None;
                             setup.data.clear();
                             setup.data_error = None;
                         }
                     });
                     ui.end_row();
-                    ui.label("Iterations");
+                    ui.label(crate::i18n::tr("Iterations"));
                     ui.horizontal(|ui| {
                         ui.add(
                             egui::DragValue::new(&mut setup.iterations)
@@ -752,21 +808,21 @@ impl PakPosApp {
                                 .custom_parser(|s| if s.trim() == "auto" { Some(0.0) } else { s.trim().parse().ok() }),
                         );
                         let effective = match (setup.iterations, setup.data.len()) {
-                            (0, 0) => "1 run".to_string(),
-                            (0, n) => format!("{n} (one per data row)"),
+                            (0, 0) => crate::i18n::tr("1 run").to_string(),
+                            (0, n) => crate::i18n::trf("{n} (one per data row)", &[("n", &n.to_string())]),
                             (n, _) => format!("{n}"),
                         };
                         ui.label(RichText::new(effective).small().color(p.text_weak));
                     });
                     ui.end_row();
-                    ui.label("Delay");
+                    ui.label(crate::i18n::tr("Delay"));
                     ui.horizontal(|ui| {
                         ui.add(egui::DragValue::new(&mut setup.delay_ms).range(0..=60_000).suffix(" ms"));
-                        ui.label(RichText::new("between requests").small().color(p.text_weak));
+                        ui.label(RichText::new(crate::i18n::tr("between requests")).small().color(p.text_weak));
                     });
                     ui.end_row();
                     ui.label("");
-                    ui.checkbox(&mut setup.stop_on_failure, "Stop at the first failure");
+                    ui.checkbox(&mut setup.stop_on_failure, crate::i18n::tr("Stop at the first failure"));
                     ui.end_row();
                 });
                 if let Some(e) = &setup.data_error {
@@ -775,9 +831,9 @@ impl PakPosApp {
                 if !setup.data.is_empty() {
                     ui.add_space(6.0);
                     ui.label(
-                        RichText::new(format!(
-                            "DATA PREVIEW · {} rows · columns are {{{{variables}}}}",
-                            setup.data.len()
+                        RichText::new(crate::i18n::trf(
+                            "DATA PREVIEW · {n} rows · columns are {{variables}}",
+                            &[("n", &setup.data.len().to_string())],
                         ))
                         .small()
                         .strong()
@@ -800,7 +856,7 @@ impl PakPosApp {
                 }
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
-                    start = widgets::primary_button(ui, "▶ Run").clicked();
+                    start = widgets::primary_button(ui, crate::i18n::tr("▶ Run")).clicked();
                 });
             });
         if start {
@@ -816,7 +872,7 @@ impl PakPosApp {
         let mut rerun = None;
         let Some(r) = &mut self.runner else { return };
         let mut open = r.open;
-        egui::Window::new(format!("Runner — {}", r.collection))
+        egui::Window::new(crate::i18n::trf("Runner — {name}", &[("name", &r.collection)]))
             .id(Id::new("runner"))
             .open(&mut open)
             .default_size([640.0, 540.0])
@@ -838,16 +894,24 @@ impl PakPosApp {
                         widgets::pill(ui, format!("tests {passed}/{total}"), p.text, p.surface_alt);
                         widgets::pill(ui, format!("{} ms", rep.total_ms), p.text, p.surface_alt);
                         if rep.iterations > 1 {
-                            widgets::pill(ui, format!("{} iterations", rep.iterations), p.text, p.surface_alt);
+                            widgets::pill(
+                                ui,
+                                crate::i18n::trf("{n} iterations", &[("n", &rep.iterations.to_string())]),
+                                p.text,
+                                p.surface_alt,
+                            );
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("⟳ Run again").clicked() {
+                            if ui.button(crate::i18n::tr("⟳ Run again")).clicked() {
                                 rerun = Some(r.setup.clone());
                             }
                         });
                     } else {
                         ui.add(egui::Spinner::new().color(theme::ORANGE));
-                        ui.label(format!("{finished}/{} requests", r.total));
+                        ui.label(crate::i18n::trf(
+                            "{done}/{total} requests",
+                            &[("done", &finished.to_string()), ("total", &r.total.to_string())],
+                        ));
                     }
                 });
                 ui.add(
@@ -864,10 +928,13 @@ impl PakPosApp {
                             last = rep.iteration;
                             ui.add_space(4.0);
                             ui.label(
-                                RichText::new(format!("ITERATION {}", rep.iteration + 1))
-                                    .small()
-                                    .strong()
-                                    .color(p.text_weak),
+                                RichText::new(crate::i18n::trf(
+                                    "ITERATION {n}",
+                                    &[("n", &(rep.iteration + 1).to_string())],
+                                ))
+                                .small()
+                                .strong()
+                                .color(p.text_weak),
                             );
                         }
                         ui.horizontal(|ui| {
@@ -900,7 +967,7 @@ impl PakPosApp {
                         }
                     }
                     if done && r.progress.is_empty() {
-                        ui.label("Collection has no requests.");
+                        ui.label(crate::i18n::tr("Collection has no requests."));
                     }
                 });
             });
@@ -918,9 +985,9 @@ impl PakPosApp {
 fn client_certs_editor(ui: &mut egui::Ui, certs: &mut Vec<pakpos_core::http::ClientCert>, p: &theme::Palette) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
-        ui.label(RichText::new("CLIENT CERTIFICATES (mTLS)").small().strong().color(p.text_weak));
+        ui.label(RichText::new(crate::i18n::tr("CLIENT CERTIFICATES (mTLS)")).small().strong().color(p.text_weak));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("+ Add").clicked() {
+            if ui.button(crate::i18n::tr("+ Add")).clicked() {
                 certs.push(pakpos_core::http::ClientCert { enabled: true, ..Default::default() });
                 changed = true;
             }
@@ -928,9 +995,11 @@ fn client_certs_editor(ui: &mut egui::Ui, certs: &mut Vec<pakpos_core::http::Cli
     });
     if certs.is_empty() {
         ui.label(
-            RichText::new("PEM certificate + key per host, used for HTTPS and gRPC (e.g. *.internal.example.com).")
-                .small()
-                .color(p.text_weak),
+            RichText::new(crate::i18n::tr(
+                "PEM certificate + key per host, used for HTTPS and gRPC (e.g. *.internal.example.com).",
+            ))
+            .small()
+            .color(p.text_weak),
         );
     }
     let mut remove = None;
@@ -947,11 +1016,11 @@ fn client_certs_editor(ui: &mut egui::Ui, certs: &mut Vec<pakpos_core::http::Cli
     for (i, cert) in certs.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             changed |= ui.checkbox(&mut cert.enabled, "").changed();
-            changed |= field(ui, &mut cert.host, "host or *.domain", 130.0);
+            changed |= field(ui, &mut cert.host, crate::i18n::tr("host or *.domain"), 130.0);
             changed |= field(ui, &mut cert.cert_path, "cert.pem", 120.0);
-            changed |= field(ui, &mut cert.key_path, "key.pem (optional)", 120.0);
-            changed |= field(ui, &mut cert.ca_path, "CA (optional)", 100.0);
-            if ui.button("×").on_hover_text("Remove").clicked() {
+            changed |= field(ui, &mut cert.key_path, crate::i18n::tr("key.pem (optional)"), 120.0);
+            changed |= field(ui, &mut cert.ca_path, crate::i18n::tr("CA (optional)"), 100.0);
+            if ui.button("×").on_hover_text(crate::i18n::tr("Remove")).clicked() {
                 remove = Some(i);
             }
         });

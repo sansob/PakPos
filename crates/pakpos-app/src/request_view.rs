@@ -73,7 +73,7 @@ impl PakPosApp {
                                             egui::Button::new(RichText::new("×").size(11.0).color(p.text_weak))
                                                 .frame(false),
                                         )
-                                        .on_hover_text("Close (Ctrl+W)")
+                                        .on_hover_text(crate::i18n::tr("Close (Ctrl+W)"))
                                         .clicked()
                                     {
                                         close = Some(i);
@@ -94,7 +94,7 @@ impl PakPosApp {
                     }
                     if ui
                         .add(egui::Button::new(RichText::new(" + ").strong()).frame(false))
-                        .on_hover_text("New tab (Ctrl+T)")
+                        .on_hover_text(crate::i18n::tr("New tab (Ctrl+T)"))
                         .clicked()
                     {
                         select = Some(usize::MAX);
@@ -153,7 +153,7 @@ impl PakPosApp {
             if let Some(c) = &breadcrumb {
                 ui.label(RichText::new(format!("{c}  /")).color(p.text_weak));
             } else {
-                ui.label(RichText::new("Unsaved  /").color(p.text_weak));
+                ui.label(RichText::new(crate::i18n::tr("Unsaved  /")).color(p.text_weak));
             }
             let name = egui::TextEdit::singleline(&mut tab.request.name)
                 .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
@@ -163,11 +163,15 @@ impl PakPosApp {
                 .desired_width(ui.available_width() - 200.0);
             changed |= ui.add(name).changed();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("</>").on_hover_text("Code snippet").clicked() {
+                if ui.button("</>").on_hover_text(crate::i18n::tr("Code snippet")).clicked() {
                     snippet = true;
                 }
-                let save_label = if tab.dirty || tab.source.is_none() { "💾 Save" } else { "✔ Saved" };
-                if ui.button(save_label).on_hover_text("Ctrl+S").clicked() {
+                let save_label = if tab.dirty || tab.source.is_none() {
+                    crate::i18n::tr("💾 Save")
+                } else {
+                    crate::i18n::tr("✔ Saved")
+                };
+                if ui.button(save_label).on_hover_text(crate::i18n::tr("Ctrl+S")).clicked() {
                     save = true;
                 }
             });
@@ -205,7 +209,10 @@ impl PakPosApp {
                             ui.separator();
                             let g = tab.request.kind == RequestKind::Grpc;
                             if ui
-                                .selectable_label(g, RichText::new("gRPC").strong().monospace().color(theme::LIME))
+                                .selectable_label(
+                                    g,
+                                    RichText::new(crate::i18n::tr("gRPC")).strong().monospace().color(theme::LIME),
+                                )
                                 .clicked()
                                 && !g
                             {
@@ -222,8 +229,13 @@ impl PakPosApp {
                             }
                             let m = tab.request.kind == RequestKind::Mcp;
                             if ui
-                                .selectable_label(m, RichText::new("MCP").strong().monospace().color(theme::ORANGE))
-                                .on_hover_text("Test an MCP server: call tools, read resources, get prompts")
+                                .selectable_label(
+                                    m,
+                                    RichText::new(crate::i18n::tr("MCP")).strong().monospace().color(theme::ORANGE),
+                                )
+                                .on_hover_text(crate::i18n::tr(crate::i18n::tr(
+                                    "Test an MCP server: call tools, read resources, get prompts",
+                                )))
                                 .clicked()
                                 && !m
                             {
@@ -287,7 +299,7 @@ impl PakPosApp {
                         ui,
                         &mut tab.url_edit,
                         &scope,
-                        "Enter URL or paste a cURL command",
+                        crate::i18n::tr("Enter URL or paste a cURL command"),
                         url_w,
                     );
                     if resp.changed() {
@@ -312,11 +324,11 @@ impl PakPosApp {
                     if tab.request.kind.is_realtime() {
                         let st = &tab.ws;
                         let label = if st.connected {
-                            "Disconnect"
+                            crate::i18n::tr("Disconnect")
                         } else if st.connecting {
-                            "Connecting…"
+                            crate::i18n::tr("Connecting…")
                         } else {
-                            "Connect"
+                            crate::i18n::tr("Connect")
                         };
                         if widgets::primary_button(ui, label).clicked() {
                             ws_action = Some(if st.connected || st.connecting {
@@ -331,8 +343,8 @@ impl PakPosApp {
                         send = false;
                     } else {
                         let loading = matches!(tab.response, crate::app::ResponseState::Loading { .. });
-                        if widgets::primary_button(ui, if loading { "Sending…" } else { "Send" })
-                            .on_hover_text("Ctrl+Enter")
+                        if widgets::primary_button(ui, crate::i18n::tr(if loading { "Sending…" } else { "Send" }))
+                            .on_hover_text(crate::i18n::tr("Ctrl+Enter"))
                             .clicked()
                         {
                             send = true;
@@ -344,9 +356,9 @@ impl PakPosApp {
         let missing = scope.unresolved(&tab.request.url);
         if !missing.is_empty() {
             ui.label(
-                RichText::new(format!(
-                    "⚠ Unresolved: {}",
-                    missing.iter().map(|m| format!("{{{{{m}}}}}")).collect::<Vec<_>>().join(", ")
+                RichText::new(crate::i18n::trf(
+                    "⚠ Unresolved: {vars}",
+                    &[("vars", &missing.iter().map(|m| format!("{{{{{m}}}}}")).collect::<Vec<_>>().join(", "))],
                 ))
                 .small()
                 .color(theme::RED),
@@ -357,19 +369,26 @@ impl PakPosApp {
         // Section tabs.
         let r = &tab.request;
         let body_label = match &r.body {
-            Body::None => "Body".to_string(),
+            Body::None => crate::i18n::tr("Body").to_string(),
             b => format!("Body ({})", b.kind().label()),
         };
         let mut items = vec![
             (ReqSection::Params, widgets::counted("Params", r.params.iter().filter(|k| !k.is_blank()).count())),
-            (ReqSection::Auth, "Auth".to_string()),
+            (ReqSection::Auth, crate::i18n::tr("Auth").to_string()),
             (ReqSection::Headers, widgets::counted("Headers", r.headers.iter().filter(|k| !k.is_blank()).count())),
             (ReqSection::Body, body_label),
             (ReqSection::Tests, widgets::counted("Tests", r.assertions.len())),
             (ReqSection::Extract, widgets::counted("Extract", r.extractions.len())),
-            (ReqSection::Scripts, if r.scripts.is_empty() { "Scripts".to_string() } else { "Scripts ●".to_string() }),
+            (
+                ReqSection::Scripts,
+                if r.scripts.is_empty() {
+                    crate::i18n::tr("Scripts").to_string()
+                } else {
+                    format!("{} ●", crate::i18n::tr("Scripts"))
+                },
+            ),
             (ReqSection::Examples, widgets::counted("Examples", r.examples.len())),
-            (ReqSection::Docs, "Docs".to_string()),
+            (ReqSection::Docs, crate::i18n::tr("Docs").to_string()),
         ];
         if r.kind == RequestKind::Grpc {
             items.retain(|(s, _)| !matches!(s, ReqSection::Params | ReqSection::Scripts | ReqSection::Examples));
@@ -378,7 +397,7 @@ impl PakPosApp {
                     ReqSection::Headers => {
                         *label = widgets::counted("Metadata", r.headers.iter().filter(|k| !k.is_blank()).count())
                     }
-                    ReqSection::Body => *label = "Message".into(),
+                    ReqSection::Body => *label = crate::i18n::tr("Message").into(),
                     _ => {}
                 }
             }
@@ -390,7 +409,7 @@ impl PakPosApp {
             items.retain(|(s, _)| !matches!(s, ReqSection::Params | ReqSection::Scripts | ReqSection::Examples));
             for (s, label) in items.iter_mut() {
                 if *s == ReqSection::Body {
-                    *label = "Call".into();
+                    *label = crate::i18n::tr("Call").into();
                 }
             }
             if tab.section == ReqSection::Params {
@@ -402,9 +421,9 @@ impl PakPosApp {
                 !matches!(s, ReqSection::Tests | ReqSection::Extract | ReqSection::Scripts | ReqSection::Examples)
             });
             items[3].1 = match r.kind {
-                RequestKind::Sse => "Stream",
-                RequestKind::Mqtt => "Topics",
-                _ => "Message",
+                RequestKind::Sse => crate::i18n::tr("Stream"),
+                RequestKind::Mqtt => crate::i18n::tr("Topics"),
+                _ => crate::i18n::tr("Message"),
             }
             .to_string();
             if r.kind == RequestKind::Mqtt {
@@ -416,18 +435,19 @@ impl PakPosApp {
         egui::ScrollArea::vertical().id_salt(("req_scroll", tab.uid)).auto_shrink([false, false]).show(ui, |ui| {
             match tab.section {
                 ReqSection::Params => {
-                    widgets::section_title(ui, "Query parameters");
-                    if widgets::kv_table(ui, "params", &mut tab.request.params, &scope, "Parameter") {
+                    widgets::section_title(ui, crate::i18n::tr("Query parameters"));
+                    if widgets::kv_table(ui, "params", &mut tab.request.params, &scope, crate::i18n::tr("Parameter")) {
                         changed = true;
                         tab.url_edit = compose_url(&tab.request);
                     }
                 }
                 ReqSection::Headers => {
-                    widgets::section_title(ui, "Headers");
-                    changed |= widgets::kv_table(ui, "headers", &mut tab.request.headers, &scope, "Header");
+                    widgets::section_title(ui, crate::i18n::tr("Headers"));
+                    changed |=
+                        widgets::kv_table(ui, "headers", &mut tab.request.headers, &scope, crate::i18n::tr("Header"));
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("Quick add:").small().color(p.text_weak));
+                        ui.label(RichText::new(crate::i18n::tr("Quick add:")).small().color(p.text_weak));
                         for (k, v) in [
                             ("Accept", "application/json"),
                             ("Content-Type", "application/json"),
@@ -520,13 +540,13 @@ impl PakPosApp {
                     changed |= crate::mock_view::examples_editor(ui, &mut tab.request.examples, tab.uid, &p);
                 }
                 ReqSection::Docs => {
-                    widgets::section_title(ui, "Description (Markdown)");
+                    widgets::section_title(ui, crate::i18n::tr("Description (Markdown)"));
                     changed |= ui
                         .add(
                             egui::TextEdit::multiline(&mut tab.request.description)
                                 .desired_rows(10)
                                 .desired_width(f32::INFINITY)
-                                .hint_text("Describe what this request does, expected inputs, etc."),
+                                .hint_text(crate::i18n::tr("Describe what this request does, expected inputs, etc.")),
                         )
                         .changed();
                 }
@@ -611,7 +631,7 @@ fn apply_url_edit(req: &mut pakpos_core::Request, text: &str) {
 /// The "Type" combo box shared by every auth kind.
 fn auth_type_picker(ui: &mut Ui, changed: &mut bool, auth: &mut Auth) {
     ui.horizontal(|ui| {
-        ui.label("Type");
+        ui.label(crate::i18n::tr("Type"));
         egui::ComboBox::from_id_salt("auth_type").width(190.0).selected_text(auth.label()).show_ui(ui, |ui| {
             for t in Auth::templates() {
                 let selected = auth.same_variant(&t);
@@ -653,13 +673,16 @@ fn auth_editor(
         auth_type_picker(ui, &mut changed, auth);
         if matches!(auth, Auth::Inherit) {
             ui.add_space(8.0);
-            ui.label(RichText::new("Uses OAuth 2.0 from the parent folder / collection.").color(p.text_weak));
+            ui.label(
+                RichText::new(crate::i18n::tr("Uses OAuth 2.0 from the parent folder / collection."))
+                    .color(p.text_weak),
+            );
             *oauth_action = crate::oauth_view::token_panel(ui, &parent, scope, tokens, job, p);
         }
         return changed;
     }
     ui.horizontal(|ui| {
-        ui.label("Type");
+        ui.label(crate::i18n::tr("Type"));
         egui::ComboBox::from_id_salt("auth_type").width(190.0).selected_text(auth.label()).show_ui(ui, |ui| {
             for t in Auth::templates() {
                 let selected = auth.same_variant(&t);
@@ -676,24 +699,24 @@ fn auth_editor(
         Auth::Inherit => {
             let text = match inherited {
                 Some(a) if !matches!(a, Auth::None | Auth::Inherit) => {
-                    format!("Uses {} from the parent folder / collection.", a.label())
+                    crate::i18n::trf("Uses {auth} from the parent folder / collection.", &[("auth", a.label())])
                 }
-                Some(_) => "The parent folder / collection has no auth.".to_string(),
-                None => "Not in a collection: no auth will be sent.".to_string(),
+                Some(_) => crate::i18n::tr("The parent folder / collection has no auth.").to_string(),
+                None => crate::i18n::tr("Not in a collection: no auth will be sent.").to_string(),
             };
             ui.label(RichText::new(text).color(p.text_weak));
             ui.end_row();
         }
         Auth::None => {
-            ui.label(RichText::new("This request does not use any authorization.").color(p.text_weak));
+            ui.label(RichText::new(crate::i18n::tr("This request does not use any authorization.")).color(p.text_weak));
             ui.end_row();
         }
         Auth::OAuth2(_) => {} // handled above
         Auth::Basic { username, password } => {
-            ui.label("Username");
+            ui.label(crate::i18n::tr("Username"));
             changed |= widgets::var_text_edit(ui, username, scope, "", w).changed();
             ui.end_row();
-            ui.label("Password");
+            ui.label(crate::i18n::tr("Password"));
             changed |= ui
                 .add(
                     egui::TextEdit::singleline(password)
@@ -706,67 +729,69 @@ fn auth_editor(
             ui.end_row();
         }
         Auth::Bearer { token } => {
-            ui.label("Token");
+            ui.label(crate::i18n::tr("Token"));
             changed |= widgets::var_text_edit(ui, token, scope, "{{token}}", w).changed();
             ui.end_row();
         }
         Auth::ApiKey { key, value, location } => {
-            ui.label("Key");
+            ui.label(crate::i18n::tr("Key"));
             changed |= widgets::var_text_edit(ui, key, scope, "X-API-Key", w).changed();
             ui.end_row();
-            ui.label("Value");
+            ui.label(crate::i18n::tr("Value"));
             changed |= widgets::var_text_edit(ui, value, scope, "", w).changed();
             ui.end_row();
-            ui.label("Add to");
+            ui.label(crate::i18n::tr("Add to"));
             ui.horizontal(|ui| {
-                changed |= ui.radio_value(location, ApiKeyLocation::Header, "Header").changed();
-                changed |= ui.radio_value(location, ApiKeyLocation::Query, "Query params").changed();
+                changed |= ui.radio_value(location, ApiKeyLocation::Header, crate::i18n::tr("Header")).changed();
+                changed |= ui.radio_value(location, ApiKeyLocation::Query, crate::i18n::tr("Query params")).changed();
             });
             ui.end_row();
         }
         Auth::Digest { username, password } => {
-            ui.label("Username");
+            ui.label(crate::i18n::tr("Username"));
             changed |= widgets::var_text_edit(ui, username, scope, "", w).changed();
             ui.end_row();
-            ui.label("Password");
+            ui.label(crate::i18n::tr("Password"));
             changed |= password_edit(ui, password, w);
             ui.end_row();
             ui.label("");
             ui.label(
-                RichText::new("Sent after the server's 401 challenge (MD5, SHA-256, -sess, qop auth).")
-                    .small()
-                    .color(p.text_weak),
+                RichText::new(crate::i18n::tr(
+                    "Sent after the server's 401 challenge (MD5, SHA-256, -sess, qop auth).",
+                ))
+                .small()
+                .color(p.text_weak),
             );
             ui.end_row();
         }
         Auth::Ntlm { username, password, domain, workstation } => {
-            ui.label("Username");
+            ui.label(crate::i18n::tr("Username"));
             changed |= widgets::var_text_edit(ui, username, scope, "DOMAIN\\user", w).changed();
             ui.end_row();
-            ui.label("Password");
+            ui.label(crate::i18n::tr("Password"));
             changed |= password_edit(ui, password, w);
             ui.end_row();
-            ui.label("Domain");
+            ui.label(crate::i18n::tr("Domain"));
             changed |= widgets::var_text_edit(ui, domain, scope, "optional", w).changed();
             ui.end_row();
-            ui.label("Workstation");
+            ui.label(crate::i18n::tr("Workstation"));
             changed |= widgets::var_text_edit(ui, workstation, scope, "optional", w).changed();
             ui.end_row();
         }
         Auth::AwsSigV4(cfg) => {
-            ui.label("Access key");
+            ui.label(crate::i18n::tr("Access key"));
             changed |= widgets::var_text_edit(ui, &mut cfg.access_key, scope, "{{aws_access_key}}", w).changed();
             ui.end_row();
-            ui.label("Secret key");
+            ui.label(crate::i18n::tr("Secret key"));
             changed |= password_edit(ui, &mut cfg.secret_key, w);
             ui.end_row();
-            ui.label("Session token");
+            ui.label(crate::i18n::tr("Session token"));
             changed |= widgets::var_text_edit(ui, &mut cfg.session_token, scope, "optional", w).changed();
             ui.end_row();
-            ui.label("Region");
+            ui.label(crate::i18n::tr("Region"));
             changed |= widgets::var_text_edit(ui, &mut cfg.region, scope, "us-east-1", w).changed();
             ui.end_row();
-            ui.label("Service");
+            ui.label(crate::i18n::tr("Service"));
             changed |= widgets::var_text_edit(ui, &mut cfg.service, scope, "execute-api, s3, lambda…", w).changed();
             ui.end_row();
         }
@@ -812,7 +837,7 @@ fn body_editor(
                     changed |= ui.selectable_value(language, l, l.label()).changed();
                 }
             });
-            if *language == RawLanguage::Json && ui.button("Beautify").clicked() {
+            if *language == RawLanguage::Json && ui.button(crate::i18n::tr("Beautify")).clicked() {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(content) {
                     if let Ok(pretty) = serde_json::to_string_pretty(&v) {
                         *content = pretty;
@@ -825,7 +850,10 @@ fn body_editor(
     ui.add_space(6.0);
     match body {
         Body::None => {
-            ui.label(RichText::new("This request does not have a body.").color(ui.visuals().weak_text_color()));
+            ui.label(
+                RichText::new(crate::i18n::tr("This request does not have a body."))
+                    .color(ui.visuals().weak_text_color()),
+            );
         }
         Body::Raw { content, language } => {
             let lang = match language {
@@ -848,18 +876,24 @@ fn body_editor(
                         .code_editor()
                         .desired_rows(14)
                         .desired_width(f32::INFINITY)
-                        .hint_text("{ \"name\": \"{{username}}\" }")
+                        .hint_text(crate::i18n::tr("{ \"name\": \"{{username}}\" }"))
                         .layouter(&mut layouter),
                 )
                 .changed();
             if *language == RawLanguage::Json && !content.trim().is_empty() {
                 let resolved = scope.resolve(content);
                 if let Err(e) = serde_json::from_str::<serde_json::Value>(&resolved) {
-                    ui.label(RichText::new(format!("⚠ Invalid JSON: {e}")).small().color(theme::YELLOW));
+                    ui.label(
+                        RichText::new(crate::i18n::trf("⚠ Invalid JSON: {e}", &[("e", &e.to_string())]))
+                            .small()
+                            .color(theme::YELLOW),
+                    );
                 }
             }
         }
-        Body::FormUrlEncoded { fields } => changed |= widgets::kv_table(ui, "urlencoded", fields, scope, "Field"),
+        Body::FormUrlEncoded { fields } => {
+            changed |= widgets::kv_table(ui, "urlencoded", fields, scope, crate::i18n::tr("Field"))
+        }
         Body::Multipart { fields } => changed |= widgets::form_table(ui, fields, scope),
         Body::GraphQl { query, variables, operation_name } => {
             changed |= crate::graphql_view::editor(
@@ -881,11 +915,11 @@ fn body_editor(
                         egui::TextEdit::singleline(path)
                             .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                             .vertical_align(egui::Align::Center)
-                            .hint_text("path/to/file")
+                            .hint_text(crate::i18n::tr("path/to/file"))
                             .desired_width(420.0),
                     )
                     .changed();
-                if ui.button("Browse…").clicked() {
+                if ui.button(crate::i18n::tr("Browse…")).clicked() {
                     if let Some(p) = rfd::FileDialog::new().pick_file() {
                         *path = p.display().to_string();
                         changed = true;
@@ -900,9 +934,9 @@ fn body_editor(
 fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palette) -> bool {
     let mut changed = false;
     ui.label(
-        RichText::new(
+        RichText::new(crate::i18n::tr(
             "Declarative tests run after every response. Targets: status, time, size, body, header.<Name>, json.<path>",
-        )
+        ))
         .small()
         .color(p.text_weak),
     );
@@ -918,7 +952,7 @@ fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palet
                             .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                             .vertical_align(egui::Align::Center)
                             .desired_width(220.0)
-                            .hint_text("json.data.id"),
+                            .hint_text(crate::i18n::tr("json.data.id")),
                     )
                     .changed();
                 egui::ComboBox::from_id_salt("op").width(120.0).selected_text(t.op.label()).show_ui(ui, |ui| {
@@ -933,11 +967,11 @@ fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palet
                                 .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                                 .vertical_align(egui::Align::Center)
                                 .desired_width(200.0)
-                                .hint_text("expected"),
+                                .hint_text(crate::i18n::tr("expected")),
                         )
                         .changed();
                 }
-                if widgets::ghost_button(ui, "×", "Remove").clicked() {
+                if widgets::ghost_button(ui, "×", crate::i18n::tr("Remove")).clicked() {
                     remove = Some(i);
                 }
             })
@@ -949,16 +983,16 @@ fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palet
     }
     ui.add_space(6.0);
     ui.horizontal_wrapped(|ui| {
-        if ui.button("+ Add test").clicked() {
+        if ui.button(crate::i18n::tr("+ Add test")).clicked() {
             tests.push(Assertion { target: String::new(), expected: String::new(), ..Default::default() });
             changed = true;
         }
-        ui.label(RichText::new("Presets:").small().color(p.text_weak));
+        ui.label(RichText::new(crate::i18n::tr("Presets:")).small().color(p.text_weak));
         let presets: [(&str, Operator, &str, &str); 4] = [
-            ("status", Operator::Equals, "200", "Status is 200"),
-            ("time", Operator::LessThan, "1000", "Time < 1s"),
-            ("header.Content-Type", Operator::Contains, "json", "Is JSON"),
-            ("body", Operator::NotContains, "error", "No \"error\""),
+            ("status", Operator::Equals, "200", crate::i18n::tr("Status is 200")),
+            ("time", Operator::LessThan, "1000", crate::i18n::tr("Time < 1s")),
+            ("header.Content-Type", Operator::Contains, "json", crate::i18n::tr("Is JSON")),
+            ("body", Operator::NotContains, "error", crate::i18n::tr("No \"error\"")),
         ];
         for (target, op, expected, label) in presets {
             if ui.small_button(label).clicked() {
@@ -973,7 +1007,7 @@ fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palet
 fn extract_editor(ui: &mut Ui, ex: &mut Vec<Extraction>, p: &crate::theme::Palette) -> bool {
     let mut changed = false;
     ui.label(
-        RichText::new("Save values from the response into the active environment, e.g. json.token → {{token}}. Great for login flows.")
+        RichText::new(crate::i18n::tr("Save values from the response into the active environment, e.g. json.token → {{token}}. Great for login flows."))
             .small()
             .color(p.text_weak),
     );
@@ -989,7 +1023,7 @@ fn extract_editor(ui: &mut Ui, ex: &mut Vec<Extraction>, p: &crate::theme::Palet
                             .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                             .vertical_align(egui::Align::Center)
                             .desired_width(240.0)
-                            .hint_text("json.data.token"),
+                            .hint_text(crate::i18n::tr("json.data.token")),
                     )
                     .changed();
                 ui.label("→");
@@ -999,10 +1033,10 @@ fn extract_editor(ui: &mut Ui, ex: &mut Vec<Extraction>, p: &crate::theme::Palet
                             .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                             .vertical_align(egui::Align::Center)
                             .desired_width(160.0)
-                            .hint_text("variable"),
+                            .hint_text(crate::i18n::tr("variable")),
                     )
                     .changed();
-                if widgets::ghost_button(ui, "×", "Remove").clicked() {
+                if widgets::ghost_button(ui, "×", crate::i18n::tr("Remove")).clicked() {
                     remove = Some(i);
                 }
             })
@@ -1012,7 +1046,7 @@ fn extract_editor(ui: &mut Ui, ex: &mut Vec<Extraction>, p: &crate::theme::Palet
         ex.remove(i);
         changed = true;
     }
-    if ui.button("+ Add extraction").clicked() {
+    if ui.button(crate::i18n::tr("+ Add extraction")).clicked() {
         ex.push(Extraction { enabled: true, ..Default::default() });
         changed = true;
     }

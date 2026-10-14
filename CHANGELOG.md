@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- The UI in Bahasa Indonesia (Settings → Language; follows the system locale
+  by default), with a test that fails on untranslated UI text.
 - Digest (RFC 7616: MD5, SHA-256, -sess, qop auth/auth-int), NTLMv2 and
   AWS Signature v4 auth, in the app, runner, CLI, MCP server, code snippets
   and Collection v2.1 import/export.

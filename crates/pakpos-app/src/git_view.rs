@@ -51,13 +51,13 @@ impl GitState {
 
 fn op_label(op: &GitOp) -> &'static str {
     match op {
-        GitOp::Refresh => "Refreshing",
-        GitOp::Init => "Initializing",
-        GitOp::SetRemote(_) => "Setting remote",
-        GitOp::Commit(_) => "Committing",
-        GitOp::Pull => "Pulling",
-        GitOp::Push => "Pushing",
-        GitOp::Sync(_) => "Syncing",
+        GitOp::Refresh => crate::i18n::tr("Refreshing"),
+        GitOp::Init => crate::i18n::tr("Initializing"),
+        GitOp::SetRemote(_) => crate::i18n::tr("Setting remote"),
+        GitOp::Commit(_) => crate::i18n::tr("Committing"),
+        GitOp::Pull => crate::i18n::tr("Pulling"),
+        GitOp::Push => crate::i18n::tr("Pushing"),
+        GitOp::Sync(_) => crate::i18n::tr("Syncing"),
     }
 }
 
@@ -65,12 +65,14 @@ fn run_op(root: &std::path::Path, op: &GitOp) -> (Result<String, String>, bool) 
     let e = |r: Result<String, git::GitError>| r.map_err(|e| e.to_string());
     match op {
         GitOp::Refresh => (Ok(String::new()), false),
-        GitOp::Init => {
-            (e(git::init(root).map(|_| "Initialized a git repository with a PakPos .gitignore".into())), false)
-        }
+        GitOp::Init => (
+            e(git::init(root).map(|_| crate::i18n::tr("Initialized a git repository with a PakPos .gitignore").into())),
+            false,
+        ),
         GitOp::SetRemote(url) => (e(git::set_remote(root, url).map(|_| format!("Remote origin = {url}"))), false),
         GitOp::Commit(msg) => (
-            e(git::commit_all(root, msg).map(|h| h.map_or("Nothing to commit".into(), |h| format!("Committed {h}")))),
+            e(git::commit_all(root, msg)
+                .map(|h| h.map_or(crate::i18n::tr("Nothing to commit").into(), |h| format!("Committed {h}")))),
             false,
         ),
         GitOp::Pull => (e(git::pull(root)), true),
@@ -78,7 +80,7 @@ fn run_op(root: &std::path::Path, op: &GitOp) -> (Result<String, String>, bool) 
         GitOp::Sync(msg) => {
             // Commit local work, bring in teammates' changes, then publish.
             let steps = git::commit_all(root, msg)
-                .map(|h| h.map_or("Nothing to commit".to_string(), |h| format!("Committed {h}")))
+                .map(|h| h.map_or(crate::i18n::tr("Nothing to commit").to_string(), |h| format!("Committed {h}")))
                 .and_then(|c| git::pull(root).map(|p| format!("{c}\n{p}")))
                 .and_then(|cp| git::push(root).map(|p| format!("{cp}\n{p}")));
             (e(steps), true)
@@ -124,7 +126,7 @@ impl PakPosApp {
                     Ok(out) if !out.is_empty() => {
                         self.git.output.push((false, out.clone()));
                         if !quiet {
-                            self.toast(out.lines().last().unwrap_or("Done").to_string());
+                            self.toast(out.lines().last().unwrap_or(crate::i18n::tr("Done")).to_string());
                         }
                         if matches!(r.op, GitOp::Commit(_) | GitOp::Sync(_)) {
                             self.git.message.clear();
@@ -188,7 +190,7 @@ impl PakPosApp {
         let p = self.palette;
         let mut open = true;
         let mut op: Option<GitOp> = None;
-        egui::Window::new("Sync with Git")
+        egui::Window::new(crate::i18n::tr("Sync with Git"))
             .id(Id::new("git_window"))
             .open(&mut open)
             .default_size([640.0, 560.0])
@@ -208,7 +210,7 @@ impl PakPosApp {
                     .chain(self.ws.environments.iter().map(|e| (format!("environments/{}.json", e.id), e.name.clone())))
                     .collect();
                 let g = &mut self.git;
-                ui.label(RichText::new(format!("Workspace: {}", self.ws.root.display())).small().color(p.text_weak));
+                ui.label(RichText::new(crate::i18n::trf("Workspace: {path}", &[("path", &self.ws.root.display().to_string())])).small().color(p.text_weak));
                 ui.add_space(6.0);
                 if let Some((running, _)) = &g.job {
                     ui.horizontal(|ui| {
@@ -218,28 +220,28 @@ impl PakPosApp {
                 }
                 match &g.status {
                     None => {
-                        ui.label(RichText::new("Checking…").color(p.text_weak));
+                        ui.label(RichText::new(crate::i18n::tr("Checking…")).color(p.text_weak));
                     }
                     Some(Err(e)) => {
                         ui.label(RichText::new(e).color(theme::RED));
-                        ui.label(RichText::new("Install Git from git-scm.com, then reopen this window.").small().color(p.text_weak));
+                        ui.label(RichText::new(crate::i18n::tr("Install Git from git-scm.com, then reopen this window.")).small().color(p.text_weak));
                     }
                     Some(Ok(st)) if !st.is_repo => {
-                        ui.label(RichText::new("This workspace is not under version control yet.").strong());
+                        ui.label(RichText::new(crate::i18n::tr("This workspace is not under version control yet.")).strong());
                         ui.label(
                             RichText::new(
-                                "Initialize a git repository to share collections with your team through GitHub, GitLab or any git server. Personal files (history, settings, OAuth tokens) are added to .gitignore.",
+                                crate::i18n::tr("Initialize a git repository to share collections with your team through GitHub, GitLab or any git server. Personal files (history, settings, OAuth tokens) are added to .gitignore."),
                             )
                             .small()
                             .color(p.text_weak),
                         );
                         ui.add_space(8.0);
-                        if widgets::primary_button(ui, "Initialize repository").clicked() {
+                        if widgets::primary_button(ui, crate::i18n::tr("Initialize repository")).clicked() {
                             op = Some(GitOp::Init);
                         }
                         ui.add_space(4.0);
                         ui.label(
-                            RichText::new("Already have a repository? Set PAKPOS_HOME to a folder inside your clone.")
+                            RichText::new(crate::i18n::tr("Already have a repository? Set PAKPOS_HOME to a folder inside your clone."))
                                 .small()
                                 .color(p.text_weak),
                         );
@@ -253,33 +255,33 @@ impl PakPosApp {
                                     ui.label(RichText::new(u).small().color(p.text_weak));
                                 }
                                 None => {
-                                    ui.label(RichText::new("not pushed yet").small().color(p.text_weak));
+                                    ui.label(RichText::new(crate::i18n::tr("not pushed yet")).small().color(p.text_weak));
                                 }
                             }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button("⟳").on_hover_text("Refresh").clicked() {
+                                if ui.button("⟳").on_hover_text(crate::i18n::tr("Refresh")).clicked() {
                                     op = Some(GitOp::Refresh);
                                 }
                             });
                         });
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
-                            ui.label("Remote");
+                            ui.label(crate::i18n::tr("Remote"));
                             ui.add(
                                 egui::TextEdit::singleline(&mut g.remote_input).min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT)).vertical_align(egui::Align::Center)
-                                    .hint_text("git@github.com:team/api-collections.git")
+                                    .hint_text(crate::i18n::tr("git@github.com:team/api-collections.git"))
                                     .desired_width(380.0),
                             );
                             let current = st.remote_url.clone().unwrap_or_default();
-                            if !g.remote_input.trim().is_empty() && g.remote_input.trim() != current && ui.button("Set").clicked() {
+                            if !g.remote_input.trim().is_empty() && g.remote_input.trim() != current && ui.button(crate::i18n::tr("Set")).clicked() {
                                 op = Some(GitOp::SetRemote(g.remote_input.trim().to_string()));
                             }
                         });
                         ui.add_space(8.0);
-                        widgets::section_title(ui, &format!("Changes ({})", st.changes.len()));
+                        widgets::section_title(ui, &crate::i18n::trf("Changes ({n})", &[("n", &st.changes.len().to_string())]));
                         egui::ScrollArea::vertical().id_salt("git_changes").max_height(140.0).show(ui, |ui| {
                             if st.changes.is_empty() {
-                                ui.label(RichText::new("Nothing to commit.").color(p.text_weak));
+                                ui.label(RichText::new(crate::i18n::tr("Nothing to commit.")).color(p.text_weak));
                             }
                             for c in &st.changes {
                                 ui.horizontal(|ui| {
@@ -301,33 +303,33 @@ impl PakPosApp {
                         ui.add_space(6.0);
                         ui.add(
                             egui::TextEdit::singleline(&mut g.message).min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT)).vertical_align(egui::Align::Center)
-                                .hint_text("Commit message (e.g. Add payment endpoints)")
+                                .hint_text(crate::i18n::tr("Commit message (e.g. Add payment endpoints)"))
                                 .desired_width(f32::INFINITY),
                         );
                         ui.add_space(6.0);
                         let has_remote = st.remote_url.is_some();
                         ui.horizontal(|ui| {
-                            if widgets::primary_button(ui, "Sync").on_hover_text("Commit, pull, then push").clicked() {
+                            if widgets::primary_button(ui, crate::i18n::tr("Sync")).on_hover_text(crate::i18n::tr("Commit, pull, then push")).clicked() {
                                 op = Some(GitOp::Sync(g.message.clone()));
                             }
-                            if ui.button("Commit").clicked() {
+                            if ui.button(crate::i18n::tr("Commit")).clicked() {
                                 op = Some(GitOp::Commit(g.message.clone()));
                             }
-                            if ui.add_enabled(has_remote, egui::Button::new("⬇ Pull")).clicked() {
+                            if ui.add_enabled(has_remote, egui::Button::new(crate::i18n::tr("⬇ Pull"))).clicked() {
                                 op = Some(GitOp::Pull);
                             }
-                            if ui.add_enabled(has_remote, egui::Button::new("⬆ Push")).clicked() {
+                            if ui.add_enabled(has_remote, egui::Button::new(crate::i18n::tr("⬆ Push"))).clicked() {
                                 op = Some(GitOp::Push);
                             }
                         });
                         if !has_remote {
-                            ui.label(RichText::new("Set a remote to pull and push.").small().color(p.text_weak));
+                            ui.label(RichText::new(crate::i18n::tr("Set a remote to pull and push.")).small().color(p.text_weak));
                         }
                         ui.add_space(8.0);
-                        widgets::section_title(ui, "History");
+                        widgets::section_title(ui, crate::i18n::tr("History"));
                         egui::ScrollArea::vertical().id_salt("git_log").max_height(140.0).show(ui, |ui| {
                             if g.log.is_empty() {
-                                ui.label(RichText::new("No commits yet.").color(p.text_weak));
+                                ui.label(RichText::new(crate::i18n::tr("No commits yet.")).color(p.text_weak));
                             }
                             for c in &g.log {
                                 ui.horizontal(|ui| {

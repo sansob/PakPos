@@ -56,6 +56,9 @@ pub struct Settings {
     /// Trusted collections whose scripts may also call `pm.sendRequest`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub network_collections: Vec<String>,
+    /// UI language code ("en", "id"); `None` follows the system locale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 fn default_theme() -> Theme {
@@ -75,6 +78,7 @@ impl Default for Settings {
             font_scale_percent: 100,
             trusted_collections: Vec::new(),
             network_collections: Vec::new(),
+            language: None,
         }
     }
 }

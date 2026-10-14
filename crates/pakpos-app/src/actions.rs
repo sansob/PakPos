@@ -11,7 +11,7 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
             app.active = app.push_tab(*req, None);
         }
         Action::NewRequestIn { collection, folder } => {
-            let req = Request { name: "New request".into(), ..Default::default() };
+            let req = Request { name: crate::i18n::tr("New request").into(), ..Default::default() };
             let rid = req.id.clone();
             if let Some(c) = app.collection_mut(&collection) {
                 let target = match &folder {
@@ -31,7 +31,7 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
             app.open_saved(&collection, &rid);
         }
         Action::NewFolderIn { collection, folder } => {
-            let f = Folder::new("New folder");
+            let f = Folder::new(crate::i18n::tr("New folder"));
             let fid = f.id.clone();
             if let Some(c) = app.collection_mut(&collection) {
                 let target = match &folder {
@@ -48,7 +48,7 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
             app.persist_collection(&collection);
             app.dialog = Some(Dialog::Rename {
                 target: RenameTarget::Item { collection, item: fid },
-                name: "New folder".into(),
+                name: crate::i18n::tr("New folder").into(),
             });
         }
         Action::MoveItem { from, item, to, at } => {
@@ -105,7 +105,9 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
                     pakpos_core::openapi::to_yaml(&doc)
                 };
                 match std::fs::write(&path, text) {
-                    Ok(()) => app.toast(format!("Exported to {}", path.display())),
+                    Ok(()) => {
+                        app.toast(crate::i18n::trf("Exported to {path}", &[("path", &path.display().to_string())]))
+                    }
                     Err(e) => app.toast_error(e.to_string()),
                 }
             }
@@ -115,7 +117,9 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
             let file = format!("{}.collection.json", sanitize(&c.name));
             if let Some(path) = rfd::FileDialog::new().set_file_name(file).add_filter("JSON", &["json"]).save_file() {
                 match std::fs::write(&path, postman::export_collection(&c)) {
-                    Ok(()) => app.toast(format!("Exported to {}", path.display())),
+                    Ok(()) => {
+                        app.toast(crate::i18n::trf("Exported to {path}", &[("path", &path.display().to_string())]))
+                    }
                     Err(e) => app.toast_error(e.to_string()),
                 }
             }
@@ -139,7 +143,10 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
                             }
                             app.open_nodes.insert(c.id.clone());
                             let id = c.id.clone();
-                            let msg = format!("Imported “{}” ({} requests)", c.name, c.request_count());
+                            let msg = crate::i18n::trf(
+                                "Imported “{name}” ({n} requests)",
+                                &[("name", &c.name), ("n", &c.request_count().to_string())],
+                            );
                             app.ws.collections.push(c);
                             app.persist_collection(&id);
                             app.toast(msg);
@@ -163,7 +170,7 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
                         if app.ws.environments.iter().any(|e| e.id == env.id) {
                             env.id = pakpos_core::model::new_id();
                         }
-                        app.toast(format!("Imported environment “{}”", env.name));
+                        app.toast(crate::i18n::trf("Imported environment “{name}”", &[("name", &env.name)]));
                         app.ws.environments.push(env);
                         app.persist_environments();
                     }
@@ -176,7 +183,9 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
             let file = format!("{}.environment.json", sanitize(&env.name));
             if let Some(path) = rfd::FileDialog::new().set_file_name(file).save_file() {
                 match std::fs::write(&path, postman::export_environment(&env)) {
-                    Ok(()) => app.toast(format!("Exported to {}", path.display())),
+                    Ok(()) => {
+                        app.toast(crate::i18n::trf("Exported to {path}", &[("path", &path.display().to_string())]))
+                    }
                     Err(e) => app.toast_error(e.to_string()),
                 }
             }
@@ -187,7 +196,10 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
         }
         Action::EditEnvironment(id) => app.dialog = Some(Dialog::Environments { selected: id }),
         Action::NewEnvironment => {
-            let env = Environment::new(format!("Environment {}", app.ws.environments.len() + 1));
+            let env = Environment::new(crate::i18n::trf(
+                "Environment {n}",
+                &[("n", &(app.ws.environments.len() + 1).to_string())],
+            ));
             let id = env.id.clone();
             app.ws.environments.push(env);
             app.persist_environments();

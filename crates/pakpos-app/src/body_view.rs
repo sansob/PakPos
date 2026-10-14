@@ -188,7 +188,7 @@ fn node(
     let key_rich = RichText::new(&key_text).monospace().color(if key_hit { theme::ORANGE } else { p.text });
     let menu = |resp: egui::Response, action: &mut Option<TreeAction>, value: &Value| {
         resp.on_hover_text(path).context_menu(|ui| {
-            if ui.button("Copy value").clicked() {
+            if ui.button(crate::i18n::tr("Copy value")).clicked() {
                 let text = match value {
                     Value::String(s) => s.clone(),
                     other => serde_json::to_string_pretty(other).unwrap_or_default(),

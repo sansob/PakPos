@@ -85,16 +85,22 @@ pub fn editor(
         if state.job.is_some() {
             ui.add(egui::Spinner::new().color(crate::theme::ORANGE));
         } else if cfg.operation != McpOperation::ListTools
-            && ui.button("⟳ Load").on_hover_text("Connect and list what the server offers").clicked()
+            && ui
+                .button(crate::i18n::tr("⟳ Load"))
+                .on_hover_text(crate::i18n::tr("Connect and list what the server offers"))
+                .clicked()
         {
             *action = Some(McpAction::Load);
         }
     });
     if let Some(s) = &state.server {
         ui.label(
-            RichText::new(format!("Server: {} {} · protocol {}", s.name, s.version, s.protocol_version))
-                .small()
-                .color(p.text_weak),
+            RichText::new(crate::i18n::trf(
+                "Server: {name} {version} · protocol {protocol}",
+                &[("name", &s.name), ("version", &s.version), ("protocol", &s.protocol_version)],
+            ))
+            .small()
+            .color(p.text_weak),
         );
     }
     if let Some(e) = &state.error {
@@ -103,9 +109,9 @@ pub fn editor(
     ui.add_space(4.0);
     if cfg.operation != McpOperation::ListTools {
         let what = match cfg.operation {
-            McpOperation::ReadResource => "Resource URI",
-            McpOperation::GetPrompt => "Prompt",
-            _ => "Tool",
+            McpOperation::ReadResource => crate::i18n::tr("Resource URI"),
+            McpOperation::GetPrompt => crate::i18n::tr("Prompt"),
+            _ => crate::i18n::tr("Tool"),
         };
         ui.horizontal(|ui| {
             ui.label(what);
@@ -152,9 +158,9 @@ pub fn editor(
     }
     if !mcp_client::is_http(&scope.resolve(target_url)) {
         egui::CollapsingHeader::new(
-            RichText::new(format!(
-                "Environment for the server process ({})",
-                cfg.env.iter().filter(|k| !k.is_blank()).count()
+            RichText::new(crate::i18n::trf(
+                "Environment for the server process ({n})",
+                &[("n", &cfg.env.iter().filter(|k| !k.is_blank()).count().to_string())],
             ))
             .small(),
         )
@@ -165,7 +171,7 @@ pub fn editor(
     }
     if matches!(cfg.operation, McpOperation::CallTool | McpOperation::GetPrompt) {
         ui.add_space(4.0);
-        widgets::section_title(ui, "Arguments (JSON)");
+        widgets::section_title(ui, crate::i18n::tr("Arguments (JSON)"));
         let Body::Raw { content, .. } = body else { return changed };
         let theme_ = egui_extras::syntax_highlighting::CodeTheme::from_style(ui.style());
         let mut layouter = |ui: &Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
@@ -186,9 +192,9 @@ pub fn editor(
             .changed();
     }
     ui.label(
-        RichText::new(
+        RichText::new(crate::i18n::tr(
             "The URL is an http(s):// endpoint (Streamable HTTP) or a command line that starts the server (stdio).",
-        )
+        ))
         .small()
         .color(p.text_weak),
     );
@@ -208,7 +214,7 @@ impl PakPosApp {
         let target = scope.resolve(tab.request.url.trim());
         let cfg = tab.request.mcp.clone().unwrap_or_default();
         if !self.mcp_allowed(idx, &target) {
-            self.tabs[idx].mcp.error = Some("This collection is not trusted: a stdio server is a program it would start. Trust it in the Scripts tab first.".into());
+            self.tabs[idx].mcp.error = Some(crate::i18n::tr("This collection is not trusted: a stdio server is a program it would start. Trust it in the Scripts tab first.").into());
             return;
         }
         let mut meta = tab.request.clone();
@@ -269,7 +275,7 @@ impl PakPosApp {
         let target = scope.resolve(tab.request.url.trim());
         if !self.mcp_allowed(idx, &target) {
             self.tabs[idx].response = ResponseState::Error(
-                "This collection is not trusted: a stdio MCP server is a program it would start. Trust the collection (Scripts tab) first.".into(),
+                crate::i18n::tr("This collection is not trusted: a stdio MCP server is a program it would start. Trust the collection (Scripts tab) first.").into(),
             );
             return;
         }

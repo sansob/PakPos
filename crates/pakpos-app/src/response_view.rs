@@ -29,13 +29,15 @@ impl PakPosApp {
         match &tab.response {
             ResponseState::Empty => {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Response").strong().color(p.text_weak));
+                    ui.label(RichText::new(crate::i18n::tr("Response")).strong().color(p.text_weak));
                 });
                 widgets::empty_state(
                     ui,
                     &p,
-                    "Ready when you are",
-                    "Enter a URL and press Send (Ctrl+Enter). Paste a cURL command into the URL bar to import it.",
+                    crate::i18n::tr("Ready when you are"),
+                    crate::i18n::tr(crate::i18n::tr(
+                        "Enter a URL and press Send (Ctrl+Enter). Paste a cURL command into the URL bar to import it.",
+                    )),
                 );
             }
             ResponseState::Loading { started, .. } => {
@@ -44,14 +46,17 @@ impl PakPosApp {
                     ui.add_space(ui.available_height() * 0.3);
                     ui.add(egui::Spinner::new().size(28.0).color(theme::ORANGE));
                     ui.add_space(6.0);
-                    ui.label(RichText::new(format!("Sending request… {elapsed} ms")).color(p.text_weak));
-                    if ui.button("Cancel").clicked() {
+                    ui.label(
+                        RichText::new(crate::i18n::trf("Sending request… {ms} ms", &[("ms", &elapsed.to_string())]))
+                            .color(p.text_weak),
+                    );
+                    if ui.button(crate::i18n::tr("Cancel")).clicked() {
                         cancel = true;
                     }
                 });
             }
             ResponseState::Error(e) => {
-                ui.label(RichText::new("Could not send request").strong().color(theme::RED));
+                ui.label(RichText::new(crate::i18n::tr("Could not send request")).strong().color(theme::RED));
                 ui.add_space(6.0);
                 egui::Frame::new().fill(theme::RED.gamma_multiply(0.12)).corner_radius(8).inner_margin(12).show(
                     ui,
@@ -62,7 +67,7 @@ impl PakPosApp {
                 );
                 ui.add_space(8.0);
                 ui.label(
-                    RichText::new("Check the URL, your network/proxy settings, or disable TLS verification in Settings for self-signed certificates.")
+                    RichText::new(crate::i18n::tr("Check the URL, your network/proxy settings, or disable TLS verification in Settings for self-signed certificates."))
                         .small()
                         .color(p.text_weak),
                 );
@@ -71,7 +76,7 @@ impl PakPosApp {
                 let resp = &outcome.response;
                 let passed = outcome.tests.iter().filter(|t| t.passed).count();
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Response").strong().color(p.text_weak));
+                    ui.label(RichText::new(crate::i18n::tr("Response")).strong().color(p.text_weak));
                     ui.add_space(10.0);
                     if resp.http_version == "gRPC" {
                         let sc = if resp.status == 0 { theme::GREEN } else { theme::RED };
@@ -90,41 +95,56 @@ impl PakPosApp {
                     if !outcome.tests.is_empty() {
                         let all = passed == outcome.tests.len();
                         let c = if all { theme::GREEN } else { theme::RED };
-                        widgets::pill(ui, format!("Tests {passed}/{}", outcome.tests.len()), c, c.gamma_multiply(0.16));
+                        widgets::pill(
+                            ui,
+                            format!("{} {passed}/{}", crate::i18n::tr("Tests"), outcome.tests.len()),
+                            c,
+                            c.gamma_multiply(0.16),
+                        );
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if resp.http_version != "gRPC"
                             && ui
-                                .add_enabled(tab.source.is_some(), egui::Button::new("+ Example"))
-                                .on_hover_text("Save as an example of this request (used by the mock server)")
-                                .on_disabled_hover_text("Save the request to a collection first")
+                                .add_enabled(tab.source.is_some(), egui::Button::new(crate::i18n::tr("+ Example")))
+                                .on_hover_text(crate::i18n::tr(crate::i18n::tr(
+                                    "Save as an example of this request (used by the mock server)",
+                                )))
+                                .on_disabled_hover_text(crate::i18n::tr("Save the request to a collection first"))
                                 .clicked()
                         {
                             save_example = true;
                         }
-                        if ui.button("⬇ Save").on_hover_text("Save response body to a file").clicked() {
+                        if ui
+                            .button(crate::i18n::tr("⬇ Save"))
+                            .on_hover_text(crate::i18n::tr("Save response body to a file"))
+                            .clicked()
+                        {
                             save_to_file = Some(resp.body.clone());
                             save_name = file_name_for(resp);
                         }
-                        if ui.button("📋 Copy").on_hover_text("Copy response body").clicked() {
+                        if ui
+                            .button(crate::i18n::tr("📋 Copy"))
+                            .on_hover_text(crate::i18n::tr("Copy response body"))
+                            .clicked()
+                        {
                             copy = Some(outcome.pretty.clone());
                         }
                     });
                 });
                 ui.add_space(6.0);
                 let items = [
-                    (RespSection::Body, "Body".to_string()),
+                    (RespSection::Body, crate::i18n::tr("Body").to_string()),
                     (RespSection::Headers, widgets::counted("Headers", resp.headers.len())),
                     (
                         RespSection::Tests,
                         if outcome.tests.is_empty() {
-                            "Tests".into()
+                            crate::i18n::tr("Tests").into()
                         } else {
-                            format!("Tests ({passed}/{})", outcome.tests.len())
+                            format!("{} ({passed}/{})", crate::i18n::tr("Tests"), outcome.tests.len())
                         },
                     ),
                     (RespSection::Console, widgets::counted("Console", outcome.logs.len())),
-                    (RespSection::Request, "Request".to_string()),
+                    (RespSection::Request, crate::i18n::tr("Request").to_string()),
                 ];
                 widgets::tab_bar(ui, &mut tab.resp_section, &items);
 
@@ -154,13 +174,13 @@ impl PakPosApp {
                         };
                         ui.horizontal(|ui| {
                             for (v, label) in views {
-                                ui.selectable_value(&mut tab.body_view, *v, *label);
+                                ui.selectable_value(&mut tab.body_view, *v, crate::i18n::tr(label));
                             }
                             if kind == BodyKind::Html
                                 && tab.body_view == BodyView::Preview
                                 && ui
-                                    .button("Open in browser")
-                                    .on_hover_text("Write the page to a temporary file and open it")
+                                    .button(crate::i18n::tr("Open in browser"))
+                                    .on_hover_text(crate::i18n::tr("Write the page to a temporary file and open it"))
                                     .clicked()
                             {
                                 open_html = Some(resp.body.clone());
@@ -169,7 +189,7 @@ impl PakPosApp {
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     let r = ui.add(
                                         egui::TextEdit::singleline(&mut tab.body_search)
-                                            .hint_text("Search (Ctrl+F)")
+                                            .hint_text(crate::i18n::tr("Search (Ctrl+F)"))
                                             .min_size(egui::vec2(0.0, theme::CONTROL_HEIGHT))
                                             .vertical_align(egui::Align::Center)
                                             .desired_width(200.0),
@@ -181,9 +201,12 @@ impl PakPosApp {
                                         let n = matches.len();
                                         let c = if n == 0 { theme::RED } else { p.text_weak };
                                         ui.label(
-                                            RichText::new(format!("{n} match{}", if n == 1 { "" } else { "es" }))
-                                                .small()
-                                                .color(c),
+                                            RichText::new(crate::i18n::trf(
+                                                if n == 1 { "{n} match" } else { "{n} matches" },
+                                                &[("n", &n.to_string())],
+                                            ))
+                                            .small()
+                                            .color(c),
                                         );
                                     }
                                 });
@@ -207,7 +230,7 @@ impl PakPosApp {
                                         ui.label(job);
                                     });
                                     ui.label(
-                                        RichText::new("Simplified preview: text, headings, lists and links. Styles, images and scripts are not rendered.")
+                                        RichText::new(crate::i18n::tr("Simplified preview: text, headings, lists and links. Styles, images and scripts are not rendered."))
                                             .small()
                                             .color(p.text_weak),
                                     );
@@ -221,7 +244,7 @@ impl PakPosApp {
                                         }
                                     }
                                     None => {
-                                        ui.label(RichText::new("The body is too large for the tree view.").color(p.text_weak));
+                                        ui.label(RichText::new(crate::i18n::tr("The body is too large for the tree view.")).color(p.text_weak));
                                     }
                                 },
                                 _ => {
@@ -277,8 +300,10 @@ impl PakPosApp {
                     RespSection::Tests => {
                         if outcome.tests.is_empty() && outcome.extracted.is_empty() {
                             ui.label(
-                                RichText::new("No tests for this request. Add some in the Tests tab above.")
-                                    .color(p.text_weak),
+                                RichText::new(crate::i18n::tr(crate::i18n::tr(
+                                    "No tests for this request. Add some in the Tests tab above.",
+                                )))
+                                .color(p.text_weak),
                             );
                         }
                         egui::ScrollArea::vertical().id_salt(("resp_tests", tab.uid)).auto_shrink([false, false]).show(
@@ -297,7 +322,7 @@ impl PakPosApp {
                                 }
                                 if !outcome.extracted.is_empty() {
                                     ui.add_space(10.0);
-                                    widgets::section_title(ui, "Extracted variables");
+                                    widgets::section_title(ui, crate::i18n::tr("Extracted variables"));
                                     for (k, v) in &outcome.extracted {
                                         ui.horizontal(|ui| {
                                             ui.label(
@@ -321,12 +346,15 @@ impl PakPosApp {
                                     ui.add(egui::Label::new(RichText::new(&pr.url).monospace()).wrap());
                                 });
                                 ui.label(
-                                    RichText::new(format!("Final URL: {}  ·  {}", resp.url, resp.http_version))
-                                        .small()
-                                        .color(p.text_weak),
+                                    RichText::new(crate::i18n::trf(
+                                        "Final URL: {url}  ·  {version}",
+                                        &[("url", &resp.url), ("version", &resp.http_version)],
+                                    ))
+                                    .small()
+                                    .color(p.text_weak),
                                 );
                                 ui.add_space(6.0);
-                                widgets::section_title(ui, "Request headers");
+                                widgets::section_title(ui, crate::i18n::tr("Request headers"));
                                 egui::Grid::new("sent_headers").striped(true).num_columns(2).spacing([24.0, 4.0]).show(
                                     ui,
                                     |ui| {
@@ -366,7 +394,7 @@ impl PakPosApp {
                                 };
                                 if let Some(b) = body {
                                     ui.add_space(6.0);
-                                    widgets::section_title(ui, "Request body");
+                                    widgets::section_title(ui, crate::i18n::tr("Request body"));
                                     ui.label(RichText::new(truncate(&b, 5000)).monospace());
                                 }
                             },
@@ -384,7 +412,7 @@ impl PakPosApp {
         }
         if let Some(text) = copy {
             ui.ctx().copy_text(text);
-            self.toast("Copied to clipboard");
+            self.toast(crate::i18n::tr("Copied to clipboard"));
         }
         if let Some(html) = open_html {
             let path = std::env::temp_dir()
@@ -392,7 +420,7 @@ impl PakPosApp {
             match std::fs::write(&path, html) {
                 Ok(()) => {
                     if webbrowser::open(&format!("file://{}", path.display())).is_err() {
-                        self.toast_error("Could not open a browser");
+                        self.toast_error(crate::i18n::tr("Could not open a browser"));
                     }
                 }
                 Err(e) => self.toast_error(e.to_string()),
@@ -401,7 +429,7 @@ impl PakPosApp {
         if let Some(bytes) = save_to_file {
             if let Some(path) = rfd::FileDialog::new().set_file_name(save_name).save_file() {
                 match std::fs::write(&path, bytes) {
-                    Ok(()) => self.toast(format!("Saved {}", path.display())),
+                    Ok(()) => self.toast(crate::i18n::trf("Saved {path}", &[("path", &path.display().to_string())])),
                     Err(e) => self.toast_error(e.to_string()),
                 }
             }

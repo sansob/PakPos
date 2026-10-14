@@ -55,7 +55,15 @@ fn open_by_name(app: &mut PakPosApp, name: &str) {
 
 fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
     app.ws.settings.active_environment = app.ws.environments.first().map(|e| e.id.clone());
+    crate::i18n::set(crate::i18n::Lang::En);
     match name {
+        "bahasa" => {
+            crate::i18n::set(crate::i18n::Lang::Id);
+            open_by_name(app, "Get with query params");
+            app.tabs[app.active].section = ReqSection::Tests;
+            app.tabs[app.active].resp_section = RespSection::Tests;
+            app.send(app.active, ctx);
+        }
         "light" => {
             app.ws.settings.theme = Theme::Light;
             open_by_name(app, "Create user (JSON)");

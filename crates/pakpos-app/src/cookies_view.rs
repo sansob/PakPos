@@ -34,15 +34,15 @@ impl PakPosApp {
         let r = egui::Modal::new(Id::new("cookies")).frame(modal_frame(&p)).show(ctx, |ui| {
             ui.set_width(760.0);
             ui.horizontal(|ui| {
-                title(ui, "Cookies");
+                title(ui, crate::i18n::tr("Cookies"));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if !self.ws.cookies.cookies.is_empty() && ui.button("Clear all").clicked() {
+                    if !self.ws.cookies.cookies.is_empty() && ui.button(crate::i18n::tr("Clear all")).clicked() {
                         self.ws.cookies.cookies.clear();
                         changed = true;
                     }
                     ui.add(
                         egui::TextEdit::singleline(&mut st.filter)
-                            .hint_text("Filter by domain or name")
+                            .hint_text(crate::i18n::tr("Filter by domain or name"))
                             .min_size(egui::vec2(0.0, theme::CONTROL_HEIGHT))
                             .vertical_align(egui::Align::Center)
                             .desired_width(220.0),
@@ -50,9 +50,9 @@ impl PakPosApp {
                 });
             });
             ui.label(
-                RichText::new(
+                RichText::new(crate::i18n::tr(
                     "Cookies set by servers are stored here and sent with matching requests (domain, path, Secure).",
-                )
+                ))
                 .small()
                 .color(p.text_weak),
             );
@@ -64,7 +64,7 @@ impl PakPosApp {
                     ui.add_space(20.0);
                     ui.vertical_centered(|ui| {
                         ui.label(
-                            RichText::new("No cookies yet. Send a request to a server that sets one.")
+                            RichText::new(crate::i18n::tr("No cookies yet. Send a request to a server that sets one."))
                                 .color(p.text_weak),
                         );
                     });
@@ -120,7 +120,7 @@ impl PakPosApp {
                                     flags.push("host-only");
                                 }
                                 ui.label(RichText::new(flags.join(" · ")).small().color(p.text_weak));
-                                if ui.button("×").on_hover_text("Delete cookie").clicked() {
+                                if ui.button("×").on_hover_text(crate::i18n::tr("Delete cookie")).clicked() {
                                     remove = Some(i);
                                 }
                                 ui.end_row();
@@ -134,7 +134,7 @@ impl PakPosApp {
                 changed = true;
             }
             ui.separator();
-            ui.label(RichText::new("ADD A COOKIE").small().strong().color(p.text_weak));
+            ui.label(RichText::new(crate::i18n::tr("ADD A COOKIE")).small().strong().color(p.text_weak));
             ui.horizontal(|ui| {
                 let field = |ui: &mut egui::Ui, v: &mut String, hint: &str, w: f32| {
                     ui.add(
@@ -149,7 +149,7 @@ impl PakPosApp {
                 field(ui, &mut st.new_name, "name", 140.0);
                 field(ui, &mut st.new_value, "value", 220.0);
                 let ready = !st.new_domain.trim().is_empty() && !st.new_name.trim().is_empty();
-                if ui.add_enabled(ready, egui::Button::new("Add")).clicked() {
+                if ui.add_enabled(ready, egui::Button::new(crate::i18n::tr("Add"))).clicked() {
                     changed |= self.ws.cookies.upsert(StoredCookie {
                         name: st.new_name.trim().to_string(),
                         value: st.new_value.clone(),
@@ -163,7 +163,7 @@ impl PakPosApp {
                 }
             });
             ui.add_space(10.0);
-            if widgets::primary_button(ui, "Done").clicked() {
+            if widgets::primary_button(ui, crate::i18n::tr("Done")).clicked() {
                 keep = false;
             }
         });

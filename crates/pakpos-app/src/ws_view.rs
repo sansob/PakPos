@@ -69,10 +69,10 @@ pub fn realtime_composer(
     };
     match kind {
         RequestKind::Sse => {
-            widgets::section_title(ui, "Server-Sent Events");
+            widgets::section_title(ui, crate::i18n::tr("Server-Sent Events"));
             ui.label(
                 RichText::new(
-                    "Receive-only: Connect opens the event stream (Accept: text/event-stream) with this request's params, headers and auth. Events appear below with their type.",
+                    crate::i18n::tr("Receive-only: Connect opens the event stream (Accept: text/event-stream) with this request's params, headers and auth. Events appear below with their type."),
                 )
                 .color(p.text_weak),
             );
@@ -82,18 +82,18 @@ pub fn realtime_composer(
             let c = cfg.get_or_insert_with(Default::default);
             let mut changed = false;
             egui::Grid::new(("sio_grid", uid)).num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
-                ui.label("Event");
+                ui.label(crate::i18n::tr("Event"));
                 changed |= field(ui, &mut c.event, "message", 260.0);
                 ui.end_row();
-                ui.label("Auth");
+                ui.label(crate::i18n::tr("Auth"));
                 changed |= field(ui, &mut c.auth, "{ \"token\": \"{{token}}\" } (optional)", 360.0);
                 ui.end_row();
-                ui.label("Path");
+                ui.label(crate::i18n::tr("Path"));
                 changed |= field(ui, &mut c.path, "/socket.io/", 260.0);
                 ui.end_row();
             });
             ui.label(
-                RichText::new("The URL's path is the namespace, e.g. http://localhost:3000/admin.")
+                RichText::new(crate::i18n::tr("The URL's path is the namespace, e.g. http://localhost:3000/admin."))
                     .small()
                     .color(p.text_weak),
             );
@@ -109,7 +109,7 @@ pub fn realtime_composer(
         RequestKind::Mqtt => {
             let c = cfg.get_or_insert_with(Default::default);
             let mut changed = false;
-            widgets::section_title(ui, "Subscriptions");
+            widgets::section_title(ui, crate::i18n::tr("Subscriptions"));
             let mut remove = None;
             for (i, t) in c.subscriptions.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
@@ -124,14 +124,14 @@ pub fn realtime_composer(
                             }
                         });
                     if state.connected && !t.topic.trim().is_empty() {
-                        if ui.button("Subscribe").clicked() {
+                        if ui.button(crate::i18n::tr("Subscribe")).clicked() {
                             *action = Some(WsAction::Subscribe { topic: t.topic.trim().to_string(), qos: t.qos });
                         }
-                        if ui.button("Unsubscribe").clicked() {
+                        if ui.button(crate::i18n::tr("Unsubscribe")).clicked() {
                             *action = Some(WsAction::Unsubscribe(t.topic.trim().to_string()));
                         }
                     }
-                    if widgets::ghost_button(ui, "×", "Remove").clicked() {
+                    if widgets::ghost_button(ui, "×", crate::i18n::tr("Remove")).clicked() {
                         remove = Some(i);
                     }
                 });
@@ -140,19 +140,21 @@ pub fn realtime_composer(
                 c.subscriptions.remove(i);
                 changed = true;
             }
-            if ui.button("+ Topic").clicked() {
+            if ui.button(crate::i18n::tr("+ Topic")).clicked() {
                 c.subscriptions.push(pakpos_core::model::MqttTopic { enabled: true, ..Default::default() });
                 changed = true;
             }
             ui.label(
-                RichText::new("Enabled topics are subscribed when you connect; + and # are wildcards.")
-                    .small()
-                    .color(p.text_weak),
+                RichText::new(crate::i18n::tr(
+                    "Enabled topics are subscribed when you connect; + and # are wildcards.",
+                ))
+                .small()
+                .color(p.text_weak),
             );
             ui.add_space(8.0);
-            widgets::section_title(ui, "Publish");
+            widgets::section_title(ui, crate::i18n::tr("Publish"));
             ui.horizontal(|ui| {
-                ui.label("Topic");
+                ui.label(crate::i18n::tr("Topic"));
                 changed |= field(ui, &mut c.topic, "sensors/kantor-1/temperature", 300.0);
                 egui::ComboBox::from_id_salt(("mqtt_pub_qos", uid))
                     .width(70.0)
@@ -162,26 +164,25 @@ pub fn realtime_composer(
                             changed |= ui.selectable_value(&mut c.qos, q, format!("QoS {q}")).changed();
                         }
                     });
-                changed |= ui.checkbox(&mut c.retain, "Retain").changed();
+                changed |= ui.checkbox(&mut c.retain, crate::i18n::tr("Retain")).changed();
             });
-            egui::CollapsingHeader::new(RichText::new("Connection").small()).id_salt(("mqtt_conn", uid)).show(
-                ui,
-                |ui| {
+            egui::CollapsingHeader::new(RichText::new(crate::i18n::tr("Connection")).small())
+                .id_salt(("mqtt_conn", uid))
+                .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label("Client ID");
+                        ui.label(crate::i18n::tr("Client ID"));
                         changed |= field(ui, &mut c.client_id, "random", 200.0);
-                        ui.label("Keep alive");
+                        ui.label(crate::i18n::tr("Keep alive"));
                         changed |=
                             ui.add(egui::DragValue::new(&mut c.keep_alive_secs).range(5..=3600).suffix(" s")).changed();
-                        changed |= ui.checkbox(&mut c.clean_session, "Clean session").changed();
+                        changed |= ui.checkbox(&mut c.clean_session, crate::i18n::tr("Clean session")).changed();
                     });
                     ui.label(
-                        RichText::new("User name and password come from the Auth tab (Basic Auth).")
+                        RichText::new(crate::i18n::tr("User name and password come from the Auth tab (Basic Auth)."))
                             .small()
                             .color(p.text_weak),
                     );
-                },
-            );
+                });
             let (topic, qos, retain) = (c.topic.trim().to_string(), c.qos, c.retain);
             let mut send = None;
             changed |= composer(ui, body, state, uid, p, &mut send);
@@ -210,7 +211,7 @@ pub fn composer(
     }
     let Body::Raw { content, language } = body else { return changed };
     ui.horizontal(|ui| {
-        widgets::section_title(ui, "Message");
+        widgets::section_title(ui, crate::i18n::tr("Message"));
         egui::ComboBox::from_id_salt("ws_lang").width(90.0).selected_text(language.label()).show_ui(ui, |ui| {
             for l in [RawLanguage::Json, RawLanguage::Text] {
                 changed |= ui.selectable_value(language, l, l.label()).changed();
@@ -230,7 +231,7 @@ pub fn composer(
             .code_editor()
             .desired_rows(8)
             .desired_width(f32::INFINITY)
-            .hint_text("{ \"type\": \"subscribe\", \"channel\": \"orders\" }")
+            .hint_text(crate::i18n::tr("{ \"type\": \"subscribe\", \"channel\": \"orders\" }"))
             .layouter(&mut layouter),
     );
     changed |= resp.changed();
@@ -238,17 +239,23 @@ pub fn composer(
     ui.horizontal(|ui| {
         let enabled = state.connected && !content.trim().is_empty();
         if ui
-            .add_enabled(enabled, egui::Button::new("Send message"))
-            .on_hover_text("Ctrl+Enter in the editor")
+            .add_enabled(enabled, egui::Button::new(crate::i18n::tr("Send message")))
+            .on_hover_text(crate::i18n::tr("Ctrl+Enter in the editor"))
             .clicked()
             || (enabled && send_shortcut)
         {
             *action = Some(WsAction::Send(content.clone()));
         }
         if !state.connected {
-            ui.label(RichText::new("Connect first (the button next to the URL).").small().color(p.text_weak));
+            ui.label(
+                RichText::new(crate::i18n::tr("Connect first (the button next to the URL)."))
+                    .small()
+                    .color(p.text_weak),
+            );
         } else {
-            ui.label(RichText::new("{{variables}} are resolved before sending.").small().color(p.text_weak));
+            ui.label(
+                RichText::new(crate::i18n::tr("{{variables}} are resolved before sending.")).small().color(p.text_weak),
+            );
         }
     });
     changed
@@ -257,14 +264,14 @@ pub fn composer(
 /// Message log shown in the response panel.
 pub fn log_view(ui: &mut Ui, state: &mut WsState, uid: u64, p: &Palette) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Messages").strong().color(p.text_weak));
+        ui.label(RichText::new(crate::i18n::tr("Messages")).strong().color(p.text_weak));
         ui.add_space(8.0);
         if state.connected {
-            widgets::pill(ui, "Connected", theme::GREEN, theme::GREEN.gamma_multiply(0.16));
+            widgets::pill(ui, crate::i18n::tr("Connected"), theme::GREEN, theme::GREEN.gamma_multiply(0.16));
         } else if state.connecting {
             ui.add(egui::Spinner::new().color(theme::ORANGE));
         } else {
-            widgets::pill(ui, "Disconnected", p.text_weak, p.surface_alt);
+            widgets::pill(ui, crate::i18n::tr("Disconnected"), p.text_weak, p.surface_alt);
         }
         let (sent, recv) = state.log.iter().fold((0, 0), |(s, r), e| match e.direction {
             Some(Direction::Sent) => (s + 1, r),
@@ -273,21 +280,26 @@ pub fn log_view(ui: &mut Ui, state: &mut WsState, uid: u64, p: &Palette) {
         });
         widgets::pill(ui, format!("↑ {sent}  ↓ {recv}"), p.text, p.surface_alt);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("Clear").clicked() {
+            if ui.button(crate::i18n::tr("Clear")).clicked() {
                 state.log.clear();
             }
             ui.add(
                 egui::TextEdit::singleline(&mut state.filter)
                     .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                     .vertical_align(egui::Align::Center)
-                    .hint_text("🔍 Filter")
+                    .hint_text(crate::i18n::tr("🔍 Filter"))
                     .desired_width(160.0),
             );
         });
     });
     ui.add_space(4.0);
     if state.log.is_empty() {
-        widgets::empty_state(ui, p, "No messages yet", "Connect, then send a message from the Message tab.");
+        widgets::empty_state(
+            ui,
+            p,
+            crate::i18n::tr("No messages yet"),
+            crate::i18n::tr("Connect, then send a message from the Message tab."),
+        );
         return;
     }
     let filter = state.filter.to_lowercase();
@@ -329,7 +341,7 @@ pub fn log_view(ui: &mut Ui, state: &mut WsState, uid: u64, p: &Palette) {
                     let rich = RichText::new(text).monospace().color(if e.error { theme::RED } else { p.text });
                     let resp = ui
                         .add(egui::Label::new(rich).wrap().sense(egui::Sense::click()))
-                        .on_hover_text("Click to copy");
+                        .on_hover_text(crate::i18n::tr("Click to copy"));
                     if resp.clicked() {
                         ui.ctx().copy_text(e.text.clone());
                     }
@@ -363,7 +375,7 @@ impl PakPosApp {
                     WsAction::Emit { event, data } => ws::WsCommand::Emit { event: r(&event), data: r(&data) },
                     WsAction::Publish { topic, payload, qos, retain } => {
                         if topic.is_empty() {
-                            self.tabs[idx].ws.system("Pick a topic to publish to", true);
+                            self.tabs[idx].ws.system(crate::i18n::tr("Pick a topic to publish to"), true);
                             return;
                         }
                         ws::WsCommand::Publish { topic: r(&topic), payload: r(&payload), qos, retain }

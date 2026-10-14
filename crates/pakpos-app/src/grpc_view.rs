@@ -57,12 +57,15 @@ pub fn editor(
         changed = true;
     }
     ui.horizontal(|ui| {
-        ui.label("Method");
-        let selected =
-            if cfg.method.is_empty() { "Load methods, then pick one".to_string() } else { cfg.method.clone() };
+        ui.label(crate::i18n::tr("Method"));
+        let selected = if cfg.method.is_empty() {
+            crate::i18n::tr("Load methods, then pick one").to_string()
+        } else {
+            cfg.method.clone()
+        };
         egui::ComboBox::from_id_salt(("grpc_method", uid)).width(380.0).selected_text(selected).show_ui(ui, |ui| {
             if state.methods.is_empty() {
-                ui.label(RichText::new("No methods loaded yet").color(p.text_weak));
+                ui.label(RichText::new(crate::i18n::tr("No methods loaded yet")).color(p.text_weak));
             }
             for m in &state.methods {
                 let label = format!("{}  ·  {}", m.full_name, m.kind_label());
@@ -76,11 +79,11 @@ pub fn editor(
         if state.job.is_some() {
             ui.add(egui::Spinner::new().color(crate::theme::ORANGE));
         } else if ui
-            .button("⟳ Load methods")
+            .button(crate::i18n::tr("⟳ Load methods"))
             .on_hover_text(if cfg.proto_files.is_empty() {
-                "Ask the server (gRPC reflection)"
+                crate::i18n::tr("Ask the server (gRPC reflection)")
             } else {
-                "Compile the .proto files"
+                crate::i18n::tr("Compile the .proto files")
             })
             .clicked()
         {
@@ -95,22 +98,24 @@ pub fn editor(
     }
     ui.add_space(4.0);
     egui::CollapsingHeader::new(RichText::new(if cfg.proto_files.is_empty() {
-        "Schema: server reflection".to_string()
+        crate::i18n::tr("Schema: server reflection").to_string()
     } else {
-        format!("Schema: {} .proto file(s)", cfg.proto_files.len())
+        crate::i18n::trf("Schema: {n} .proto file(s)", &[("n", &cfg.proto_files.len().to_string())])
     }))
     .id_salt(("grpc_schema", uid))
     .show(ui, |ui| {
         ui.label(
-            RichText::new("Leave empty to describe the service with gRPC server reflection, or add the .proto files.")
-                .small()
-                .color(p.text_weak),
+            RichText::new(crate::i18n::tr(
+                "Leave empty to describe the service with gRPC server reflection, or add the .proto files.",
+            ))
+            .small()
+            .color(p.text_weak),
         );
         let mut remove = None;
         for (i, f) in cfg.proto_files.iter().enumerate() {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(f).monospace().small());
-                if widgets::ghost_button(ui, "×", "Remove").clicked() {
+                if widgets::ghost_button(ui, "×", crate::i18n::tr("Remove")).clicked() {
                     remove = Some(i);
                 }
             });
@@ -120,17 +125,17 @@ pub fn editor(
             changed = true;
         }
         ui.horizontal(|ui| {
-            if ui.button("Add .proto…").clicked() {
+            if ui.button(crate::i18n::tr("Add .proto…")).clicked() {
                 *action = Some(GrpcAction::AddProto);
             }
-            ui.label(RichText::new("Import paths").small().color(p.text_weak));
+            ui.label(RichText::new(crate::i18n::tr("Import paths")).small().color(p.text_weak));
             let mut paths = cfg.import_paths.join(";");
             if ui
                 .add(
                     egui::TextEdit::singleline(&mut paths)
                         .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                         .vertical_align(egui::Align::Center)
-                        .hint_text("dir1;dir2 (optional)")
+                        .hint_text(crate::i18n::tr("dir1;dir2 (optional)"))
                         .desired_width(240.0),
                 )
                 .changed()
@@ -144,8 +149,8 @@ pub fn editor(
     ui.add_space(6.0);
     let Body::Raw { content, .. } = body else { return changed };
     ui.horizontal(|ui| {
-        widgets::section_title(ui, "Message (JSON)");
-        if ui.button("Generate example").clicked() {
+        widgets::section_title(ui, crate::i18n::tr("Message (JSON)"));
+        if ui.button(crate::i18n::tr("Generate example")).clicked() {
             *action = Some(GrpcAction::Template);
         }
     });
@@ -153,30 +158,40 @@ pub fn editor(
     if streaming {
         ui.horizontal(|ui| {
             if state.stream.is_some() {
-                if widgets::primary_button(ui, "Send message")
-                    .on_hover_text("Send the message below (an array sends each element)")
+                if widgets::primary_button(ui, crate::i18n::tr("Send message"))
+                    .on_hover_text(crate::i18n::tr("Send the message below (an array sends each element)"))
                     .clicked()
                 {
                     *action = Some(GrpcAction::StreamSend(content.clone()));
                 }
                 if ui
-                    .button("End stream")
-                    .on_hover_text("Half-close: the server sees the end of your messages")
+                    .button(crate::i18n::tr("End stream"))
+                    .on_hover_text(crate::i18n::tr("Half-close: the server sees the end of your messages"))
                     .clicked()
                 {
                     *action = Some(GrpcAction::StreamEnd);
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(crate::i18n::tr("Cancel")).clicked() {
                     *action = Some(GrpcAction::StreamCancel);
                 }
-                widgets::pill(ui, "stream open", crate::theme::GREEN, crate::theme::GREEN.gamma_multiply(0.16));
+                widgets::pill(
+                    ui,
+                    crate::i18n::tr("stream open"),
+                    crate::theme::GREEN,
+                    crate::theme::GREEN.gamma_multiply(0.16),
+                );
             } else {
-                if ui.button("▶ Open stream").on_hover_text("Keep the call open and send messages one by one").clicked()
+                if ui
+                    .button(crate::i18n::tr("▶ Open stream"))
+                    .on_hover_text(crate::i18n::tr("Keep the call open and send messages one by one"))
+                    .clicked()
                 {
                     *action = Some(GrpcAction::OpenStream);
                 }
                 ui.label(
-                    RichText::new("or press Send to send a JSON array of messages at once").small().color(p.text_weak),
+                    RichText::new(crate::i18n::tr("or press Send to send a JSON array of messages at once"))
+                        .small()
+                        .color(p.text_weak),
                 );
             }
         });
@@ -234,7 +249,7 @@ impl PakPosApp {
             GrpcAction::StreamEnd => {
                 if let Some(h) = &self.tabs[idx].grpc.stream {
                     h.end();
-                    self.tabs[idx].grpc.live.system("You ended the stream", false);
+                    self.tabs[idx].grpc.live.system(crate::i18n::tr("You ended the stream"), false);
                 }
             }
             GrpcAction::StreamCancel => {
@@ -289,8 +304,11 @@ impl PakPosApp {
                     Ok(pool) => {
                         st.methods = grpc::methods(&pool);
                         st.pool = Some(pool);
-                        st.error =
-                            if st.methods.is_empty() { Some("The server exposes no services.".into()) } else { None };
+                        st.error = if st.methods.is_empty() {
+                            Some(crate::i18n::tr("The server exposes no services.").into())
+                        } else {
+                            None
+                        };
                         let cfg = tab.request.grpc.get_or_insert_with(Default::default);
                         if cfg.method.is_empty() || !st.methods.iter().any(|m| m.full_name == cfg.method) {
                             if let Some(first) = st.methods.first() {
@@ -321,7 +339,7 @@ impl PakPosApp {
         let mut tokens = self.ws.tokens.clone();
         let settings = self.ws.settings.http.clone();
         let result = (|| -> Result<grpc::StreamHandle, String> {
-            let pool = pool.ok_or("Load the methods first (⟳ Load methods).")?;
+            let pool = pool.ok_or(crate::i18n::tr("Load the methods first (⟳ Load methods)."))?;
             pakpos_core::oauth2::ensure_token(&effective, &mut scope, &mut tokens, &settings)
                 .map_err(|e| e.to_string())?;
             let mut meta = req.clone();
@@ -342,7 +360,7 @@ impl PakPosApp {
         st.live.log.clear();
         match result {
             Ok(h) => {
-                st.live.system(format!("Opening {}", cfg.method), false);
+                st.live.system(crate::i18n::trf("Opening {method}", &[("method", &cfg.method)]), false);
                 st.live.connecting = true;
                 st.stream = Some(h);
             }
@@ -362,7 +380,7 @@ impl PakPosApp {
                     grpc::StreamEvent::Opened { .. } => {
                         st.live.connecting = false;
                         st.live.connected = true;
-                        st.live.system("Stream open", false);
+                        st.live.system(crate::i18n::tr("Stream open"), false);
                     }
                     grpc::StreamEvent::Message { direction, text, at } => {
                         st.live.connecting = false;
@@ -428,7 +446,7 @@ impl PakPosApp {
                     None => grpc::load_pool(&cfg, &prepared.url, &settings).map_err(|e| e.to_string())?,
                 };
                 if cfg.method.is_empty() {
-                    return Err("Pick a method first (Message tab → Load methods).".into());
+                    return Err(crate::i18n::tr("Pick a method first (Message tab → Load methods).").into());
                 }
                 let r = grpc::call(&prepared.url, &pool, &cfg.method, &message, &prepared.headers, &settings, 500)
                     .map_err(|e| e.to_string())?;

@@ -179,9 +179,9 @@ impl PakPosApp {
                     ui,
                     &mut view,
                     &[
-                        (SidebarView::Collections, "Collections".into()),
-                        (SidebarView::Environments, "Environments".into()),
-                        (SidebarView::History, "History".into()),
+                        (SidebarView::Collections, crate::i18n::tr("Collections").into()),
+                        (SidebarView::Environments, crate::i18n::tr("Environments").into()),
+                        (SidebarView::History, crate::i18n::tr("History").into()),
                     ],
                 );
                 self.sidebar = view;
@@ -200,21 +200,26 @@ impl PakPosApp {
         // button (sizing it as "available - N" makes the panel grow every frame).
         let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
         ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("+").on_hover_text("New collection").clicked() {
+            if ui.button("+").on_hover_text(crate::i18n::tr("New collection")).clicked() {
                 self.actions.push(Action::Dialog(Dialog::NewCollection { name: String::new() }));
             }
             ui.add(
                 egui::TextEdit::singleline(&mut self.search)
                     .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                     .vertical_align(egui::Align::Center)
-                    .hint_text("🔍 Search requests")
+                    .hint_text(crate::i18n::tr("🔍 Search requests"))
                     .desired_width(ui.available_width()),
             );
         });
         ui.add_space(6.0);
 
         if self.ws.collections.is_empty() {
-            widgets::empty_state(ui, &p, "No collections yet", "Create one with + or import a collection file.");
+            widgets::empty_state(
+                ui,
+                &p,
+                crate::i18n::tr("No collections yet"),
+                crate::i18n::tr("Create one with + or import a collection file."),
+            );
             return;
         }
 
@@ -253,40 +258,40 @@ impl PakPosApp {
                     actions.push(cmd);
                 }
                 resp.context_menu(|ui| {
-                    if ui.button("➕ Add request").clicked() {
+                    if ui.button(crate::i18n::tr("➕ Add request")).clicked() {
                         pending.push(Action::NewRequestIn { collection: c.id.clone(), folder: None });
                     }
-                    if ui.button("📁 Add folder").clicked() {
+                    if ui.button(crate::i18n::tr("📁 Add folder")).clicked() {
                         pending.push(Action::NewFolderIn { collection: c.id.clone(), folder: None });
                     }
-                    if ui.button("⚙ Edit collection…").clicked() {
+                    if ui.button(crate::i18n::tr("⚙ Edit collection…")).clicked() {
                         pending.push(Action::Dialog(Dialog::CollectionSettings {
                             id: c.id.clone(),
                             tab: crate::app::CollectionTab::General,
                         }));
                     }
                     if self.mock.as_ref().is_some_and(|m| m.collection == c.id) {
-                        if ui.button("■ Stop mock server").clicked() {
+                        if ui.button(crate::i18n::tr("■ Stop mock server")).clicked() {
                             pending.push(Action::StopMock);
                         }
-                    } else if ui.button("◉ Start mock server").clicked() {
+                    } else if ui.button(crate::i18n::tr("◉ Start mock server")).clicked() {
                         pending.push(Action::StartMock(c.id.clone()));
                     }
-                    if ui.button("▶ Run collection").clicked() {
+                    if ui.button(crate::i18n::tr("▶ Run collection")).clicked() {
                         pending.push(Action::RunCollection(c.id.clone()));
                     }
                     ui.separator();
-                    if ui.button("✏ Rename").clicked() {
+                    if ui.button(crate::i18n::tr("✏ Rename")).clicked() {
                         pending.push(Action::Rename(RenameTarget::Collection(c.id.clone()), c.name.clone()));
                     }
-                    if ui.button("⬆ Export (Collection v2.1)…").clicked() {
+                    if ui.button(crate::i18n::tr("⬆ Export (Collection v2.1)…")).clicked() {
                         pending.push(Action::ExportCollection(c.id.clone()));
                     }
-                    if ui.button("⬆ Export as OpenAPI 3…").clicked() {
+                    if ui.button(crate::i18n::tr("⬆ Export as OpenAPI 3…")).clicked() {
                         pending.push(Action::ExportOpenApi(c.id.clone()));
                     }
                     ui.separator();
-                    if ui.button(RichText::new("🗑 Delete").color(theme::RED)).clicked() {
+                    if ui.button(RichText::new(crate::i18n::tr("🗑 Delete")).color(theme::RED)).clicked() {
                         pending.push(Action::Delete(DeleteTarget::Collection(c.id.clone()), c.name.clone()));
                     }
                 });
@@ -387,17 +392,17 @@ impl PakPosApp {
                         toggles.push(cmd);
                     }
                     resp.context_menu(|ui| {
-                        if ui.button("Open").clicked() {
+                        if ui.button(crate::i18n::tr("Open")).clicked() {
                             toggles.push(ToggleNode(format!("open:{collection}:{}", r.id)));
                         }
-                        if ui.button("📋 Duplicate").clicked() {
+                        if ui.button(crate::i18n::tr("📋 Duplicate")).clicked() {
                             toggles.push(ToggleNode(format!("dup:{collection}:{}", r.id)));
                         }
-                        if ui.button("✏ Rename").clicked() {
+                        if ui.button(crate::i18n::tr("✏ Rename")).clicked() {
                             toggles.push(ToggleNode(format!("ren:{collection}:{}:{}", r.id, r.name)));
                         }
                         ui.separator();
-                        if ui.button(RichText::new("🗑 Delete").color(theme::RED)).clicked() {
+                        if ui.button(RichText::new(crate::i18n::tr("🗑 Delete")).color(theme::RED)).clicked() {
                             toggles.push(ToggleNode(format!("del:{collection}:{}:{}", r.id, r.name)));
                         }
                     });
@@ -410,19 +415,28 @@ impl PakPosApp {
         let p = self.palette;
         let mut pending: Vec<Action> = Vec::new();
         ui.horizontal(|ui| {
-            if ui.button("+ New").clicked() {
+            if ui.button(crate::i18n::tr("+ New")).clicked() {
                 pending.push(Action::NewEnvironment);
             }
-            if ui.button("Import…").clicked() {
+            if ui.button(crate::i18n::tr("Import…")).clicked() {
                 pending.push(Action::ImportEnvironment);
             }
-            if ui.button("Globals").on_hover_text("Variables available in every environment").clicked() {
+            if ui
+                .button(crate::i18n::tr("Globals"))
+                .on_hover_text(crate::i18n::tr("Variables available in every environment"))
+                .clicked()
+            {
                 pending.push(Action::EditEnvironment(None));
             }
         });
         ui.add_space(8.0);
         if self.ws.environments.is_empty() {
-            widgets::empty_state(ui, &p, "No environments", "Environments hold variables like {{base_url}}.");
+            widgets::empty_state(
+                ui,
+                &p,
+                crate::i18n::tr("No environments"),
+                crate::i18n::tr("Environments hold variables like {{base_url}}."),
+            );
             self.actions.extend(pending);
             return;
         }
@@ -440,7 +454,10 @@ impl PakPosApp {
                         icon: Some(if is_active { "●" } else { "○" }),
                         label: &e.name,
                         selected: is_active,
-                        weak_suffix: Some(format!("{} vars", e.variables.iter().filter(|v| !v.key.is_empty()).count())),
+                        weak_suffix: Some(crate::i18n::trf(
+                            "{n} vars",
+                            &[("n", &e.variables.iter().filter(|v| !v.key.is_empty()).count().to_string())],
+                        )),
                     },
                 );
                 if resp.clicked() {
@@ -450,23 +467,25 @@ impl PakPosApp {
                     pending.push(Action::EditEnvironment(Some(e.id.clone())));
                 }
                 resp.context_menu(|ui| {
-                    if ui.button("✏ Edit variables").clicked() {
+                    if ui.button(crate::i18n::tr("✏ Edit variables")).clicked() {
                         pending.push(Action::EditEnvironment(Some(e.id.clone())));
                     }
-                    if ui.button("Rename").clicked() {
+                    if ui.button(crate::i18n::tr("Rename")).clicked() {
                         pending.push(Action::Rename(RenameTarget::Environment(e.id.clone()), e.name.clone()));
                     }
-                    if ui.button("⬆ Export…").clicked() {
+                    if ui.button(crate::i18n::tr("⬆ Export…")).clicked() {
                         pending.push(Action::ExportEnvironment(e.id.clone()));
                     }
                     ui.separator();
-                    if ui.button(RichText::new("🗑 Delete").color(theme::RED)).clicked() {
+                    if ui.button(RichText::new(crate::i18n::tr("🗑 Delete")).color(theme::RED)).clicked() {
                         pending.push(Action::Delete(DeleteTarget::Environment(e.id.clone()), e.name.clone()));
                     }
                 });
             }
             ui.add_space(10.0);
-            ui.label(RichText::new("Click to activate · double-click to edit").small().color(p.text_weak));
+            ui.label(
+                RichText::new(crate::i18n::tr("Click to activate · double-click to edit")).small().color(p.text_weak),
+            );
         });
         self.actions.extend(pending);
     }
@@ -475,16 +494,24 @@ impl PakPosApp {
         let p = self.palette;
         let mut pending: Vec<Action> = Vec::new();
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("{} requests", self.ws.history.len())).color(p.text_weak));
+            ui.label(
+                RichText::new(crate::i18n::trf("{n} requests", &[("n", &self.ws.history.len().to_string())]))
+                    .color(p.text_weak),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if !self.ws.history.is_empty() && ui.button("Clear").clicked() {
+                if !self.ws.history.is_empty() && ui.button(crate::i18n::tr("Clear")).clicked() {
                     pending.push(Action::ClearHistory);
                 }
             });
         });
         ui.add_space(6.0);
         if self.ws.history.is_empty() {
-            widgets::empty_state(ui, &p, "No history yet", "Requests you send appear here.");
+            widgets::empty_state(
+                ui,
+                &p,
+                crate::i18n::tr("No history yet"),
+                crate::i18n::tr("Requests you send appear here."),
+            );
             self.actions.extend(pending);
             return;
         }
@@ -541,17 +568,17 @@ impl PakPosApp {
 pub struct ToggleNode(pub String);
 
 fn folder_menu(ui: &mut Ui, collection: &str, folder: &str, name: &str, out: &mut Vec<ToggleNode>) {
-    if ui.button("➕ Add request").clicked() {
+    if ui.button(crate::i18n::tr("➕ Add request")).clicked() {
         out.push(ToggleNode(format!("newreq:{collection}:{folder}")));
     }
-    if ui.button("📁 Add folder").clicked() {
+    if ui.button(crate::i18n::tr("📁 Add folder")).clicked() {
         out.push(ToggleNode(format!("newfolder:{collection}:{folder}")));
     }
-    if ui.button("✏ Rename").clicked() {
+    if ui.button(crate::i18n::tr("✏ Rename")).clicked() {
         out.push(ToggleNode(format!("ren:{collection}:{folder}:{name}")));
     }
     ui.separator();
-    if ui.button(RichText::new("🗑 Delete").color(theme::RED)).clicked() {
+    if ui.button(RichText::new(crate::i18n::tr("🗑 Delete")).color(theme::RED)).clicked() {
         out.push(ToggleNode(format!("del:{collection}:{folder}:{name}")));
     }
 }

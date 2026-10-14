@@ -260,6 +260,10 @@ pub struct PakPosApp {
 impl PakPosApp {
     pub fn new(cc: &eframe::CreationContext<'_>, ws: Workspace, load_errors: Vec<String>) -> Self {
         let palette = Palette::of(ws.settings.theme);
+        crate::i18n::set(match &ws.settings.language {
+            Some(code) => crate::i18n::Lang::from_code(code),
+            None => crate::i18n::Lang::from_system(),
+        });
         let cookie_jar = pakpos_core::cookies::SharedJar::new(ws.cookies.clone());
         let mut app = PakPosApp {
             cookie_jar,
@@ -462,7 +466,10 @@ impl PakPosApp {
             let mut changes = pakpos_core::scripts::VarChanges::default();
             if skipped {
                 logs.push(
-                    "Scripts were not run: this collection is not trusted (see the banner in the Scripts tab).".into(),
+                    crate::i18n::tr(
+                        "Scripts were not run: this collection is not trusted (see the banner in the Scripts tab).",
+                    )
+                    .into(),
                 );
             }
             if run_scripts {
@@ -478,9 +485,10 @@ impl PakPosApp {
             let new_token = match pakpos_core::oauth2::ensure_token(&effective, &mut scope, &mut tokens, &settings) {
                 Ok(t) => t,
                 Err(pakpos_core::oauth2::OAuthError::NeedsInteractive) => {
-                    let _ = tx.send(Err(
-                        "No OAuth 2.0 token yet: open the Auth tab and click “Get new access token”.".into()
-                    ));
+                    let _ = tx.send(Err(crate::i18n::tr(
+                        "No OAuth 2.0 token yet: open the Auth tab and click “Get new access token”.",
+                    )
+                    .into()));
                     ctx.request_repaint();
                     return;
                 }
@@ -561,7 +569,10 @@ impl PakPosApp {
                                 env.set(k, v.clone());
                             }
                             self.env_dirty = Some(Instant::now());
-                            self.toast(format!("Saved {} to environment", names.join(", ")));
+                            self.toast(crate::i18n::trf(
+                                "Saved {names} to environment",
+                                &[("names", &names.join(", "))],
+                            ));
                         } else {
                             for (k, v) in &outcome.extracted {
                                 if let Some(g) = self.ws.globals.iter_mut().find(|g| &g.key == k) {
@@ -571,7 +582,7 @@ impl PakPosApp {
                                 }
                             }
                             let _ = self.ws.save_globals();
-                            self.toast(format!("Saved {} to globals", names.join(", ")));
+                            self.toast(crate::i18n::trf("Saved {names} to globals", &[("names", &names.join(", "))]));
                         }
                     }
                     let tab = &mut self.tabs[i];
@@ -596,7 +607,7 @@ impl PakPosApp {
         if !self.ws.is_trusted(id) {
             self.ws.settings.trusted_collections.push(id.to_string());
             self.persist_settings();
-            self.toast("Collection trusted: its scripts will run");
+            self.toast(crate::i18n::tr("Collection trusted: its scripts will run"));
         }
     }
 
@@ -648,7 +659,7 @@ impl PakPosApp {
         if saved {
             self.persist_collection(&cid);
             self.tabs[idx].dirty = false;
-            self.toast("Saved");
+            self.toast(crate::i18n::tr("Saved"));
         } else {
             // The saved request was deleted meanwhile: save as new.
             self.tabs[idx].source = None;
@@ -670,7 +681,7 @@ impl PakPosApp {
         let Some(tab) = self.tabs.get(idx) else { return };
         let ResponseState::Done(outcome) = &tab.response else { return };
         let Some((cid, rid)) = tab.source.clone() else {
-            self.toast_error("Save the request to a collection first, then save examples.");
+            self.toast_error(crate::i18n::tr("Save the request to a collection first, then save examples."));
             return;
         };
         let r = &outcome.response;
@@ -681,7 +692,7 @@ impl PakPosApp {
             saved.examples.push(example);
         }
         self.persist_collection(&cid);
-        self.toast("Saved as example (served by the mock server)");
+        self.toast(crate::i18n::tr("Saved as example (served by the mock server)"));
     }
 
     pub fn persist_environments(&mut self) {
@@ -849,7 +860,7 @@ impl PakPosApp {
                         let white = p.header_text;
                         if ui
                             .add(egui::Button::new(RichText::new("⚙").size(16.0).color(white)).frame(false))
-                            .on_hover_text("Settings")
+                            .on_hover_text(crate::i18n::tr("Settings"))
                             .clicked()
                         {
                             self.dialog = Some(Dialog::Settings);
@@ -857,7 +868,7 @@ impl PakPosApp {
                         let theme_icon = if p.dark { "☀" } else { "🌙" };
                         if ui
                             .add(egui::Button::new(RichText::new(theme_icon).size(15.0).color(white)).frame(false))
-                            .on_hover_text("Toggle light / dark")
+                            .on_hover_text(crate::i18n::tr("Toggle light / dark"))
                             .clicked()
                         {
                             self.ws.settings.theme = if p.dark { Theme::Light } else { Theme::Dark };
@@ -865,57 +876,65 @@ impl PakPosApp {
                         }
                         ui.add_space(8.0);
                         self.environment_picker(ui);
-                        ui.label(RichText::new("Environment").color(white.gamma_multiply(0.7)).small());
+                        ui.label(
+                            RichText::new(crate::i18n::tr("Environment")).color(white.gamma_multiply(0.7)).small(),
+                        );
                         ui.add_space(12.0);
                         let changes = self.git.change_count();
-                        let sync_label =
-                            if changes > 0 { format!("⇅ Sync ({changes})") } else { "⇅ Sync".to_string() };
+                        let sync_label = if changes > 0 {
+                            crate::i18n::trf("⇅ Sync ({n})", &[("n", &changes.to_string())])
+                        } else {
+                            crate::i18n::tr("⇅ Sync").to_string()
+                        };
                         if ui
                             .add(
                                 egui::Button::new(RichText::new(sync_label).color(white))
                                     .fill(theme::NAVY_600)
                                     .stroke(egui::Stroke::NONE),
                             )
-                            .on_hover_text("Share this workspace with git")
+                            .on_hover_text(crate::i18n::tr("Share this workspace with git"))
                             .clicked()
                         {
                             self.git.open = true;
                             self.git.last_refresh = None;
                         }
                         let cookie_count = self.ws.cookies.cookies.len();
-                        let cookies_label =
-                            if cookie_count > 0 { format!("Cookies ({cookie_count})") } else { "Cookies".to_string() };
+                        let cookies_label = if cookie_count > 0 {
+                            format!("{} ({cookie_count})", crate::i18n::tr("Cookies"))
+                        } else {
+                            crate::i18n::tr("Cookies").to_string()
+                        };
                         if ui
                             .add(
                                 egui::Button::new(RichText::new(cookies_label).color(white))
                                     .fill(theme::NAVY_600)
                                     .stroke(egui::Stroke::NONE),
                             )
-                            .on_hover_text("View and edit the cookie jar")
+                            .on_hover_text(crate::i18n::tr("View and edit the cookie jar"))
                             .clicked()
                         {
                             self.dialog = Some(Dialog::Cookies(Default::default()));
                         }
                         let import = ui.add(
-                            egui::Button::new(RichText::new("Import").color(white))
+                            egui::Button::new(RichText::new(crate::i18n::tr("Import")).color(white))
                                 .fill(theme::NAVY_600)
                                 .stroke(egui::Stroke::NONE),
                         );
                         egui::Popup::menu(&import).show(|ui| {
-                            if ui.button("Collection or OpenAPI file…").clicked() {
+                            if ui.button(crate::i18n::tr("Collection or OpenAPI file…")).clicked() {
                                 self.actions.push(Action::ImportPostmanCollection);
                             }
-                            if ui.button("Environment…").clicked() {
+                            if ui.button(crate::i18n::tr("Environment…")).clicked() {
                                 self.actions.push(Action::ImportEnvironment);
                             }
-                            if ui.button("cURL command…").clicked() {
+                            if ui.button(crate::i18n::tr("cURL command…")).clicked() {
                                 self.actions
                                     .push(Action::Dialog(Dialog::ImportCurl { text: String::new(), error: None }));
                             }
                         });
                         if ui
                             .add(
-                                egui::Button::new(RichText::new("+ New").color(theme::INK).strong())
+                                egui::Button::new(RichText::new(crate::i18n::tr("+ New")).color(theme::INK).strong())
                                     .fill(theme::ORANGE)
                                     .stroke(egui::Stroke::NONE),
                             )
@@ -929,15 +948,19 @@ impl PakPosApp {
     }
 
     fn environment_picker(&mut self, ui: &mut egui::Ui) {
-        let current = self.ws.active_environment().map(|e| e.name.clone()).unwrap_or_else(|| "No environment".into());
+        let current = self
+            .ws
+            .active_environment()
+            .map(|e| e.name.clone())
+            .unwrap_or_else(|| crate::i18n::tr("No environment").into());
         let mut selected = self.ws.settings.active_environment.clone();
         egui::ComboBox::from_id_salt("env_picker").width(170.0).selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut selected, None, "No environment");
+            ui.selectable_value(&mut selected, None, crate::i18n::tr("No environment"));
             for e in &self.ws.environments {
                 ui.selectable_value(&mut selected, Some(e.id.clone()), &e.name);
             }
             ui.separator();
-            if ui.button("Manage environments…").clicked() {
+            if ui.button(crate::i18n::tr("Manage environments…")).clicked() {
                 self.actions.push(Action::EditEnvironment(self.ws.settings.active_environment.clone()));
             }
         });
@@ -960,7 +983,12 @@ impl PakPosApp {
                     ui.label(RichText::new(format!("PakPos {}", pakpos_core::VERSION)).small().color(p.text_weak));
                     ui.separator();
                     ui.label(
-                        RichText::new(format!("Workspace: {}", self.ws.root.display())).small().color(p.text_weak),
+                        RichText::new(crate::i18n::trf(
+                            "Workspace: {path}",
+                            &[("path", &self.ws.root.display().to_string())],
+                        ))
+                        .small()
+                        .color(p.text_weak),
                     );
                     if let Some(m) = &self.mock {
                         ui.separator();
@@ -968,7 +996,7 @@ impl PakPosApp {
                             RichText::new(format!("● Mock http://{}", m.server.addr)).small().color(theme::GREEN);
                         if ui
                             .add(egui::Label::new(label).sense(egui::Sense::click()))
-                            .on_hover_text("Show mock server")
+                            .on_hover_text(crate::i18n::tr("Show mock server"))
                             .clicked()
                         {
                             self.actions.push(Action::ShowMock);
@@ -977,7 +1005,7 @@ impl PakPosApp {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .add(
-                                egui::Label::new(RichText::new("About").small().color(p.text_weak))
+                                egui::Label::new(RichText::new(crate::i18n::tr("About")).small().color(p.text_weak))
                                     .sense(egui::Sense::click()),
                             )
                             .clicked()
@@ -985,9 +1013,11 @@ impl PakPosApp {
                             self.dialog = Some(Dialog::About);
                         }
                         ui.label(
-                            RichText::new("Ctrl+Enter send  ·  Ctrl+S save  ·  Ctrl+T new tab  ·  Ctrl+I import cURL")
-                                .small()
-                                .color(p.text_weak),
+                            RichText::new(crate::i18n::tr(crate::i18n::tr(
+                                "Ctrl+Enter send  ·  Ctrl+S save  ·  Ctrl+T new tab  ·  Ctrl+I import cURL",
+                            )))
+                            .small()
+                            .color(p.text_weak),
                         );
                     });
                 });
