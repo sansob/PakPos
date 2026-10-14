@@ -51,6 +51,27 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
                 name: "New folder".into(),
             });
         }
+        Action::MoveItem { from, item, to, at } => {
+            if pakpos_core::model::move_item(&mut app.ws.collections, &from, &item, &to, &at) {
+                app.persist_collection(&from);
+                if from != to {
+                    app.persist_collection(&to);
+                    // Open tabs follow their requests to the other collection.
+                    let moved: Vec<String> = app
+                        .collection(&to)
+                        .map(|c| c.flatten().into_iter().map(|(_, r)| r.id).collect())
+                        .unwrap_or_default();
+                    for tab in &mut app.tabs {
+                        if let Some((c, r)) = &mut tab.source {
+                            if *c == from && moved.contains(r) {
+                                *c = to.clone();
+                            }
+                        }
+                    }
+                    app.open_nodes.insert(to);
+                }
+            }
+        }
         Action::Duplicate { collection, request } => {
             let mut new_id = None;
             if let Some(c) = app.collection_mut(&collection) {

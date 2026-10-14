@@ -207,6 +207,7 @@ pub struct RunnerState {
 /// Things the UI asks for; applied after drawing to keep borrows simple.
 pub enum Action {
     OpenRequest { collection: String, request: String },
+    MoveItem { from: String, item: String, to: String, at: pakpos_core::model::DropTarget },
     NewTab(Box<Request>),
     NewRequestIn { collection: String, folder: Option<String> },
     NewFolderIn { collection: String, folder: Option<String> },

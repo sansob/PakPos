@@ -945,6 +945,100 @@ impl Collection {
     pub fn request_count(&self) -> usize {
         self.flatten().len()
     }
+
+    /// Is `id` the folder `ancestor` or somewhere inside it?
+    pub fn is_inside(&self, id: &str, ancestor: &str) -> bool {
+        fn contains(items: &[Item], id: &str) -> bool {
+            items.iter().any(|i| i.id() == id || matches!(i, Item::Folder(f) if contains(&f.items, id)))
+        }
+        fn find<'a>(items: &'a [Item], id: &str) -> Option<&'a Folder> {
+            items.iter().find_map(|i| match i {
+                Item::Folder(f) if f.id == id => Some(f),
+                Item::Folder(f) => find(&f.items, id),
+                _ => None,
+            })
+        }
+        id == ancestor || find(&self.items, ancestor).is_some_and(|f| contains(&f.items, id))
+    }
+
+    /// Inserts an item at a drop position. Returns the item back when the
+    /// target does not exist.
+    pub fn insert_item(&mut self, item: Item, at: &DropTarget) -> Result<(), Item> {
+        fn walk(items: &mut Vec<Item>, item: Item, at: &DropTarget) -> Result<(), Item> {
+            match at {
+                DropTarget::Before(id) | DropTarget::After(id) => {
+                    if let Some(pos) = items.iter().position(|i| i.id() == id) {
+                        let pos = if matches!(at, DropTarget::After(_)) { pos + 1 } else { pos };
+                        items.insert(pos, item);
+                        return Ok(());
+                    }
+                }
+                DropTarget::Into(Some(id)) => {
+                    if let Some(Item::Folder(f)) = items.iter_mut().find(|i| i.id() == id) {
+                        f.items.push(item);
+                        return Ok(());
+                    }
+                }
+                DropTarget::Into(None) => {
+                    items.push(item);
+                    return Ok(());
+                }
+            }
+            let mut item = item;
+            for child in items.iter_mut() {
+                if let Item::Folder(f) = child {
+                    match walk(&mut f.items, item, at) {
+                        Ok(()) => return Ok(()),
+                        Err(back) => item = back,
+                    }
+                }
+            }
+            Err(item)
+        }
+        walk(&mut self.items, item, at)
+    }
+}
+
+/// Where a dragged item lands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DropTarget {
+    /// Just before the item with this id (same parent).
+    Before(String),
+    /// Just after the item with this id.
+    After(String),
+    /// At the end of a folder, or of the collection itself (`None`).
+    Into(Option<String>),
+}
+
+impl DropTarget {
+    pub fn target_id(&self) -> Option<&str> {
+        match self {
+            DropTarget::Before(id) | DropTarget::After(id) | DropTarget::Into(Some(id)) => Some(id),
+            DropTarget::Into(None) => None,
+        }
+    }
+}
+
+/// Moves an item inside one collection or between two. Refuses to move a
+/// folder into itself. Returns whether anything moved.
+pub fn move_item(collections: &mut [Collection], from: &str, item_id: &str, to: &str, at: &DropTarget) -> bool {
+    if at.target_id() == Some(item_id) {
+        return false;
+    }
+    let Some(src) = collections.iter().position(|c| c.id == from) else { return false };
+    let Some(dst) = collections.iter().position(|c| c.id == to) else { return false };
+    if src == dst && at.target_id().is_some_and(|t| collections[src].is_inside(t, item_id)) {
+        return false;
+    }
+    let Some(item) = collections[src].remove_item(item_id) else { return false };
+    match collections[dst].insert_item(item, at) {
+        Ok(()) => true,
+        Err(item) => {
+            // Target vanished: put it back at the end of the source.
+            collections[src].items.push(item);
+            false
+        }
+    }
 }
 
 /// A set of variables, e.g. "Local", "Staging", "Production".
@@ -1001,6 +1095,39 @@ mod tests {
         f.items.push(Item::Request(r));
         c.items.push(Item::Folder(f));
         assert_eq!(c.effective_auth(&id), Some(Auth::Bearer { token: "abc".into() }));
+    }
+
+    #[test]
+    fn move_items_between_folders_and_collections() {
+        let mut a = Collection::new("A");
+        let mut f = Folder::new("F");
+        let r1 = Request::new(HttpMethod::Get, "/1");
+        let r2 = Request::new(HttpMethod::Get, "/2");
+        let r3 = Request::new(HttpMethod::Get, "/3");
+        let (id1, id2, id3, fid) = (r1.id.clone(), r2.id.clone(), r3.id.clone(), f.id.clone());
+        f.items.push(Item::Request(r3));
+        a.items = vec![Item::Request(r1), Item::Request(r2), Item::Folder(f)];
+        let b = Collection::new("B");
+        let (aid, bid) = (a.id.clone(), b.id.clone());
+        let mut cs = vec![a, b];
+
+        // Reorder: r2 before r1.
+        assert!(move_item(&mut cs, &aid, &id2, &aid, &DropTarget::Before(id1.clone())));
+        let ids: Vec<_> = cs[0].items.iter().map(|i| i.id().to_string()).collect();
+        assert_eq!(ids, [id2.clone(), id1.clone(), fid.clone()]);
+        // Into a folder, after its child.
+        assert!(move_item(&mut cs, &aid, &id1, &aid, &DropTarget::After(id3.clone())));
+        assert_eq!(cs[0].find_folder_mut(&fid).unwrap().items.len(), 2);
+        // A folder cannot go into itself or its children.
+        assert!(!move_item(&mut cs, &aid, &fid, &aid, &DropTarget::Into(Some(fid.clone()))));
+        assert!(!move_item(&mut cs, &aid, &fid, &aid, &DropTarget::Before(id3.clone())));
+        // To another collection's root.
+        assert!(move_item(&mut cs, &aid, &fid, &bid, &DropTarget::Into(None)));
+        assert_eq!(cs[1].request_count(), 2);
+        assert_eq!(cs[0].request_count(), 1);
+        // Missing target: nothing lost.
+        assert!(!move_item(&mut cs, &aid, &id2, &aid, &DropTarget::Before("nope".into())));
+        assert_eq!(cs[0].request_count(), 1);
     }
 
     #[test]

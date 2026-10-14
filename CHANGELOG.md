@@ -23,6 +23,8 @@ All notable changes to this project are documented here. The format follows
 - Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
   view (copy a value or its test path), image preview and a simplified HTML
   preview with *Open in browser*; *Save* picks the extension from the content type.
+- Drag & drop in the sidebar: reorder requests and folders, move them into
+  folders or to another collection; open tabs follow moved requests.
 
 ## [0.2.0-rc.1] - 2026-10-14
 

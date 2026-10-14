@@ -18,7 +18,7 @@ struct RowStyle<'a> {
 /// Paints one full-width tree row and returns its response.
 fn tree_row(ui: &mut Ui, p: &Palette, s: RowStyle<'_>) -> egui::Response {
     let height = 26.0;
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), Sense::click_and_drag());
     let painter = ui.painter();
     if s.selected {
         painter.rect_filled(rect, 5.0, if p.dark { theme::NAVY_700 } else { p.surface_alt });
@@ -59,6 +59,94 @@ fn tree_row(ui: &mut Ui, p: &Palette, s: RowStyle<'_>) -> egui::Response {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     resp
+}
+
+/// What is being dragged in the tree.
+#[derive(Clone)]
+struct DragItem {
+    collection: String,
+    id: String,
+    name: String,
+    is_folder: bool,
+}
+
+/// Drop position from the pointer's height in the row.
+fn drop_zone(resp: &egui::Response, is_folder: bool) -> DropZone {
+    let y = resp.ctx.pointer_interact_pos().map(|p| p.y).unwrap_or(resp.rect.center().y);
+    let rel = (y - resp.rect.top()) / resp.rect.height().max(1.0);
+    match (is_folder, rel) {
+        (true, r) if r < 0.28 => DropZone::Before,
+        (true, r) if r > 0.72 => DropZone::After,
+        (true, _) => DropZone::Into,
+        (false, r) if r < 0.5 => DropZone::Before,
+        _ => DropZone::After,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum DropZone {
+    Before,
+    After,
+    Into,
+}
+
+/// Makes a row draggable and a drop target; returns the move command on drop.
+fn drag_and_drop(ui: &Ui, resp: &egui::Response, me: DragItem, collection: &str) -> Option<ToggleNode> {
+    resp.dnd_set_drag_payload(me.clone());
+    let hovered = resp.dnd_hover_payload::<DragItem>();
+    let released = resp.dnd_release_payload::<DragItem>();
+    let payload = released.as_ref().or(hovered.as_ref())?;
+    if payload.id == me.id {
+        return None;
+    }
+    // Rows are collection roots when `me.id` is the collection id.
+    let is_root = me.id == collection;
+    let zone = if is_root { DropZone::Into } else { drop_zone(resp, me.is_folder) };
+    let r = resp.rect;
+    let painter = ui.painter();
+    match zone {
+        DropZone::Before => {
+            painter.hline(r.x_range(), r.top(), Stroke::new(2.0, theme::ORANGE));
+        }
+        DropZone::After => {
+            painter.hline(r.x_range(), r.bottom(), Stroke::new(2.0, theme::ORANGE));
+        }
+        DropZone::Into => {
+            painter.rect_stroke(r, 5.0, Stroke::new(1.5, theme::ORANGE), egui::StrokeKind::Inside);
+        }
+    }
+    let payload = released?;
+    let at = match zone {
+        _ if is_root => "into-root".to_string(),
+        DropZone::Before => format!("before|{}", me.id),
+        DropZone::After => format!("after|{}", me.id),
+        DropZone::Into => format!("into|{}", me.id),
+    };
+    Some(ToggleNode(format!("move:{}:{}:{collection}|{at}", payload.collection, payload.id)))
+}
+
+/// A label following the pointer while something is dragged.
+fn drag_ghost(ctx: &egui::Context, p: &Palette) {
+    let Some(payload) = egui::DragAndDrop::payload::<DragItem>(ctx) else { return };
+    let Some(pos) = ctx.pointer_interact_pos() else { return };
+    egui::Area::new(egui::Id::new("tree_drag_ghost"))
+        .order(egui::Order::Tooltip)
+        .fixed_pos(pos + egui::vec2(14.0, 6.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(p.surface)
+                .stroke(Stroke::new(1.0, theme::ORANGE))
+                .corner_radius(6)
+                .inner_margin(6)
+                .show(ui, |ui| {
+                    ui.label(
+                        RichText::new(format!("{} {}", if payload.is_folder { "🗀" } else { "↕" }, payload.name))
+                            .color(p.text),
+                    );
+                });
+        });
+    ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
 }
 
 fn matches(filter: &str, item: &Item) -> bool {
@@ -159,6 +247,11 @@ impl PakPosApp {
                 if resp.clicked() {
                     actions.push(ToggleNode(c.id.clone()));
                 }
+                let root =
+                    DragItem { collection: c.id.clone(), id: c.id.clone(), name: c.name.clone(), is_folder: true };
+                if let Some(cmd) = drag_and_drop(ui, &resp, root, &c.id) {
+                    actions.push(cmd);
+                }
                 resp.context_menu(|ui| {
                     if ui.button("➕ Add request").clicked() {
                         pending.push(Action::NewRequestIn { collection: c.id.clone(), folder: None });
@@ -200,6 +293,7 @@ impl PakPosApp {
                 ui.add_space(4.0);
             }
         });
+        drag_ghost(ui.ctx(), &p);
         self.actions.extend(pending);
         for ToggleNode(id) in actions {
             if self.handle_tree_command(&id) {
@@ -246,6 +340,15 @@ impl PakPosApp {
                     if resp.clicked() {
                         toggles.push(ToggleNode(f.id.clone()));
                     }
+                    let me = DragItem {
+                        collection: collection.to_string(),
+                        id: f.id.clone(),
+                        name: f.name.clone(),
+                        is_folder: true,
+                    };
+                    if let Some(cmd) = drag_and_drop(ui, &resp, me, collection) {
+                        toggles.push(cmd);
+                    }
                     resp.context_menu(|ui| {
                         folder_menu(ui, collection, &f.id, &f.name, toggles);
                     });
@@ -270,6 +373,15 @@ impl PakPosApp {
                     .on_hover_text(&r.url);
                     if resp.clicked() {
                         toggles.push(ToggleNode(format!("open:{collection}:{}", r.id)));
+                    }
+                    let me = DragItem {
+                        collection: collection.to_string(),
+                        id: r.id.clone(),
+                        name: r.name.clone(),
+                        is_folder: false,
+                    };
+                    if let Some(cmd) = drag_and_drop(ui, &resp, me, collection) {
+                        toggles.push(cmd);
                     }
                     resp.context_menu(|ui| {
                         if ui.button("Open").clicked() {
@@ -456,6 +568,20 @@ impl PakPosApp {
             "del" => Action::Delete(DeleteTarget::Item { collection, item }, name),
             "newreq" => Action::NewRequestIn { collection, folder: Some(item) },
             "newfolder" => Action::NewFolderIn { collection, folder: Some(item) },
+            "move" => {
+                // name = "<target collection>|before|<id>", "|after|<id>", "|into|<id>" or "|into-root"
+                let mut parts = name.splitn(3, '|');
+                let to = parts.next().unwrap_or("").to_string();
+                let mode = parts.next().unwrap_or("");
+                let target = parts.next().unwrap_or("").to_string();
+                let at = match mode {
+                    "before" => pakpos_core::model::DropTarget::Before(target),
+                    "after" => pakpos_core::model::DropTarget::After(target),
+                    "into" => pakpos_core::model::DropTarget::Into(Some(target)),
+                    _ => pakpos_core::model::DropTarget::Into(None),
+                };
+                Action::MoveItem { from: collection, item, to, at }
+            }
             _ => return false,
         };
         self.actions.push(action);
