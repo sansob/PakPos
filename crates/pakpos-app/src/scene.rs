@@ -55,7 +55,31 @@ fn open_by_name(app: &mut PakPosApp, name: &str) {
 
 fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
     app.ws.settings.active_environment = app.ws.environments.first().map(|e| e.id.clone());
+    crate::i18n::set(crate::i18n::Lang::En);
     match name {
+        "bahasa" => {
+            crate::i18n::set(crate::i18n::Lang::Id);
+            open_by_name(app, "Get with query params");
+            app.tabs[app.active].section = ReqSection::Tests;
+            app.tabs[app.active].resp_section = RespSection::Tests;
+            app.send(app.active, ctx);
+        }
+        "workspaces" => {
+            let team = app.ws.root.with_file_name("payments-team");
+            app.registry.add("Payments team", &team);
+            app.dialog =
+                Some(crate::app::Dialog::NewWorkspace { name: "Mobile app".into(), path: String::new(), error: None });
+        }
+        "close-tabs" => {
+            open_by_name(app, "Create user (JSON)");
+            open_by_name(app, "Get with query params");
+            open_by_name(app, "Update user");
+            for t in &mut app.tabs[..2] {
+                t.dirty = true;
+            }
+            let uids = app.tabs.iter().map(|t| t.uid).collect();
+            app.request_close(uids, false);
+        }
         "light" => {
             app.ws.settings.theme = Theme::Light;
             open_by_name(app, "Create user (JSON)");
@@ -127,6 +151,11 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.git.open = true;
             app.git.message = "Document collection owner".into();
         }
+        "grpc-stream" => {
+            open_by_name(app, "Chat (gRPC stream)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.grpc_load(app.active, ctx);
+        }
         "grpc" => {
             open_by_name(app, "Health check (gRPC)");
             app.tabs[app.active].section = ReqSection::Body;
@@ -156,6 +185,22 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].resp_section = RespSection::Tests;
             app.send(app.active, ctx);
         }
+        "mcp" => {
+            open_by_name(app, "Weather tool (MCP)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.mcp_load(app.active, ctx);
+            app.send(app.active, ctx);
+        }
+        "sse" | "socketio" | "mqtt" => {
+            let name = match name {
+                "sse" => "Price stream (SSE)",
+                "socketio" => "Parcel events (Socket.IO)",
+                _ => "Office sensors (MQTT)",
+            };
+            open_by_name(app, name);
+            app.tabs[app.active].section = ReqSection::Body;
+            app.ws_connect(app.active, ctx);
+        }
         "websocket" => {
             open_by_name(app, "Live prices (WebSocket)");
             app.tabs[app.active].section = ReqSection::Body;
@@ -176,6 +221,53 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             open_by_name(app, "Get with query params");
             app.dialog = Some(Dialog::Settings);
         }
+        "tree" => {
+            open_by_name(app, "JSON document");
+            let t = &mut app.tabs[app.active];
+            t.body_view = crate::body_view::BodyView::Tree;
+            t.body_search = "title".into();
+            app.send(app.active, ctx);
+        }
+        "search" => {
+            open_by_name(app, "Create user (JSON)");
+            app.tabs[app.active].body_search = "budi".into();
+            app.send(app.active, ctx);
+        }
+        "html" | "image" => {
+            let path = if name == "html" { "/html" } else { "/image/png" };
+            let mut req = pakpos_core::Request::new(pakpos_core::HttpMethod::Get, format!("{{{{base_url}}}}{path}"));
+            req.name = if name == "html" { "Shipment page".into() } else { "Logo".into() };
+            let idx = app.push_tab(req, None);
+            app.active = idx;
+            app.tabs[idx].body_view = crate::body_view::BodyView::Preview;
+            app.send(idx, ctx);
+        }
+        "cookies" => {
+            open_by_name(app, "Set a cookie");
+            app.send(app.active, ctx);
+            app.cookie_jar.with(|j| {
+                j.set_cookie(
+                    "https://api.example.com/v1/login",
+                    "session=8f3a91c2e7; Path=/; Secure; HttpOnly; Max-Age=86400",
+                );
+                j.set_cookie("https://api.example.com/", "lang=id; Domain=example.com; Path=/");
+            });
+            app.dialog = Some(Dialog::Cookies(Default::default()));
+        }
+        "runner-data" => {
+            open_by_name(app, "Get with query params");
+            let id = app.ws.collections[0].id.clone();
+            let name = app.ws.collections[0].name.clone();
+            let mut setup = crate::app::RunnerSetup::new(&id, &name);
+            let csv = app.ws.root.join("users.csv");
+            let _ = std::fs::write(
+                &csv,
+                "user,city,expected_status\nbudi,Jakarta,200\nsiti,Bandung,200\nagus,Medan,200\nwayan,Denpasar,200\n",
+            );
+            setup.load_data(csv.display().to_string());
+            setup.delay_ms = 50;
+            app.runner_setup = Some(setup);
+        }
         _ => {
             open_by_name(app, "Create user (JSON)");
             app.tabs[app.active].section = ReqSection::Body;
@@ -188,13 +280,24 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
 fn is_ready(app: &PakPosApp, name: &str) -> bool {
     match name {
         "runner" => app.runner.as_ref().is_some_and(|r| r.report.is_some()),
-        "environments" | "curl" | "snippet" | "settings" => true,
+        "environments" | "curl" | "snippet" | "settings" | "runner-data" => true,
         "git" => app.git.job.is_none() && app.git.status.as_ref().is_some_and(|s| s.as_ref().is_ok_and(|s| s.is_repo)),
         "grpc" => app.tabs.get(app.active).is_some_and(|t| {
             t.grpc.job.is_none() && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))
         }),
         "mock" => app.mock.as_ref().is_some_and(|m| m.hits.len() >= 4),
+        "mcp" => app.tabs.get(app.active).is_some_and(|t| {
+            t.mcp.job.is_none()
+                && !t.mcp.items.is_empty()
+                && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))
+        }),
+        "grpc-stream" => app.tabs.get(app.active).is_some_and(|t| {
+            t.grpc.live.log.iter().filter(|e| e.direction == Some(pakpos_core::ws::Direction::Received)).count() >= 2
+        }),
         "websocket" => app.tabs.get(app.active).is_some_and(|t| t.ws.log.iter().any(|e| e.text.contains("\"tick\""))),
+        "sse" | "socketio" | "mqtt" => app.tabs.get(app.active).is_some_and(|t| {
+            t.ws.log.iter().filter(|e| e.direction == Some(pakpos_core::ws::Direction::Received)).count() >= 4
+        }),
         "graphql" => {
             app.graphql.job.is_none()
                 && app
@@ -219,6 +322,34 @@ pub fn tick(app: &mut PakPosApp, ctx: &egui::Context) {
         setup(app, &name, ctx);
         ctx.request_repaint();
         return;
+    }
+    if state.name == "grpc-stream" {
+        let idx = app.active;
+        let loaded = app.tabs.get(idx).is_some_and(|t| t.grpc.pool.is_some() && t.grpc.job.is_none());
+        if loaded && !state.sent {
+            state.sent = true;
+            app.grpc_open_stream(idx, ctx);
+            for text in ["paket saya sudah sampai mana?", "terima kasih!"] {
+                let msg = format!("{{\"user\": \"budi\", \"text\": \"{text}\"}}");
+                app.handle_grpc_action(idx, crate::grpc_view::GrpcAction::StreamSend(msg), ctx);
+            }
+        }
+    }
+    if state.name == "socketio" || state.name == "mqtt" {
+        let idx = app.active;
+        if !state.sent && app.tabs.get(idx).is_some_and(|t| t.ws.connected) {
+            state.sent = true;
+            let r = app.tabs[idx].request.clone();
+            let cfg = r.realtime.clone().unwrap_or_default();
+            if let pakpos_core::Body::Raw { content, .. } = r.body {
+                let action = if state.name == "mqtt" {
+                    crate::ws_view::WsAction::Publish { topic: cfg.topic, payload: content, qos: 1, retain: false }
+                } else {
+                    crate::ws_view::WsAction::Emit { event: cfg.event, data: content }
+                };
+                app.handle_ws_action(idx, action, ctx);
+            }
+        }
     }
     if state.name == "websocket" {
         let idx = app.active;

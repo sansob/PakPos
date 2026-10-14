@@ -53,6 +53,12 @@ pub struct Settings {
     /// collection file, so a shared or imported collection cannot trust itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub trusted_collections: Vec<String>,
+    /// Trusted collections whose scripts may also call `pm.sendRequest`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub network_collections: Vec<String>,
+    /// UI language code ("en", "id"); `None` follows the system locale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 fn default_theme() -> Theme {
@@ -71,6 +77,8 @@ impl Default for Settings {
             active_environment: None,
             font_scale_percent: 100,
             trusted_collections: Vec::new(),
+            network_collections: Vec::new(),
+            language: None,
         }
     }
 }
@@ -94,18 +102,134 @@ pub struct Workspace {
     pub settings: Settings,
     /// OAuth 2.0 tokens (`tokens.json`, keep it out of git).
     pub tokens: crate::oauth2::TokenStore,
+    /// Cookie jar (`cookies.json`, kept out of git).
+    pub cookies: crate::cookies::CookieJar,
 }
 
-/// Default workspace location (overridable with `PAKPOS_HOME`).
+/// The built-in workspace folder (the platform's data directory).
+pub fn data_dir() -> PathBuf {
+    directories::ProjectDirs::from("dev", "PakPos", "PakPos")
+        .map(|d| d.data_dir().to_path_buf())
+        .unwrap_or_else(|| PathBuf::from(".pakpos"))
+}
+
+/// The workspace to open: `PAKPOS_HOME` if set, else the active workspace from
+/// the registry (when its folder still exists), else [`data_dir`].
 pub fn default_root() -> PathBuf {
     if let Ok(dir) = std::env::var("PAKPOS_HOME") {
         if !dir.trim().is_empty() {
             return PathBuf::from(dir);
         }
     }
-    directories::ProjectDirs::from("dev", "PakPos", "PakPos")
-        .map(|d| d.data_dir().to_path_buf())
-        .unwrap_or_else(|| PathBuf::from(".pakpos"))
+    WorkspaceRegistry::load().active.filter(|p| p.is_dir()).unwrap_or_else(data_dir)
+}
+
+/// Where the list of workspaces lives: `PAKPOS_CONFIG` (a folder) if set, else
+/// the platform's config directory. Not inside a workspace, so it never ends
+/// up in a shared repository.
+pub fn registry_path() -> PathBuf {
+    let dir = match std::env::var("PAKPOS_CONFIG") {
+        Ok(d) if !d.trim().is_empty() => PathBuf::from(d),
+        _ => directories::ProjectDirs::from("dev", "PakPos", "PakPos")
+            .map(|d| d.config_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from(".pakpos-config")),
+    };
+    dir.join("workspaces.json")
+}
+
+/// A workspace the app knows about.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceEntry {
+    pub name: String,
+    pub path: PathBuf,
+}
+
+/// The workspaces shown in the app's workspace menu, and the active one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceRegistry {
+    #[serde(default)]
+    pub workspaces: Vec<WorkspaceEntry>,
+    #[serde(default)]
+    pub active: Option<PathBuf>,
+}
+
+impl WorkspaceRegistry {
+    pub fn load() -> Self {
+        Self::load_from(&registry_path())
+    }
+
+    pub fn load_from(path: &Path) -> Self {
+        read_json(path).ok().flatten().unwrap_or_default()
+    }
+
+    pub fn save(&self) -> Result<(), StorageError> {
+        self.save_to(&registry_path())
+    }
+
+    pub fn save_to(&self, path: &Path) -> Result<(), StorageError> {
+        write_json(path, self)
+    }
+
+    /// The menu entries: the built-in workspace first, then the added ones, and
+    /// `current` if it is neither (e.g. opened through `PAKPOS_HOME`).
+    pub fn entries(&self, current: &Path) -> Vec<WorkspaceEntry> {
+        let mut out = vec![WorkspaceEntry { name: "Default".into(), path: data_dir() }];
+        for w in &self.workspaces {
+            if !out.iter().any(|e| same_path(&e.path, &w.path)) {
+                out.push(w.clone());
+            }
+        }
+        if !out.iter().any(|e| same_path(&e.path, current)) {
+            out.push(WorkspaceEntry { name: folder_name(current), path: current.to_path_buf() });
+        }
+        out
+    }
+
+    /// Adds (or renames) a workspace.
+    pub fn add(&mut self, name: &str, path: &Path) {
+        match self.workspaces.iter_mut().find(|w| same_path(&w.path, path)) {
+            Some(w) => w.name = name.to_string(),
+            None => self.workspaces.push(WorkspaceEntry { name: name.to_string(), path: path.to_path_buf() }),
+        }
+    }
+
+    /// Forgets a workspace (its folder is left alone).
+    pub fn remove(&mut self, path: &Path) {
+        self.workspaces.retain(|w| !same_path(&w.path, path));
+        if self.active.as_deref().is_some_and(|a| same_path(a, path)) {
+            self.active = None;
+        }
+    }
+}
+
+pub fn same_path(a: &Path, b: &Path) -> bool {
+    a == b || matches!((a.canonicalize(), b.canonicalize()), (Ok(x), Ok(y)) if x == y)
+}
+
+fn folder_name(p: &Path) -> String {
+    p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.display().to_string())
+}
+
+/// Creates the folder for a new, empty workspace. An existing folder must be
+/// empty or already look like a workspace.
+pub fn create_workspace(path: &Path, settings: &Settings) -> Result<(), StorageError> {
+    if path.exists() {
+        let looks_like_workspace = path.join("collections").is_dir() || path.join("settings.json").is_file();
+        let empty = fs::read_dir(path).map_err(|e| StorageError::Io(path.to_path_buf(), e))?.next().is_none();
+        if !empty && !looks_like_workspace {
+            return Err(StorageError::Io(
+                path.to_path_buf(),
+                io::Error::other("the folder is not empty; pick an empty folder or open it as a workspace"),
+            ));
+        }
+    }
+    for dir in [path.join("collections"), path.join("environments")] {
+        fs::create_dir_all(&dir).map_err(|e| StorageError::Io(dir.clone(), e))?;
+    }
+    if !path.join("settings.json").exists() {
+        write_json(&path.join("settings.json"), settings)?;
+    }
+    Ok(())
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Option<T>, StorageError> {
@@ -170,7 +294,8 @@ impl Workspace {
         let history = take(read_json(&root.join("history.json")), &mut errors).unwrap_or_default();
         let settings = take(read_json(&root.join("settings.json")), &mut errors).unwrap_or_default();
         let tokens = take(read_json(&root.join("tokens.json")), &mut errors).unwrap_or_default();
-        (Workspace { root, collections, environments, globals, history, settings, tokens }, errors)
+        let cookies = take(read_json(&root.join("cookies.json")), &mut errors).unwrap_or_default();
+        (Workspace { root, collections, environments, globals, history, settings, tokens, cookies }, errors)
     }
 
     pub fn collections_dir(&self) -> PathBuf {
@@ -205,6 +330,10 @@ impl Workspace {
         write_json(&self.root.join("history.json"), &self.history)
     }
 
+    pub fn save_cookies(&self) -> Result<(), StorageError> {
+        write_json(&self.root.join("cookies.json"), &self.cookies)
+    }
+
     pub fn save_tokens(&self) -> Result<(), StorageError> {
         write_json(&self.root.join("tokens.json"), &self.tokens)
     }
@@ -237,6 +366,11 @@ impl Workspace {
 
     pub fn is_trusted(&self, collection_id: &str) -> bool {
         self.settings.trusted_collections.iter().any(|c| c == collection_id)
+    }
+
+    /// May this collection's scripts send requests (`pm.sendRequest`)? Only trusted ones can.
+    pub fn has_network(&self, collection_id: &str) -> bool {
+        self.is_trusted(collection_id) && self.settings.network_collections.iter().any(|c| c == collection_id)
     }
 
     pub fn active_environment(&self) -> Option<&Environment> {
@@ -274,9 +408,22 @@ pub fn load_collection_file(path: &Path) -> Result<(Collection, Vec<String>), St
     parse_collection(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Parses collection JSON in either PakPos or Postman format.
+/// Parses a collection: PakPos or Collection v2.x JSON, or an OpenAPI /
+/// Swagger document (JSON or YAML).
 pub fn parse_collection(text: &str) -> Result<(Collection, Vec<String>), String> {
-    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    let value: serde_json::Value = match serde_json::from_str(text) {
+        Ok(v) => v,
+        // Not JSON: maybe an OpenAPI document in YAML.
+        Err(e) => match crate::openapi::import(text) {
+            Ok(i) => return Ok((i.collection, i.warnings)),
+            Err(crate::openapi::OpenApiError::NotOpenApi) => return Err(e.to_string()),
+            Err(oe) => return Err(format!("{e} (and not YAML OpenAPI: {oe})")),
+        },
+    };
+    if value.get("openapi").is_some() || value.get("swagger").is_some() {
+        let i = crate::openapi::import(text).map_err(|e| e.to_string())?;
+        return Ok((i.collection, i.warnings));
+    }
     if value.get("info").is_some() {
         let imported = crate::postman::import_collection(text).map_err(|e| e.to_string())?;
         Ok((imported.value, imported.warnings))
@@ -346,5 +493,42 @@ mod tests {
             ws.push_history(Request::default(), None, None);
         }
         assert_eq!(ws.history.len(), HISTORY_LIMIT);
+    }
+
+    #[test]
+    fn workspace_registry_round_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_path_buf();
+        let reg_path = dir.join("cfg").join("workspaces.json");
+        let a = dir.join("team-a");
+        let mut reg = WorkspaceRegistry::default();
+        reg.add("Team A", &a);
+        reg.add("Team A (renamed)", &a);
+        reg.active = Some(a.clone());
+        reg.save_to(&reg_path).unwrap();
+        let back = WorkspaceRegistry::load_from(&reg_path);
+        assert_eq!(back.workspaces.len(), 1);
+        assert_eq!(back.workspaces[0].name, "Team A (renamed)");
+        let entries = back.entries(&dir.join("elsewhere"));
+        assert_eq!(entries[0].name, "Default");
+        assert_eq!(entries.len(), 3, "default, team-a, the current folder");
+        let mut back = back;
+        back.remove(&a);
+        assert!(back.workspaces.is_empty() && back.active.is_none());
+    }
+
+    #[test]
+    fn create_workspace_checks_the_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_path_buf();
+        let fresh = dir.join("new");
+        create_workspace(&fresh, &Settings::default()).unwrap();
+        assert!(fresh.join("collections").is_dir() && fresh.join("settings.json").is_file());
+        // Again: it already is a workspace, fine.
+        create_workspace(&fresh, &Settings::default()).unwrap();
+        let busy = dir.join("busy");
+        fs::create_dir_all(&busy).unwrap();
+        fs::write(busy.join("notes.txt"), "x").unwrap();
+        assert!(create_workspace(&busy, &Settings::default()).is_err());
     }
 }

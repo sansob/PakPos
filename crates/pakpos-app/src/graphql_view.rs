@@ -49,17 +49,21 @@ pub fn editor(
     ui.horizontal(|ui| {
         if loading {
             ui.add(egui::Spinner::new().color(theme::ORANGE));
-            ui.label(RichText::new("Fetching schema…").color(p.text_weak));
-        } else if ui.button("⟳ Fetch schema").on_hover_text("Run an introspection query against the URL").clicked() {
+            ui.label(RichText::new(crate::i18n::tr("Fetching schema…")).color(p.text_weak));
+        } else if ui
+            .button(crate::i18n::tr("⟳ Fetch schema"))
+            .on_hover_text(crate::i18n::tr("Run an introspection query against the URL"))
+            .clicked()
+        {
             *action = Some(GqlAction::FetchSchema);
         }
-        ui.label(RichText::new("Operation name").small().color(p.text_weak));
+        ui.label(RichText::new(crate::i18n::tr("Operation name")).small().color(p.text_weak));
         changed |= ui
             .add(
                 egui::TextEdit::singleline(operation_name)
                     .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                     .vertical_align(egui::Align::Center)
-                    .hint_text("optional")
+                    .hint_text(crate::i18n::tr("optional"))
                     .desired_width(140.0),
             )
             .changed();
@@ -71,7 +75,7 @@ pub fn editor(
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(editors_w);
-            widgets::section_title(ui, "Query");
+            widgets::section_title(ui, crate::i18n::tr("Query"));
             let mut lay = code_layouter("js");
             changed |= ui
                 .add(
@@ -80,12 +84,12 @@ pub fn editor(
                         .code_editor()
                         .desired_rows(12)
                         .desired_width(f32::INFINITY)
-                        .hint_text("query { me { id name } }")
+                        .hint_text(crate::i18n::tr("query { me { id name } }"))
                         .layouter(&mut lay),
                 )
                 .changed();
             ui.add_space(4.0);
-            widgets::section_title(ui, "Variables (JSON)");
+            widgets::section_title(ui, crate::i18n::tr("Variables (JSON)"));
             let mut lay = code_layouter("json");
             changed |= ui
                 .add(
@@ -94,14 +98,19 @@ pub fn editor(
                         .code_editor()
                         .desired_rows(4)
                         .desired_width(f32::INFINITY)
-                        .hint_text("{ \"id\": \"{{user_id}}\" }")
+                        .hint_text(crate::i18n::tr("{ \"id\": \"{{user_id}}\" }"))
                         .layouter(&mut lay),
                 )
                 .changed();
             if !variables.trim().is_empty() && !variables.contains("{{") {
                 if let Err(e) = serde_json::from_str::<serde_json::Value>(variables) {
                     ui.label(
-                        RichText::new(format!("⚠ Variables are not valid JSON: {e}")).small().color(theme::YELLOW),
+                        RichText::new(crate::i18n::trf(
+                            "⚠ Variables are not valid JSON: {e}",
+                            &[("e", &e.to_string())],
+                        ))
+                        .small()
+                        .color(theme::YELLOW),
                     );
                 }
             }
@@ -110,7 +119,7 @@ pub fn editor(
             ui.separator();
             ui.vertical(|ui| {
                 ui.set_width(explorer_w);
-                widgets::section_title(ui, "Schema explorer");
+                widgets::section_title(ui, crate::i18n::tr("Schema explorer"));
                 match schema {
                     Err(e) => {
                         ui.label(RichText::new(e).small().color(theme::RED));
@@ -118,9 +127,9 @@ pub fn editor(
                     Ok(s) => {
                         egui::ScrollArea::vertical().id_salt(("gql_explorer", uid)).max_height(320.0).show(ui, |ui| {
                             for (title, op, fields) in [
-                                ("Queries", "query", &s.queries),
-                                ("Mutations", "mutation", &s.mutations),
-                                ("Subscriptions", "subscription", &s.subscriptions),
+                                (crate::i18n::tr("Queries"), "query", &s.queries),
+                                (crate::i18n::tr("Mutations"), "mutation", &s.mutations),
+                                (crate::i18n::tr("Subscriptions"), "subscription", &s.subscriptions),
                             ] {
                                 if fields.is_empty() {
                                     continue;
@@ -152,7 +161,7 @@ pub fn editor(
                                                     .sense(egui::Sense::click()),
                                                 )
                                                 .on_hover_text(if f.description.is_empty() {
-                                                    "Click to insert a starter query".to_string()
+                                                    crate::i18n::tr("Click to insert a starter query").to_string()
                                                 } else {
                                                     format!("{}\n\nClick to insert a starter query", f.description)
                                                 });
@@ -166,7 +175,12 @@ pub fn editor(
                                     });
                             }
                             ui.label(
-                                RichText::new(format!("{} object types", s.types.len())).small().color(p.text_weak),
+                                RichText::new(crate::i18n::trf(
+                                    "{n} object types",
+                                    &[("n", &s.types.len().to_string())],
+                                ))
+                                .small()
+                                .color(p.text_weak),
                             );
                         });
                     }

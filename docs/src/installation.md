@@ -14,8 +14,11 @@ Builds are not code-signed yet, so SmartScreen may warn: click **More info → R
 ## macOS 11+ (Apple Silicon and Intel)
 
 1. Open `PakPos-x.y.z-macos-universal.dmg` and drag **PakPos** into **Applications**.
-2. The first time, **right-click PakPos → Open → Open** (the app is ad-hoc signed, not notarised).
-   If macOS still refuses: `xattr -dr com.apple.quarantine /Applications/PakPos.app`.
+2. The app is ad-hoc signed, not notarised, so macOS blocks the first launch.
+   On macOS 15 (Sequoia) and later: open PakPos once, dismiss the warning, then go to
+   **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
+   On older versions: **right-click PakPos → Open → Open**.
+   Or, from a terminal: `xattr -dr com.apple.quarantine /Applications/PakPos.app`.
 
 The CLI lives inside the bundle; link it onto your PATH:
 

@@ -1,5 +1,6 @@
 //! Turns a [`Request`] into a concrete HTTP call and executes it.
 
+use crate::auth::{digest, ntlm, sigv4, ChallengeAuth};
 use crate::model::{ApiKeyLocation, Auth, Body, KeyValue, Request};
 use crate::vars::VarScope;
 use base64::Engine;
@@ -32,6 +33,65 @@ pub struct HttpSettings {
     #[serde(default)]
     pub proxy: String,
     pub user_agent: String,
+    /// Client certificates (mTLS), picked by host.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub client_certs: Vec<ClientCert>,
+}
+
+/// A client certificate used for hosts matching `host`
+/// (`api.example.com`, `*.example.com`, `localhost:8443`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ClientCert {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub host: String,
+    /// PEM file with the certificate (and optionally the chain and key).
+    /// May be empty when the entry only adds a CA.
+    #[serde(default)]
+    pub cert_path: String,
+    /// PEM file with the private key; empty when it is inside `cert_path`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub key_path: String,
+    /// Extra CA (PEM) to trust for this host, for servers with a private CA.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub ca_path: String,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl HttpSettings {
+    /// The first enabled client certificate whose host pattern matches `url`.
+    pub fn client_cert_for(&self, url: &str) -> Option<&ClientCert> {
+        self.client_certs.iter().filter(|c| c.enabled && !c.host.trim().is_empty()).find(|c| {
+            host_allowed(url, std::slice::from_ref(&c.host))
+                || url::Url::parse(url).ok().and_then(|u| u.host_str().map(|h| h.eq_ignore_ascii_case(c.host.trim())))
+                    == Some(true)
+        })
+    }
+}
+
+impl ClientCert {
+    /// Reads the PEM data: certificate chain followed by the key.
+    pub fn pem(&self) -> Result<Vec<u8>, HttpError> {
+        let read = |p: &str| std::fs::read(p).map_err(|e| HttpError::File(p.to_string(), e.to_string()));
+        let mut pem = read(self.cert_path.trim())?;
+        if !self.key_path.trim().is_empty() {
+            pem.push(b'\n');
+            pem.extend(read(self.key_path.trim())?);
+        }
+        Ok(pem)
+    }
+
+    /// The extra CA, if one is configured.
+    pub fn ca_pem(&self) -> Result<Option<Vec<u8>>, HttpError> {
+        let path = self.ca_path.trim();
+        if path.is_empty() {
+            return Ok(None);
+        }
+        std::fs::read(path).map(Some).map_err(|e| HttpError::File(path.to_string(), e.to_string()))
+    }
 }
 
 impl Default for HttpSettings {
@@ -43,6 +103,7 @@ impl Default for HttpSettings {
             verify_tls: true,
             proxy: String::new(),
             user_agent: format!("PakPos/{}", env!("CARGO_PKG_VERSION")),
+            client_certs: Vec::new(),
         }
     }
 }
@@ -65,6 +126,8 @@ pub struct PreparedRequest {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub body: PreparedBody,
+    /// Digest / NTLM credentials, answered in [`send`] after the server's challenge.
+    pub challenge: Option<ChallengeAuth>,
 }
 
 impl PreparedRequest {
@@ -171,8 +234,32 @@ pub fn prepare(req: &Request, scope: &VarScope, fallback_auth: Option<&Auth>) ->
         Auth::Inherit => fallback_auth.cloned().unwrap_or(Auth::None),
         other => other.clone(),
     };
+    let mut challenge = None;
+    let mut aws = None;
     match auth {
         Auth::Inherit | Auth::None => {}
+        Auth::Digest { username, password } => {
+            challenge =
+                Some(ChallengeAuth::Digest { username: scope.resolve(&username), password: scope.resolve(&password) });
+        }
+        Auth::Ntlm { username, password, domain, workstation } => {
+            challenge = Some(ChallengeAuth::Ntlm {
+                username: scope.resolve(&username),
+                password: scope.resolve(&password),
+                domain: scope.resolve(&domain),
+                workstation: scope.resolve(&workstation),
+            });
+        }
+        Auth::AwsSigV4(cfg) => {
+            let r = |s: &str| scope.resolve(s).trim().to_string();
+            aws = Some(sigv4::Credentials {
+                access_key: r(&cfg.access_key),
+                secret_key: r(&cfg.secret_key),
+                session_token: r(&cfg.session_token),
+                region: r(&cfg.region),
+                service: r(&cfg.service),
+            });
+        }
         Auth::Basic { username, password } => {
             let creds = format!("{}:{}", scope.resolve(&username), scope.resolve(&password));
             let encoded = base64::engine::general_purpose::STANDARD.encode(creds);
@@ -252,11 +339,83 @@ pub fn prepare(req: &Request, scope: &VarScope, fallback_auth: Option<&Auth>) ->
         }
     };
 
-    Ok(PreparedRequest { method: req.method.as_str().to_string(), url: url.to_string(), headers, body })
+    let method = req.method.as_str().to_string();
+    if let Some(creds) = aws {
+        let form_bytes;
+        let payload: Option<&[u8]> = match &body {
+            PreparedBody::None => Some(b""),
+            PreparedBody::Bytes(b) => Some(b),
+            PreparedBody::Text(t) => Some(t.as_bytes()),
+            PreparedBody::Form(fields) => {
+                form_bytes = encode_form(fields);
+                Some(form_bytes.as_bytes())
+            }
+            PreparedBody::Multipart(_) => None,
+        };
+        let input = sigv4::SignInput { method: &method, url: &url, headers: &headers, body: payload };
+        let signed = sigv4::sign(&input, &creds, &sigv4::now_amz_date());
+        headers.extend(signed);
+    }
+
+    Ok(PreparedRequest { method, url: url.to_string(), headers, body, challenge })
 }
 
-/// Builds a blocking client for the given settings.
+fn encode_form(fields: &[(String, String)]) -> String {
+    url::form_urlencoded::Serializer::new(String::new()).extend_pairs(fields.iter()).finish()
+}
+
+/// Builds a blocking client for the given settings, without a client certificate.
 pub fn build_client(settings: &HttpSettings) -> Result<reqwest::blocking::Client, HttpError> {
+    build_client_with(settings, None, None)
+}
+
+/// Builds a client presenting the certificate configured for `url`'s host, if any.
+pub fn client_for(settings: &HttpSettings, url: &str) -> Result<reqwest::blocking::Client, HttpError> {
+    build_client_with(settings, settings.client_cert_for(url), None)
+}
+
+/// Like [`client_for`], with cookies read from and stored into `jar`.
+pub fn client_with_jar(
+    settings: &HttpSettings,
+    url: &str,
+    jar: &std::sync::Arc<crate::cookies::SharedJar>,
+) -> Result<reqwest::blocking::Client, HttpError> {
+    build_client_with(settings, settings.client_cert_for(url), Some(jar.clone()))
+}
+
+/// Clients per client certificate, for callers sending many requests.
+pub struct Clients {
+    settings: HttpSettings,
+    jar: Option<std::sync::Arc<crate::cookies::SharedJar>>,
+    cache: std::collections::HashMap<Option<usize>, reqwest::blocking::Client>,
+}
+
+impl Clients {
+    pub fn new(settings: HttpSettings) -> Self {
+        Self { settings, jar: None, cache: Default::default() }
+    }
+
+    /// Clients that share one cookie jar.
+    pub fn with_jar(settings: HttpSettings, jar: std::sync::Arc<crate::cookies::SharedJar>) -> Self {
+        Self { settings, jar: Some(jar), cache: Default::default() }
+    }
+
+    pub fn for_url(&mut self, url: &str) -> Result<&reqwest::blocking::Client, HttpError> {
+        let cert = self.settings.client_cert_for(url);
+        let key = cert.and_then(|c| self.settings.client_certs.iter().position(|x| x == c));
+        if !self.cache.contains_key(&key) {
+            let client = build_client_with(&self.settings, cert, self.jar.clone())?;
+            self.cache.insert(key, client);
+        }
+        Ok(&self.cache[&key])
+    }
+}
+
+fn build_client_with(
+    settings: &HttpSettings,
+    cert: Option<&ClientCert>,
+    jar: Option<std::sync::Arc<crate::cookies::SharedJar>>,
+) -> Result<reqwest::blocking::Client, HttpError> {
     let redirect = if settings.follow_redirects {
         reqwest::redirect::Policy::limited(settings.max_redirects)
     } else {
@@ -266,33 +425,151 @@ pub fn build_client(settings: &HttpSettings) -> Result<reqwest::blocking::Client
         .timeout(Duration::from_secs(settings.timeout_secs.max(1)))
         .redirect(redirect)
         .user_agent(settings.user_agent.clone())
-        .cookie_store(true)
+        .tls_danger_accept_invalid_certs(!settings.verify_tls);
+    builder = match jar {
+        Some(jar) => builder.cookie_provider(jar),
+        None => builder.cookie_store(true),
+    };
+    if !settings.proxy.trim().is_empty() {
+        let proxy = reqwest::Proxy::all(settings.proxy.trim())
+            .map_err(|e| HttpError::InvalidUrl(settings.proxy.clone(), e.to_string()))?;
+        builder = builder.proxy(proxy);
+    }
+    if let Some(cert) = cert {
+        if !cert.cert_path.trim().is_empty() {
+            let identity = reqwest::Identity::from_pem(&cert.pem()?).map_err(|e| {
+                HttpError::Transport(format!("client certificate `{}`: {}", cert.cert_path, describe_error(&e)))
+            })?;
+            builder = builder.identity(identity);
+        }
+        if let Some(ca) = cert.ca_pem()? {
+            let certs = reqwest::Certificate::from_pem_bundle(&ca)
+                .map_err(|e| HttpError::Transport(format!("CA `{}`: {}", cert.ca_path, describe_error(&e))))?;
+            for c in certs {
+                builder = builder.add_root_certificate(c);
+            }
+        }
+    }
+    builder.build().map_err(|e| HttpError::Transport(e.to_string()))
+}
+
+/// An async client for long-lived streams (Server-Sent Events): same TLS,
+/// proxy and client-certificate settings, but only a connect timeout.
+pub fn streaming_client_for(settings: &HttpSettings, url: &str) -> Result<reqwest::Client, HttpError> {
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(settings.timeout_secs.max(1)))
+        .user_agent(settings.user_agent.clone())
         .tls_danger_accept_invalid_certs(!settings.verify_tls);
     if !settings.proxy.trim().is_empty() {
         let proxy = reqwest::Proxy::all(settings.proxy.trim())
             .map_err(|e| HttpError::InvalidUrl(settings.proxy.clone(), e.to_string()))?;
         builder = builder.proxy(proxy);
     }
-    builder.build().map_err(|e| HttpError::Transport(e.to_string()))
+    if let Some(cert) = settings.client_cert_for(url) {
+        if !cert.cert_path.trim().is_empty() {
+            let identity = reqwest::Identity::from_pem(&cert.pem()?)
+                .map_err(|e| HttpError::Transport(format!("client certificate `{}`: {e}", cert.cert_path)))?;
+            builder = builder.identity(identity);
+        }
+        if let Some(ca) = cert.ca_pem()? {
+            for c in reqwest::Certificate::from_pem_bundle(&ca).map_err(|e| HttpError::Transport(e.to_string()))? {
+                builder = builder.add_root_certificate(c);
+            }
+        }
+    }
+    builder.build().map_err(|e| HttpError::Transport(describe_error(&e)))
 }
 
-/// Sends a prepared request with an existing client.
+/// Sends a prepared request with an existing client, answering a Digest or
+/// NTLM challenge when the request carries those credentials.
 pub fn send(client: &reqwest::blocking::Client, prepared: &PreparedRequest) -> Result<Response, HttpError> {
+    let started = Instant::now();
+    let mut response = match &prepared.challenge {
+        None => send_once(client, prepared, None)?,
+        Some(ChallengeAuth::Digest { username, password }) => {
+            let first = send_once(client, prepared, None)?;
+            match (first.status, digest::find_challenge(header_values(&first, "www-authenticate"))) {
+                (401, Some(ch)) => {
+                    let uri = request_target(&prepared.url);
+                    let cnonce = crate::auth::hex(&crate::auth::random_bytes::<8>());
+                    let body = body_bytes(&prepared.body);
+                    let header = digest::authorization(
+                        &ch,
+                        username,
+                        password,
+                        &prepared.method,
+                        &uri,
+                        body.as_deref().unwrap_or_default(),
+                        &cnonce,
+                        1,
+                    );
+                    send_once(client, prepared, Some(header))?
+                }
+                _ => first,
+            }
+        }
+        Some(ChallengeAuth::Ntlm { username, password, domain, workstation }) => {
+            let first = send_once(client, prepared, Some(ntlm::negotiate_header()))?;
+            match (first.status, ntlm::find_challenge(header_values(&first, "www-authenticate"))) {
+                (401, Some(ch)) => {
+                    let header = ntlm::authenticate_header(&ch, username, password, domain, workstation);
+                    send_once(client, prepared, Some(header))?
+                }
+                _ => first,
+            }
+        }
+    };
+    response.elapsed_ms = started.elapsed().as_millis();
+    Ok(response)
+}
+
+fn header_values<'a>(resp: &'a Response, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+    resp.headers.iter().filter(move |(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
+}
+
+/// Path and query of a URL, as used in the HTTP request line.
+fn request_target(url: &str) -> String {
+    match url::Url::parse(url) {
+        Ok(u) => match u.query() {
+            Some(q) => format!("{}?{q}", u.path()),
+            None => u.path().to_string(),
+        },
+        Err(_) => url.to_string(),
+    }
+}
+
+fn body_bytes(body: &PreparedBody) -> Option<Vec<u8>> {
+    match body {
+        PreparedBody::None => Some(Vec::new()),
+        PreparedBody::Bytes(b) => Some(b.clone()),
+        PreparedBody::Text(t) => Some(t.as_bytes().to_vec()),
+        PreparedBody::Form(f) => Some(encode_form(f).into_bytes()),
+        PreparedBody::Multipart(_) => None,
+    }
+}
+
+fn send_once(
+    client: &reqwest::blocking::Client,
+    prepared: &PreparedRequest,
+    authorization: Option<String>,
+) -> Result<Response, HttpError> {
     let method =
         reqwest::Method::from_bytes(prepared.method.as_bytes()).map_err(|e| HttpError::Transport(e.to_string()))?;
     let mut builder = client.request(method, &prepared.url);
     for (k, v) in &prepared.headers {
+        if authorization.is_some() && k.eq_ignore_ascii_case("authorization") {
+            continue;
+        }
         builder = builder.header(k, v);
+    }
+    if let Some(a) = authorization {
+        builder = builder.header("Authorization", a);
     }
     builder = match &prepared.body {
         PreparedBody::None => builder,
         PreparedBody::Bytes(b) => builder.body(b.clone()),
         PreparedBody::Text(t) => builder.body(t.clone()),
-        PreparedBody::Form(fields) => {
-            let encoded: String =
-                url::form_urlencoded::Serializer::new(String::new()).extend_pairs(fields.iter()).finish();
-            builder.body(encoded)
-        }
+        PreparedBody::Form(fields) => builder.body(encode_form(fields)),
         PreparedBody::Multipart(fields) => {
             let mut form = reqwest::blocking::multipart::Form::new();
             for (k, v, is_file) in fields {
@@ -338,7 +615,7 @@ pub fn execute(
     settings: &HttpSettings,
 ) -> Result<(PreparedRequest, Response), HttpError> {
     let prepared = prepare(req, scope, fallback_auth)?;
-    let client = build_client(settings)?;
+    let client = client_for(settings, &prepared.url)?;
     let response = send(&client, &prepared)?;
     Ok((prepared, response))
 }
@@ -456,5 +733,32 @@ mod tests {
     fn size_formatting() {
         assert_eq!(format_size(12), "12 B");
         assert_eq!(format_size(2048), "2.0 KB");
+    }
+
+    #[test]
+    fn client_certificate_is_picked_by_host() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mtls");
+        let cert = |host: &str| ClientCert {
+            enabled: true,
+            host: host.into(),
+            cert_path: format!("{dir}/client.pem"),
+            key_path: format!("{dir}/client.key"),
+            ca_path: format!("{dir}/ca.pem"),
+        };
+        let settings = HttpSettings {
+            client_certs: vec![
+                ClientCert { enabled: false, ..cert("*") },
+                cert("*.internal.example"),
+                cert("localhost"),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(settings.client_cert_for("https://api.internal.example/x").unwrap().host, "*.internal.example");
+        assert_eq!(settings.client_cert_for("https://localhost:8443/").unwrap().host, "localhost");
+        assert!(settings.client_cert_for("https://example.com/").is_none());
+        let mut clients = Clients::new(settings);
+        clients.for_url("https://localhost:8443/").expect("PEM identity and CA load");
+        clients.for_url("https://example.com/").unwrap();
+        assert_eq!(clients.cache.len(), 2);
     }
 }

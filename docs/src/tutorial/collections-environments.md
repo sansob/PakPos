@@ -12,6 +12,10 @@ Inside it you can create **folders** (and folders inside folders).
 - Right-click a collection or folder for *Add request*, *Add folder*, *Rename*,
   *Run collection*, *Export* and *Delete*.
 - Right-click a request to *Duplicate*, *Rename* or *Delete* it.
+- Drag requests and folders to reorder them. Drop on the upper or lower part
+  of a row to place the item before or after it, on the middle of a folder to
+  move it inside, or on a collection's name to move it there (also to another
+  collection). Folders cannot be dropped into themselves.
 - Use the search box to filter by name or URL.
 
 ## Environments

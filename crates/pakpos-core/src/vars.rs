@@ -20,6 +20,10 @@ pub struct VarScope {
     pub environment: HashMap<String, String>,
     pub collection: HashMap<String, String>,
     pub globals: HashMap<String, String>,
+    /// The current row of a data-driven run (CSV / JSON file).
+    pub data: HashMap<String, String>,
+    /// Zero-based iteration of a data-driven run.
+    pub iteration: usize,
     /// OAuth 2.0 access tokens by [`crate::model::OAuth2Config::cache_key`].
     pub oauth_tokens: HashMap<String, String>,
 }
@@ -53,6 +57,7 @@ impl VarScope {
         if let Some(v) = self
             .runtime
             .get(name)
+            .or_else(|| self.data.get(name))
             .or_else(|| self.environment.get(name))
             .or_else(|| self.collection.get(name))
             .or_else(|| self.globals.get(name))

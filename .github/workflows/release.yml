@@ -158,12 +158,21 @@ jobs:
           merge-multiple: true
       - name: Checksums
         run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Package manager manifests (Homebrew, winget, AUR, Flatpak)
+        run: |
+          V=${{ needs.meta.outputs.version }}
+          python3 packaging/make-manifests.py --version "$V" --sums dist/SHA256SUMS.txt \
+            --repo "${{ github.repository }}" --out manifests
+          (cd manifests && zip -qr "../dist/pakpos-$V-package-manifests.zip" .)
+          (cd dist && sha256sum "pakpos-$V-package-manifests.zip" >> SHA256SUMS.txt)
       - name: Release notes from CHANGELOG
         run: |
           V=${{ needs.meta.outputs.version }}
+          # The section of this version, without the link definitions at the end.
           awk -v v="$V" '
             $0 ~ "^## \\[" v "\\]" {found=1; next}
             found && /^## \[/ {exit}
+            found && /^\[[^]]+\]: / {next}
             found {print}
           ' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "Release $V" > notes.md

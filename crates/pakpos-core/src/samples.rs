@@ -72,6 +72,11 @@ pub fn demo_collection() -> Collection {
     let mut basic = req("Basic auth", HttpMethod::Get, "{{base_url}}/basic-auth/pakpos/rahasia");
     basic.auth = Auth::Basic { username: "pakpos".into(), password: "rahasia".into() };
     basic.assertions = vec![test("status", Operator::Equals, "200")];
+    let mut cookies = req("Set a cookie", HttpMethod::Get, "{{base_url}}/cookies/set?flavour=kopi-susu");
+    cookies.assertions = vec![test("json.cookies.flavour", Operator::Equals, "kopi-susu")];
+    let mut digest = req("Digest auth", HttpMethod::Get, "{{base_url}}/digest-auth/auth/pakpos/rahasia");
+    digest.auth = Auth::Digest { username: "pakpos".into(), password: "rahasia".into() };
+    digest.assertions = vec![test("json.authenticated", Operator::Equals, "true")];
 
     let mut uuid = req("Get UUID (extract)", HttpMethod::Get, "{{base_url}}/uuid");
     uuid.extractions = vec![Extraction { enabled: true, variable: "last_uuid".into(), source: "json.uuid".into() }];
@@ -138,15 +143,61 @@ pub fn demo_collection() -> Collection {
     grpc_req.description = "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send.".into();
 
     let mut basics = Folder::new("Basics");
-    basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
+    basics.items = [get, post, form, put, patch, del, cookies].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
-    auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(oauth)];
+    auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(digest), Item::Request(oauth)];
     let mut responses = Folder::new("Responses");
     responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found), Item::Request(scripted)];
     let mut graphql = Folder::new("GraphQL");
     graphql.items = vec![Item::Request(gql)];
     let mut realtime = Folder::new("Realtime");
-    realtime.items = vec![Item::Request(ws), Item::Request(grpc_req)];
+    let mut chat = req("Chat (gRPC stream)", HttpMethod::Post, "{{grpc_url}}");
+    chat.kind = crate::model::RequestKind::Grpc;
+    chat.grpc = Some(crate::model::GrpcConfig { method: "pakpos.demo.Chat/Talk".into(), ..Default::default() });
+    chat.body = Body::Raw {
+        content: "{\n  \"user\": \"budi\",\n  \"text\": \"paket saya sudah sampai mana?\"\n}".into(),
+        language: RawLanguage::Json,
+    };
+    chat.description =
+        "A bidirectional stream: Open stream, then Send message as often as you like; End stream when done.".into();
+    let mut sse = req("Price stream (SSE)", HttpMethod::Get, "{{base_url}}/sse");
+    sse.kind = crate::model::RequestKind::Sse;
+    let mut sio = req("Parcel events (Socket.IO)", HttpMethod::Get, "{{base_url}}");
+    sio.kind = crate::model::RequestKind::SocketIo;
+    sio.realtime = Some(crate::model::RealtimeConfig { event: "track".into(), ..Default::default() });
+    sio.body = Body::Raw { content: "{ \"resi\": \"PP-2026-0042\" }".into(), language: RawLanguage::Json };
+    let mut mqtt = req("Office sensors (MQTT)", HttpMethod::Get, "{{mqtt_url}}");
+    mqtt.kind = crate::model::RequestKind::Mqtt;
+    mqtt.realtime = Some(crate::model::RealtimeConfig {
+        subscriptions: vec![crate::model::MqttTopic { enabled: true, topic: "kantor/#".into(), qos: 1 }],
+        topic: "kantor/1/lampu".into(),
+        ..Default::default()
+    });
+    mqtt.body = Body::Raw { content: "{ \"on\": true }".into(), language: RawLanguage::Json };
+    mqtt.description = "Start the demo broker with `python3 scripts/mock_mqtt.py`, then Connect.".into();
+    let mut mcp = req("Weather tool (MCP)", HttpMethod::Post, "{{base_url}}/mcp");
+    mcp.kind = crate::model::RequestKind::Mcp;
+    mcp.mcp = Some(crate::model::McpConfig {
+        operation: crate::model::McpOperation::CallTool,
+        target: "weather".into(),
+        env: Vec::new(),
+    });
+    mcp.body = Body::Raw { content: "{\n  \"city\": \"Jakarta\"\n}".into(), language: RawLanguage::Json };
+    mcp.assertions = vec![
+        test("status", Operator::Equals, "200"),
+        test("json.structuredContent.celsius", Operator::Exists, ""),
+        test("json.content[0].text", Operator::Contains, "Jakarta"),
+    ];
+    mcp.description = "Calls the `weather` tool of an MCP server like any request; the result is the response, so tests work. Load lists the tools.".into();
+    realtime.items = vec![
+        Item::Request(ws),
+        Item::Request(sse),
+        Item::Request(sio),
+        Item::Request(mqtt),
+        Item::Request(grpc_req),
+        Item::Request(chat),
+        Item::Request(mcp),
+    ];
 
     let mut c = Collection::new("PakPos Demo");
     c.description =
@@ -169,6 +220,7 @@ pub fn demo_environment(base_url: &str) -> Environment {
     env.set("token", "pakpos-demo-token");
     env.set("ws_url", crate::ws::to_ws_url(base_url));
     env.set("grpc_url", "grpc://127.0.0.1:50051");
+    env.set("mqtt_url", "mqtt://127.0.0.1:1883");
     env
 }
 
@@ -177,7 +229,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 16);
+        assert_eq!(c.request_count(), 23);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

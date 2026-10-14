@@ -45,9 +45,9 @@ fn editor(
     let mut changed = false;
     ui.horizontal(|ui| {
         widgets::section_title(ui, title);
-        ui.menu_button(RichText::new("Snippets ▾").small(), |ui| {
+        ui.menu_button(RichText::new(crate::i18n::tr("Snippets ▾")).small(), |ui| {
             for (label, snippet) in snippets {
-                if ui.button(*label).clicked() {
+                if ui.button(crate::i18n::tr(label)).clicked() {
                     if !code.is_empty() && !code.ends_with('\n') {
                         code.push('\n');
                     }
@@ -58,7 +58,11 @@ fn editor(
             }
         });
         if !code.trim().is_empty() {
-            ui.label(RichText::new(format!("{} lines", code.lines().count())).small().color(p.text_weak));
+            ui.label(
+                RichText::new(crate::i18n::trf("{n} lines", &[("n", &code.lines().count().to_string())]))
+                    .small()
+                    .color(p.text_weak),
+            );
         }
     });
     let theme_ = egui_extras::syntax_highlighting::CodeTheme::from_style(ui.style());
@@ -103,17 +107,17 @@ pub fn scripts_editor(
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("⚠").color(theme::YELLOW).size(16.0));
                     ui.vertical(|ui| {
-                        ui.label(RichText::new("Scripts in this collection are not run yet").strong());
+                        ui.label(RichText::new(crate::i18n::tr("Scripts in this collection are not run yet")).strong());
                         ui.label(
                             RichText::new(
-                                "It came from outside PakPos (import or shared folder). Scripts run sandboxed, without file or network access, but read them before trusting.",
+                                crate::i18n::tr("It came from outside PakPos (import or shared folder). Scripts run sandboxed, without file or network access, but read them before trusting."),
                             )
                             .small()
                             .color(p.text_weak),
                         );
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if widgets::primary_button(ui, "Trust collection").clicked() {
+                        if widgets::primary_button(ui, crate::i18n::tr("Trust collection")).clicked() {
                             *action = Some(ScriptAction::Trust);
                         }
                     });
@@ -133,7 +137,7 @@ pub fn scripts_editor(
     }
     changed |= editor(
         ui,
-        "Pre-request script",
+        crate::i18n::tr("Pre-request script"),
         "// Runs before the request is sent.\npm.variables.set(\"ts\", String(Date.now()));",
         &mut scripts.pre_request,
         ("pre_script", uid),
@@ -143,7 +147,7 @@ pub fn scripts_editor(
     ui.add_space(8.0);
     changed |= editor(
         ui,
-        "Post-response script (tests)",
+        crate::i18n::tr("Post-response script (tests)"),
         "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
         &mut scripts.test,
         ("test_script", uid),
@@ -152,7 +156,7 @@ pub fn scripts_editor(
     );
     ui.add_space(4.0);
     ui.label(
-        RichText::new("pm.* API: pm.test, pm.expect, pm.response, pm.request, pm.environment, pm.collectionVariables, pm.globals, pm.variables, console.log. No pm.sendRequest, require or file access.")
+        RichText::new(crate::i18n::tr("pm.* API: pm.test, pm.expect, pm.response, pm.request, pm.environment, pm.collectionVariables, pm.globals, pm.variables, console.log. No pm.sendRequest, require or file access."))
             .small()
             .color(p.text_weak),
     );
@@ -162,7 +166,9 @@ pub fn scripts_editor(
 /// Script console output in the response panel.
 pub fn console(ui: &mut Ui, logs: &[String], uid: u64, p: &Palette) {
     if logs.is_empty() {
-        ui.label(RichText::new("No console output. Use console.log() in a script.").color(p.text_weak));
+        ui.label(
+            RichText::new(crate::i18n::tr("No console output. Use console.log() in a script.")).color(p.text_weak),
+        );
         return;
     }
     egui::ScrollArea::vertical().id_salt(("console", uid)).auto_shrink([false, false]).show(ui, |ui| {

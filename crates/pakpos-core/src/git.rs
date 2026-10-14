@@ -6,10 +6,10 @@
 //! outside it.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
 
 /// Files that are personal or secret and should not be shared.
-pub const GITIGNORE: &str = "# PakPos: personal and secret files stay local\nhistory.json\nsettings.json\ntokens.json\nui-state.ron\n*.json.tmp\n";
+pub const GITIGNORE: &str = "# PakPos: personal and secret files stay local\nhistory.json\nsettings.json\ntokens.json\ncookies.json\nui-state.ron\n*.json.tmp\n";
 
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {
@@ -47,7 +47,7 @@ pub struct Commit {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Result<Output, GitError> {
-    Command::new("git")
+    crate::process::command("git")
         .args(args)
         .current_dir(dir)
         // Never block waiting for a password prompt in a GUI.
@@ -78,7 +78,7 @@ fn run(dir: &Path, args: &[&str]) -> Result<String, GitError> {
 }
 
 pub fn is_installed() -> bool {
-    Command::new("git").arg("--version").output().is_ok_and(|o| o.status.success())
+    crate::process::command("git").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
 /// Top level of the repository containing `dir`, if any.

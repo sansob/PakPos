@@ -6,6 +6,75 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0-rc.1] - 2026-10-14
+
+### Added
+- Tab context menu: new, duplicate, close, force close, close other tabs,
+  close tabs to the right, close all, force close all; middle-click closes a tab.
+  Closing tabs with unsaved changes now asks (save and close, close without
+  saving or cancel) instead of dropping the changes.
+- Several workspaces: a workspace menu in the header switches between them,
+  creates a new one (name + folder) or opens any folder as a workspace. Open
+  tabs are remembered per workspace; `pakpos-cli` uses the active workspace
+  (`PAKPOS_HOME` still overrides). The list lives in the config folder
+  (`PAKPOS_CONFIG` to move it), never in a workspace.
+- The UI in Bahasa Indonesia (Settings → Language; follows the system locale
+  by default), with a test that fails on untranslated UI text.
+- Digest (RFC 7616: MD5, SHA-256, -sess, qop auth/auth-int), NTLMv2 and
+  AWS Signature v4 auth, in the app, runner, CLI, MCP server, code snippets
+  and Collection v2.1 import/export.
+- Client certificates (mTLS) per host, with an optional private CA, for HTTPS
+  and gRPC; `--cert`, `--key` and `--cacert` on `run`, `send` and `grpc`.
+- Data-driven runs: CSV or JSON data files, one iteration per row, with
+  `{{column}}` variables, `pm.iterationData` and `pm.info.iteration`;
+  `pakpos-cli run --data / --iterations`, a run options dialog in the app and a
+  `data` argument for the MCP `run_collection` tool.
+- gRPC requests run in the collection runner (app, CLI and MCP).
+- Persistent cookie jar (`cookies.json`, git-ignored) with RFC 6265 matching,
+  cookies from redirects included, and a viewer/editor (**Cookies** in the top
+  bar). Runs share the jar between requests.
+- Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
+  view (copy a value or its test path), image preview and a simplified HTML
+  preview with *Open in browser*; *Save* picks the extension from the content type.
+- OpenAPI 3.0 / 3.1 and Swagger 2.0 import (JSON or YAML): folders by tag,
+  `{{baseUrl}}`, path variables, example bodies, auth from security schemes and
+  response examples ready for the mock server; export to OpenAPI 3.0.3 YAML or
+  JSON (app and `pakpos-cli export -f openapi|openapi-yaml`).
+- Package manager manifests on every release (Homebrew cask and formula,
+  winget, AUR `pakpos-bin`, Flatpak with metainfo), generated from the release
+  checksums; release notes no longer include the changelog's link lines.
+- MCP client request type: test MCP servers over Streamable HTTP or stdio
+  like REST requests (call tools, read resources, get prompts, list tools),
+  with tests, the runner and `pakpos-cli mcp-client`; stdio servers need a
+  trusted collection. The mock API gains a small `/mcp` server.
+- Server-Sent Events, Socket.IO (v5 / Engine.IO v4) and MQTT 3.1.1 (QoS 0-2,
+  retained messages, TLS and client certificates) as request kinds with the
+  live message log; `pakpos-cli sse`, `socketio` and `mqtt`; an offline
+  Socket.IO server in the mock API and `scripts/mock_mqtt.py`.
+- Interactive gRPC streams: open a client-streaming or bidirectional call,
+  send messages one by one, see answers live, end or cancel it. The demo
+  server gains `pakpos.demo.Chat` (`Talk`, `Sum`).
+- `pm.sendRequest` in scripts, behind a per-collection network permission
+  (trusted collections only, stored in settings); `pakpos-cli run --allow-network`;
+  host allow-list, request cap and cookie jar apply.
+- Drag & drop in the sidebar: reorder requests and folders, move them into
+  folders or to another collection; open tabs follow moved requests.
+
+### Changed
+- New app icon: Pak Pos himself (navy cap with an envelope, on orange), also in
+  the header and the About dialog. `assets/icon.svg` is the source;
+  `scripts/make_icons.py` renders every size, `.ico` and `.icns` from it.
+- Dark theme: neutral near-black surfaces instead of navy (the light theme keeps
+  its navy header).
+
+### Fixed
+- Windows installer: "Add pakpos-cli to PATH" failed for all-users installs
+  (`RegCreateKeyEx failed; code 87` on `HKLM\Environment`). It now writes the
+  system environment key, and uninstall removes the folder from PATH again.
+  A CI job installs and uninstalls the installer to check this.
+- Windows: no more console windows flashing up when PakPos runs git (the
+  Sync badge refreshes every minute) or starts a stdio MCP server.
+
 ## [0.2.0-rc.1] - 2026-10-14
 
 Release candidate for the first public release.
@@ -54,5 +123,6 @@ Release candidate for the first public release.
   (rebase, auto-reload), push, or one-click Sync, scoped to the workspace folder,
   using the installed git and its credentials; personal files are git-ignored.
 
-[Unreleased]: https://github.com/sansob/PakPos/compare/v0.2.0-rc.1...HEAD
+[Unreleased]: https://github.com/sansob/PakPos/compare/v0.3.0-rc.1...HEAD
+[0.3.0-rc.1]: https://github.com/sansob/PakPos/compare/v0.2.0-rc.1...v0.3.0-rc.1
 [0.2.0-rc.1]: https://github.com/sansob/PakPos/releases/tag/v0.2.0-rc.1

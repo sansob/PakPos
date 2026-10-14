@@ -11,6 +11,8 @@ use pakpos_core::{postman, Body, HttpMethod, KeyValue, Request};
 use std::io::IsTerminal;
 
 mod mcp;
+mod mcp_client_cmd;
+mod realtime;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -37,7 +39,7 @@ enum Command {
     Send(SendArgs),
     /// Convert a Collection v2.1 file into PakPos format.
     Import {
-        /// Collection JSON (v2.0 / v2.1).
+        /// Collection JSON (v2.0 / v2.1) or an OpenAPI 3 / Swagger 2.0 document (JSON or YAML).
         input: PathBuf,
         /// Output file. Defaults to stdout.
         #[arg(short, long)]
@@ -46,11 +48,14 @@ enum Command {
         #[arg(long)]
         workspace: bool,
     },
-    /// Export a PakPos collection as Collection v2.1.
+    /// Export a PakPos collection as Collection v2.1 or OpenAPI 3 (--format).
     Export {
         input: PathBuf,
         #[arg(short, long)]
         out: Option<PathBuf>,
+        /// Output format.
+        #[arg(short, long, value_enum, default_value_t = ExportFormat::Collection)]
+        format: ExportFormat,
     },
     /// Convert a cURL command into a PakPos request (JSON) or a code snippet.
     Curl {
@@ -78,6 +83,14 @@ enum Command {
         #[arg(long)]
         timeout: Option<u64>,
     },
+    /// Test an MCP server: list and call tools, read resources, get prompts.
+    McpClient(mcp_client_cmd::McpClientArgs),
+    /// Listen to Server-Sent Events (text/event-stream).
+    Sse(realtime::SseArgs),
+    /// Connect to a Socket.IO server: print events, emit with --emit or stdin.
+    Socketio(realtime::SocketIoArgs),
+    /// Connect to an MQTT broker: subscribe, publish (--pub, --message or stdin).
+    Mqtt(realtime::MqttArgs),
     /// Call a gRPC method (JSON in, JSON out) or list a server's methods.
     Grpc {
         /// grpc://host:port, grpcs://host (TLS) or host:port.
@@ -106,6 +119,8 @@ enum Command {
         /// Print an example request message instead of calling.
         #[arg(long)]
         template: bool,
+        #[command(flatten)]
+        tls: TlsArgs,
     },
     /// Serve the saved examples of a collection as a mock API.
     Mock {
@@ -153,6 +168,16 @@ enum Reporter {
     Junit,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum ExportFormat {
+    /// Collection v2.1 JSON
+    Collection,
+    /// OpenAPI 3.0.3 JSON
+    Openapi,
+    /// OpenAPI 3.0.3 YAML
+    OpenapiYaml,
+}
+
 #[derive(clap::Args)]
 struct RunArgs {
     /// Collection file (PakPos or v2.1 JSON), or the name of a collection in the workspace.
@@ -191,6 +216,51 @@ struct RunArgs {
     /// Collections trusted in the desktop app run their scripts without this flag.
     #[arg(long)]
     allow_scripts: bool,
+    /// Let those scripts send requests with pm.sendRequest (implies --allow-scripts).
+    /// Collections with network access in the desktop app have it without this flag.
+    #[arg(long)]
+    allow_network: bool,
+    /// Data file (CSV with a header row, or a JSON array of objects): the
+    /// collection runs once per row, with the row's columns as variables.
+    #[arg(short, long)]
+    data: Option<PathBuf>,
+    /// Number of iterations (default: one per data row, or 1).
+    #[arg(short = 'n', long, default_value_t = 0)]
+    iterations: usize,
+    #[command(flatten)]
+    tls: TlsArgs,
+}
+
+/// Client certificate flags shared by `run`, `send` and `grpc`.
+#[derive(clap::Args, Clone, Default)]
+struct TlsArgs {
+    /// Client certificate (PEM) for mTLS, used for every host. Certificates
+    /// configured in the desktop app's settings are used as well.
+    #[arg(long)]
+    cert: Option<String>,
+    /// Private key (PEM) for --cert, if it is not in the same file.
+    #[arg(long, requires = "cert")]
+    key: Option<String>,
+    /// Extra CA certificate (PEM) to trust, e.g. for a private CA.
+    #[arg(long)]
+    cacert: Option<String>,
+}
+
+impl TlsArgs {
+    fn client_certs(&self, ws: &Workspace) -> Vec<pakpos_core::http::ClientCert> {
+        let mut certs = Vec::new();
+        if self.cert.is_some() || self.cacert.is_some() {
+            certs.push(pakpos_core::http::ClientCert {
+                enabled: true,
+                host: "*".into(),
+                cert_path: self.cert.clone().unwrap_or_default(),
+                key_path: self.key.clone().unwrap_or_default(),
+                ca_path: self.cacert.clone().unwrap_or_default(),
+            });
+        }
+        certs.extend(ws.settings.http.client_certs.iter().cloned());
+        certs
+    }
 }
 
 #[derive(clap::Args)]
@@ -217,6 +287,8 @@ struct SendArgs {
     insecure: bool,
     #[arg(long, default_value_t = 30)]
     timeout: u64,
+    #[command(flatten)]
+    tls: TlsArgs,
 }
 
 fn parse_kv(s: &str) -> Result<(String, String), String> {
@@ -296,9 +368,16 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
             write_output(out.as_ref(), &json, !workspace)?;
             Ok(ExitCode::SUCCESS)
         }
-        Command::Export { input, out } => {
+        Command::Export { input, out, format } => {
             let (collection, _) = storage::load_collection_file(&input).map_err(anyhow::Error::msg)?;
-            write_output(out.as_ref(), &postman::export_collection(&collection), true)?;
+            let text = match format {
+                ExportFormat::Collection => postman::export_collection(&collection),
+                ExportFormat::Openapi => {
+                    serde_json::to_string_pretty(&pakpos_core::openapi::export(&collection)).unwrap_or_default()
+                }
+                ExportFormat::OpenapiYaml => pakpos_core::openapi::to_yaml(&pakpos_core::openapi::export(&collection)),
+            };
+            write_output(out.as_ref(), &text, true)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Curl { command, to } => {
@@ -330,6 +409,10 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
         Command::Ws { url, headers, environment, vars, send, timeout } => {
             cmd_ws(url, headers, environment, vars, send, timeout, style)
         }
+        Command::McpClient(a) => mcp_client_cmd::run(a, style),
+        Command::Sse(a) => realtime::sse(a, style),
+        Command::Socketio(a) => realtime::socketio(a, style),
+        Command::Mqtt(a) => realtime::mqtt(a, style),
         Command::Grpc {
             url,
             method,
@@ -341,8 +424,21 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
             vars,
             max_messages,
             template,
+            tls,
         } => cmd_grpc(
-            GrpcArgs { url, method, data, protos, import_paths, headers, environment, vars, max_messages, template },
+            GrpcArgs {
+                url,
+                method,
+                data,
+                protos,
+                import_paths,
+                headers,
+                environment,
+                vars,
+                max_messages,
+                template,
+                tls,
+            },
             style,
         ),
         Command::Mock { collection, port, host, delay } => cmd_mock(&collection, &host, port, delay, style),
@@ -418,8 +514,17 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         None => None,
     };
     let (mut ws, _) = Workspace::load(storage::default_root());
+    let data = match &args.data {
+        Some(p) => pakpos_core::data::load(&p.display().to_string())?,
+        None => Vec::new(),
+    };
     let options = RunOptions {
-        settings: HttpSettings { timeout_secs: args.timeout, verify_tls: !args.insecure, ..Default::default() },
+        settings: HttpSettings {
+            timeout_secs: args.timeout,
+            verify_tls: !args.insecure,
+            client_certs: args.tls.client_certs(&ws),
+            ..Default::default()
+        },
         filter: args.filter.clone(),
         stop_on_failure: args.bail,
         delay_ms: args.delay,
@@ -427,8 +532,14 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         overrides: args.vars.clone(),
         allowed_hosts: Vec::new(),
         tokens: ws.tokens.clone(),
-        allow_scripts: args.allow_scripts || ws.is_trusted(&collection.id),
+        allow_scripts: args.allow_scripts || args.allow_network || ws.is_trusted(&collection.id),
+        allow_network: args.allow_network || ws.has_network(&collection.id),
+        data,
+        iterations: args.iterations,
+        // Each CLI run starts with an empty jar, so CI runs are reproducible.
+        cookies: Default::default(),
     };
+    let iteration_count = options.iteration_count();
 
     let cli_reporter = args.reporter == Reporter::Cli;
     if cli_reporter {
@@ -439,9 +550,14 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
             env.as_ref().map(|(e, _)| style.dim(&format!("  ·  env: {}", e.name))).unwrap_or_default()
         );
     }
+    let mut last_iteration = usize::MAX;
     let print = |r: &RequestReport| {
         if !cli_reporter {
             return;
+        }
+        if iteration_count > 1 && r.iteration != last_iteration {
+            last_iteration = r.iteration;
+            println!("{}", style.bold(&format!("── iteration {}/{iteration_count}", r.iteration + 1)));
         }
         let folder =
             if r.folder.is_empty() { String::new() } else { style.dim(&format!("{} / ", r.folder.join(" / "))) };
@@ -484,8 +600,10 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         Reporter::Cli => {
             let (passed, total) = report.assertion_counts();
             let failed_reqs = report.failed_requests();
+            let iterations =
+                if report.iterations > 1 { format!("iterations: {}  ·  ", report.iterations) } else { String::new() };
             println!(
-                "\n{}  requests: {}  ·  assertions: {}/{}  ·  {} ms\n",
+                "\n{}  {iterations}requests: {}  ·  assertions: {}/{}  ·  {} ms\n",
                 if report.passed() { style.green("PASSED") } else { style.red("FAILED") },
                 report.requests.len(),
                 passed,
@@ -556,7 +674,12 @@ fn cmd_send(args: SendArgs, style: &Style) -> Result<ExitCode> {
     if !missing.is_empty() {
         eprintln!("{} unresolved variables: {}", style.paint("33", "warning:"), missing.join(", "));
     }
-    let settings = HttpSettings { timeout_secs: args.timeout, verify_tls: !args.insecure, ..Default::default() };
+    let settings = HttpSettings {
+        timeout_secs: args.timeout,
+        verify_tls: !args.insecure,
+        client_certs: args.tls.client_certs(&ws),
+        ..Default::default()
+    };
     let (_, resp) = http::execute(&req, &scope, None, &settings)?;
     eprintln!(
         "{} {}  {}",
@@ -635,6 +758,7 @@ fn cmd_ws(
             }
             Ok(WsEvent::Message { direction: Direction::Received, text, .. }) => println!("{text}"),
             Ok(WsEvent::Error(e)) => eprintln!("{} {e}", style.red("error:")),
+            Ok(WsEvent::Info(t)) => eprintln!("{} {t}", style.dim("•")),
             Ok(WsEvent::Closed { reason }) => {
                 eprintln!("{} {reason}", style.dim("closed:"));
                 return Ok(ExitCode::SUCCESS);
@@ -711,6 +835,7 @@ struct GrpcArgs {
     vars: Vec<(String, String)>,
     max_messages: usize,
     template: bool,
+    tls: TlsArgs,
 }
 
 fn cmd_grpc(a: GrpcArgs, style: &Style) -> Result<ExitCode> {
@@ -725,7 +850,7 @@ fn cmd_grpc(a: GrpcArgs, style: &Style) -> Result<ExitCode> {
         scope.runtime.insert(k, v);
     }
     let url = scope.resolve(&a.url);
-    let settings = HttpSettings::default();
+    let settings = HttpSettings { client_certs: a.tls.client_certs(&ws), ..Default::default() };
     let cfg = pakpos_core::model::GrpcConfig {
         method: a.method.clone().unwrap_or_default(),
         proto_files: a.protos,

@@ -41,17 +41,26 @@ out and brings the reply back. That's the whole job.
 ## What it can do today
 
 You can send any common HTTP method with query params, headers, and JSON, form,
-multipart, binary or GraphQL bodies. Basic, Bearer, API-key and OAuth 2.0 auth
-are built in (client credentials, password, and the browser login with PKCE),
+multipart, binary or GraphQL bodies. Basic, Bearer, API-key, Digest, NTLM, AWS
+Signature v4 and OAuth 2.0 auth are built in (client credentials, password, and
+the browser login with PKCE), client certificates (mTLS) can be set per host,
 and a request can inherit auth from its folder or collection, so you set your
 token once instead of forty times. OAuth tokens are fetched and refreshed for
 you, and they live in a local file, never in the collection you share.
 
-It isn't only HTTP. A request can be a **WebSocket** (connect, send messages,
-watch the live log) or a **gRPC** call: PakPos reads the service from server
-reflection or your `.proto` files, gives you a JSON template for the message,
-and shows the reply, streaming included. GraphQL gets a schema explorer, so you
-can click your way to a starter query instead of reading SDL.
+It isn't only HTTP. A request can be a **WebSocket**, **Server-Sent Events**,
+**Socket.IO** or **MQTT** connection (connect, send or publish, watch the live
+log) or a **gRPC** call: PakPos reads the service from server reflection or your
+`.proto` files, gives you a JSON template for the message, and shows the reply.
+Client and bidirectional streams stay open, so you send messages one by one and
+see the answers as they come. GraphQL gets a schema explorer, so you can click
+your way to a starter query instead of reading SDL. And if you build **MCP
+servers**, a request can call their tools, read resources and get prompts, with
+the same tests as a REST call.
+
+Responses can be searched (`Ctrl/⌘ + F`), browsed as a JSON tree, and previewed
+when they're images or HTML. Cookies that servers set go into a jar you can see
+and edit. Requests and folders reorder with drag & drop.
 
 Requests live in collections with folders. Environments hold variables like
 `{{base_url}}` and `{{token}}`: switch from Staging to Production in the header
@@ -62,8 +71,9 @@ For checking responses you have two options. Small declarative checks such as
 `status equals 200`, `json.data.id exists` or `time less than 500` cover most
 needs and are easy to review in a diff. When you need more, write
 JavaScript with a familiar `pm.*` API (`pm.test`, `pm.expect`, `pm.environment.set`…). It
-runs in a sandbox with no file or network access, and scripts from a collection
-you imported only run after you say you trust it.
+runs in a sandbox with no file access, scripts from a collection you imported
+only run after you say you trust it, and `pm.sendRequest` only works for
+collections you also gave network access.
 
 Save a response as an **example** and PakPos can serve those examples as a mock
 API, which is handy when the frontend is ready before the backend is.
@@ -71,7 +81,8 @@ API, which is handy when the frontend is ready before the backend is.
 Have collections from another tool? Files in the common Collection v2.1 JSON
 format, and their environments, [import as-is](docs/src/tutorial/import.md):
 folders, auth (OAuth 2.0 too), GraphQL bodies, scripts and saved examples come
-across. You can also paste a `curl` command straight into the URL
+across. OpenAPI 3 and Swagger 2 specs (JSON or YAML) import too, and any
+collection exports back to OpenAPI 3. You can also paste a `curl` command straight into the URL
 bar, and go the other way with the `</>` button to get cURL, Python, JavaScript
 or HTTPie snippets.
 
@@ -80,7 +91,8 @@ the workspace into a git repository and commits, pulls and pushes it with the
 git you already have, so your history and access control stay on GitHub, GitLab
 or wherever your code lives.
 
-There's a light theme too, if that's your thing:
+The UI speaks English and Bahasa Indonesia (Settings → Language). There's a
+light theme too, if that's your thing:
 
 ![PakPos in light mode](docs/screenshots/light.png)
 
@@ -95,9 +107,11 @@ pakpos-cli run api/collection.json -e api/staging.json --var token=$API_TOKEN \
 ```
 
 It exits non-zero when a check fails, speaks JUnit for GitHub Actions, GitLab
-and Jenkins, and reads Collection v2.1 files too. The CLI also does the rest
-from a terminal: `pakpos-cli grpc` calls gRPC methods, `pakpos-cli ws` opens a
-WebSocket, and `pakpos-cli mock` serves a collection's examples.
+and Jenkins, and reads Collection v2.1 and OpenAPI files too. Add `-d users.csv`
+to run the collection once per data row. The CLI also does the rest from a
+terminal: `pakpos-cli grpc` calls gRPC methods, `ws`, `sse`, `socketio` and
+`mqtt` open live connections, `mcp-client` talks to an MCP server, and
+`pakpos-cli mock` serves a collection's examples.
 
 ## Letting an AI agent use your requests
 
@@ -114,9 +128,11 @@ Grab a build for your OS from the [releases page](https://github.com/sansob/PakP
 an installer or portable zip for Windows (x64 and ARM64), a `.dmg` for macOS
 (Apple Silicon and Intel in one), and a `.deb` or tarball for Linux (x86_64 and arm64).
 
-The builds aren't code-signed yet, so your OS will grumble the first time. On
-macOS right-click the app and choose **Open**; on Windows click **More info →
-Run anyway**. The [installation guide](docs/src/installation.md) has the details.
+The builds aren't code-signed, so your OS will grumble the first time. On
+macOS 15 and later open **System Settings → Privacy & Security** and click
+**Open Anyway** (older versions: right-click the app → **Open**); on Windows
+click **More info → Run anyway**. Each release also carries Homebrew, winget,
+AUR and Flatpak manifests. The [installation guide](docs/src/installation.md) has the details.
 
 If you'd rather build it yourself, you need Rust 1.95 or newer:
 
@@ -130,10 +146,10 @@ The first launch creates a small demo collection, so you have something to press
 
 ## What it doesn't do (yet)
 
-It's a young project, so to be straight about the gaps: scripts can't make network calls (`pm.sendRequest`) or load npm libraries,
-there's no interactive bidirectional gRPC streaming (inputs are sent up front)
-and no Socket.IO or MQTT, the collection runner only runs HTTP requests, and
-there are no data-driven runs from CSV yet. The builds aren't signed. The
+It's a young project, so to be straight about the gaps: scripts can't load npm
+libraries, the collection runner skips WebSocket, SSE, Socket.IO and MQTT
+requests (they're interactive), the package manifests aren't published to Homebrew,
+winget, Flathub or the AUR yet, and the builds aren't signed. The
 [roadmap](docs/src/roadmap.md) lists what's planned, and any of it is up for grabs.
 
 ## Docs
@@ -141,8 +157,9 @@ there are no data-driven runs from CSV yet. The builds aren't signed. The
 The [documentation](https://sansob.github.io/PakPos/) (source in `docs/`) starts
 with six short tutorials: your first request, environments and variables, tests
 and chaining, importing existing collections, running in CI, and the MCP server. The
-reference pages then cover each feature in depth: OAuth 2.0, GraphQL, WebSocket,
-gRPC, scripts, the mock server, Git sync, the CLI and the file format.
+reference pages then cover each feature in depth: auth and client certificates,
+OAuth 2.0, cookies, GraphQL, WebSocket, SSE, Socket.IO and MQTT, gRPC, scripts,
+the mock server, testing MCP servers, Git sync, the CLI and the file format.
 
 ## Helping out
 

@@ -30,13 +30,49 @@ because you opened it. So:
 Scripts run in an embedded [QuickJS](https://bellard.org/quickjs/) engine
 (modern JavaScript, ES2023) with:
 
-- **no** file system, process, environment or network access: no `require`,
-  `fetch`, `XMLHttpRequest` or `pm.sendRequest`;
-- a 3-second time limit and a 64 MB memory limit per script;
+- **no** file system, process or environment access: no `require`, `fetch` or
+  `XMLHttpRequest`;
+- **no** network access either, unless you allow it for the collection (see
+  below);
+- a 3-second time limit (time spent waiting on `pm.sendRequest` does not
+  count) and a 64 MB memory limit per script;
 - a fresh context per script, so nothing leaks between runs.
 
-If you need data from another endpoint, make it a separate request and pass the
-value with an [extraction](tests.md#extractions) or `pm.environment.set`.
+## `pm.sendRequest`
+
+A script can send its own request, for example to fetch a token before the
+real call:
+
+```js
+pm.sendRequest({
+  url: "{{base_url}}/oauth/token",
+  method: "POST",
+  header: { "Content-Type": "application/json" },
+  body: { mode: "raw", raw: JSON.stringify({ user: "budi" }) },
+}, (err, res) => {
+  if (err) throw err;
+  pm.environment.set("token", res.json().access_token);
+});
+```
+
+The first argument is a URL or an object with `url`, `method`, `header`
+(a list of `{ key, value }` or an object) and `body` (`{ mode: "raw", raw }`,
+`{ mode: "urlencoded", urlencoded: [...] }`, a string, or a plain object sent as
+JSON). `{{variables}}` in the URL are resolved. The response has the same API
+as `pm.response` (`code`, `status`, `headers.get`, `json()`, `text()`,
+`responseTime`).
+
+It is **off by default**. Turn it on per collection in **Edit collection… →
+Scripts → Allow network access for scripts**; the collection must be trusted
+first, and like trust the permission lives in your `settings.json`. From the
+command line use `pakpos-cli run --allow-network`. In `pakpos-cli mcp` it
+needs `--allow-scripts` plus the permission from the app, and `--allow-host`
+applies to these requests too.
+
+Unlike the asynchronous original, the call is synchronous: the callback runs
+before `pm.sendRequest` returns, and the response is also returned, so
+`const res = pm.sendRequest(url)` works. At most 20 requests per script.
+Requests share the cookie jar and client certificates with normal requests.
 
 ## API
 
@@ -47,8 +83,9 @@ value with an [extraction](tests.md#extractions) or `pm.environment.set`.
 | `pm.response` | `.code`, `.status`, `.headers.get(name)`, `.responseTime`, `.responseSize`, `.text()`, `.json()`, `.to.have.status(n)`, `.to.have.header(k)`, `.to.be.ok` |
 | `pm.request` | `.url` and `.method` (read/write), `.headers.add / upsert / remove / get`, `.body.raw` (read/write) |
 | `pm.environment`, `pm.collectionVariables`, `pm.globals` | `.get`, `.set`, `.unset`, `.has`, `.toObject()`, `.replaceIn("{{x}}")` |
-| `pm.variables` | Local to the current run; `.get` falls back to environment → collection → globals |
-| `pm.info` | `.requestName`, `.eventName` |
+| `pm.variables` | Local to the current run; `.get` falls back to the data row → environment → collection → globals |
+| `pm.iterationData` | The current row of a data-driven run: `.get`, `.has`, `.toObject()` |
+| `pm.info` | `.requestName`, `.eventName`, `.iteration` (zero-based) |
 | `console.log / info / warn / error` | Shown in the response's **Console** tab and in CLI output |
 | Legacy | `tests["name"] = bool`, `responseBody`, `responseCode.code`, `responseTime`, `postman.setEnvironmentVariable` |
 
@@ -76,6 +113,6 @@ console.log("created", json.id);
 
 Imported collections keep their scripts (collection, folder and request
 level). Most `pm.test` / `pm.expect` / variable scripts work unchanged. Not
-available: `pm.sendRequest`, `pm.cookies`, `pm.vault`, `pm.visualizer`,
-`pm.iterationData`, `require(...)` of npm libraries (`lodash`,
+available: `pm.cookies`, `pm.vault`, `pm.visualizer`,
+`require(...)` of npm libraries (`lodash`,
 `moment`, `crypto-js`, `cheerio`, …) and asynchronous code that waits on timers.

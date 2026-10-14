@@ -1,16 +1,13 @@
-//! PakPos visual identity: deep navy surfaces with a warm orange accent.
+//! PakPos visual identity: navy and a warm orange accent.
 //!
-//! Navy is the dominant colour (header, sidebar, dark surfaces); orange is
-//! reserved for primary actions and selection so it stays meaningful.
+//! The light theme uses a navy header; the dark theme is neutral near-black so
+//! it doesn't read as blue. Orange is reserved for primary actions and
+//! selection so it stays meaningful.
 
 use egui::{Color32, CornerRadius, FontFamily, FontId, Margin, Shadow, Stroke, TextStyle, Visuals};
 use pakpos_core::storage::Theme;
 use pakpos_core::HttpMethod;
 
-pub const NAVY_950: Color32 = Color32::from_rgb(0x0A, 0x13, 0x2E);
-pub const NAVY_900: Color32 = Color32::from_rgb(0x0F, 0x1B, 0x3F);
-pub const NAVY_850: Color32 = Color32::from_rgb(0x13, 0x22, 0x4D);
-pub const NAVY_800: Color32 = Color32::from_rgb(0x18, 0x29, 0x5B);
 pub const NAVY_700: Color32 = Color32::from_rgb(0x1E, 0x31, 0x70);
 pub const NAVY_600: Color32 = Color32::from_rgb(0x2A, 0x41, 0x8E);
 pub const ORANGE: Color32 = Color32::from_rgb(0xF7, 0x94, 0x1D);
@@ -38,6 +35,14 @@ pub struct Palette {
     pub text_weak: Color32,
     pub header: Color32,
     pub header_text: Color32,
+    /// Buttons in the header bar.
+    pub header_button: Color32,
+    /// Text inputs and code editors.
+    pub input: Color32,
+    /// Button / combo fills: idle, hovered, pressed.
+    pub widget: [Color32; 3],
+    pub row_selected: Color32,
+    pub row_hover: Color32,
 }
 
 impl Palette {
@@ -45,15 +50,24 @@ impl Palette {
         match theme {
             Theme::Dark => Palette {
                 dark: true,
-                bg: NAVY_950,
-                surface: NAVY_900,
-                surface_alt: NAVY_850,
-                sidebar: NAVY_900,
-                border: Color32::from_rgb(0x26, 0x36, 0x6B),
-                text: Color32::from_rgb(0xE6, 0xEA, 0xF5),
-                text_weak: Color32::from_rgb(0x95, 0xA2, 0xC8),
-                header: NAVY_700,
+                bg: Color32::from_rgb(0x11, 0x11, 0x13),
+                surface: Color32::from_rgb(0x18, 0x18, 0x1B),
+                surface_alt: Color32::from_rgb(0x1F, 0x1F, 0x23),
+                sidebar: Color32::from_rgb(0x16, 0x16, 0x19),
+                border: Color32::from_rgb(0x2C, 0x2C, 0x32),
+                text: Color32::from_rgb(0xE8, 0xE8, 0xEA),
+                text_weak: Color32::from_rgb(0x9A, 0x9A, 0xA3),
+                header: Color32::from_rgb(0x1B, 0x1B, 0x1F),
                 header_text: Color32::WHITE,
+                header_button: Color32::from_rgb(0x2C, 0x2C, 0x32),
+                input: Color32::from_rgb(0x0C, 0x0C, 0x0E),
+                widget: [
+                    Color32::from_rgb(0x24, 0x24, 0x28),
+                    Color32::from_rgb(0x2E, 0x2E, 0x33),
+                    Color32::from_rgb(0x38, 0x38, 0x3E),
+                ],
+                row_selected: Color32::from_rgb(0x27, 0x27, 0x2C),
+                row_hover: Color32::from_rgb(0x1F, 0x1F, 0x23),
             },
             Theme::Light => Palette {
                 dark: false,
@@ -66,6 +80,15 @@ impl Palette {
                 text_weak: Color32::from_rgb(0x5D, 0x69, 0x8C),
                 header: NAVY_700,
                 header_text: Color32::WHITE,
+                header_button: NAVY_600,
+                input: Color32::WHITE,
+                widget: [
+                    Color32::from_rgb(0xE9, 0xED, 0xF7),
+                    Color32::from_rgb(0xDD, 0xE3, 0xF3),
+                    Color32::from_rgb(0xCF, 0xD7, 0xEE),
+                ],
+                row_selected: Color32::from_rgb(0xEC, 0xF0, 0xF9),
+                row_hover: Color32::from_rgb(0xEC, 0xF0, 0xF9),
             },
         }
     }
@@ -99,6 +122,10 @@ pub fn badge(r: &pakpos_core::Request) -> (&'static str, Color32) {
         pakpos_core::model::RequestKind::Http => (method_short(r.method), method_color(r.method)),
         pakpos_core::model::RequestKind::WebSocket => ("WS", TEAL),
         pakpos_core::model::RequestKind::Grpc => ("gRPC", LIME),
+        pakpos_core::model::RequestKind::Sse => ("SSE", PURPLE),
+        pakpos_core::model::RequestKind::SocketIo => ("SIO", PINK),
+        pakpos_core::model::RequestKind::Mqtt => ("MQTT", YELLOW),
+        pakpos_core::model::RequestKind::Mcp => ("MCP", ORANGE),
     }
 }
 
@@ -134,10 +161,10 @@ pub fn apply(ctx: &egui::Context, theme: Theme, font_scale_percent: u32) {
         Shadow { offset: [0, 8], blur: 24, spread: 0, color: Color32::from_black_alpha(if p.dark { 110 } else { 40 }) };
     visuals.popup_shadow =
         Shadow { offset: [0, 4], blur: 14, spread: 0, color: Color32::from_black_alpha(if p.dark { 90 } else { 30 }) };
-    visuals.extreme_bg_color = if p.dark { INK } else { Color32::WHITE };
-    visuals.text_edit_bg_color = Some(if p.dark { INK } else { Color32::WHITE });
+    visuals.extreme_bg_color = p.input;
+    visuals.text_edit_bg_color = Some(p.input);
     visuals.faint_bg_color = p.surface_alt;
-    visuals.code_bg_color = if p.dark { INK } else { Color32::from_rgb(0xF6, 0xF8, 0xFD) };
+    visuals.code_bg_color = if p.dark { p.input } else { Color32::from_rgb(0xF6, 0xF8, 0xFD) };
     visuals.hyperlink_color = ORANGE;
     visuals.selection.bg_fill = if p.dark {
         Color32::from_rgba_unmultiplied(0xF7, 0x94, 0x1D, 70)
@@ -156,11 +183,7 @@ pub fn apply(ctx: &egui::Context, theme: Theme, font_scale_percent: u32) {
     w.noninteractive.fg_stroke = Stroke::new(1.0, p.text);
     w.noninteractive.corner_radius = radius;
 
-    let (inactive, hovered, active) = if p.dark {
-        (NAVY_800, NAVY_700, NAVY_600)
-    } else {
-        (Color32::from_rgb(0xE9, 0xED, 0xF7), Color32::from_rgb(0xDD, 0xE3, 0xF3), Color32::from_rgb(0xCF, 0xD7, 0xEE))
-    };
+    let [inactive, hovered, active] = p.widget;
     w.inactive.bg_fill = inactive;
     w.inactive.weak_bg_fill = inactive;
     w.inactive.bg_stroke = Stroke::new(1.0, p.border);
