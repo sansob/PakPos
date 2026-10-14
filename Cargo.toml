@@ -24,7 +24,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 reqwest = { version = "0.13", features = ["blocking", "json", "multipart", "gzip", "brotli", "deflate", "cookies"] }
 directories = "6"
-rand = "0.9"
+rand = "0.10"
 base64 = "0.22"
 url = "2"
 sha2 = "0.10"
