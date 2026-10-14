@@ -1,10 +1,11 @@
 # FAQ
 
 **Can PakPos replace my current API client?**
-For most day-to-day work, yes: HTTP, GraphQL, WebSocket and gRPC requests,
-collections, environments, OAuth 2.0, tests and scripts, mock servers, CI runs and
-team sharing (through git). The gaps are listed in the [roadmap](roadmap.md):
-`pm.sendRequest` and npm libraries in scripts, data-driven runs, some auth types.
+For most day-to-day work, yes: HTTP, GraphQL, WebSocket, gRPC, SSE,
+Socket.IO, MQTT and MCP requests, collections, environments, OAuth 2.0, Digest,
+AWS SigV4 and NTLM auth, client certificates, tests and scripts, data-driven
+runs, mock servers, CI runs and team sharing (through git). The gaps are listed
+in the [roadmap](roadmap.md), npm libraries in scripts being the main one.
 
 **Can I run existing JavaScript tests?**
 Yes, in a sandbox (no file, process or network access) and only for collections
@@ -20,8 +21,12 @@ Yes: point `PAKPOS_HOME` at a folder in a git repository. Each collection is one
 JSON file, so reviews and merges are straightforward.
 
 **macOS says the app "cannot be opened".**
-Builds are not notarised yet. Right-click → *Open*, or run
-`xattr -dr com.apple.quarantine /Applications/PakPos.app`.
+Builds are not notarised. On macOS 15 and later open *System Settings →
+Privacy & Security* and click *Open Anyway*; on older versions right-click →
+*Open*. Or run `xattr -dr com.apple.quarantine /Applications/PakPos.app`.
+
+**Can I use PakPos in Bahasa Indonesia?**
+Yes: Settings → Language. It follows the system locale until you pick one.
 
 **The window is blank or crashes on Linux.**
 PakPos needs OpenGL 2+. In VMs or remote sessions try `LIBGL_ALWAYS_SOFTWARE=1 pakpos`.

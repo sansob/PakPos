@@ -34,17 +34,27 @@ cuma itu tugasnya.
 ## Bisa apa saja sekarang
 
 Kirim request dengan method apa pun, lengkap dengan query params, header, dan
-body JSON, form, multipart, file, atau GraphQL. Auth Basic, Bearer, API key, dan
-OAuth 2.0 sudah ada (client credentials, password, dan login lewat browser dengan
-PKCE). Request bisa "mewarisi" auth dari folder atau collection, jadi token cukup
+body JSON, form, multipart, file, atau GraphQL. Auth Basic, Bearer, API key,
+Digest, NTLM, AWS Signature v4, dan OAuth 2.0 sudah ada (client credentials,
+password, dan login lewat browser dengan PKCE), plus sertifikat klien (mTLS)
+per host. Request bisa "mewarisi" auth dari folder atau collection, jadi token cukup
 diset sekali. Token OAuth diambil dan diperbarui otomatis, dan disimpan di file
 lokal, bukan di collection yang kamu bagikan.
 
-Bukan cuma HTTP. Request bisa berupa **WebSocket** (connect, kirim pesan, lihat
-log langsung) atau panggilan **gRPC**: PakPos membaca service dari server
-reflection atau file `.proto` kamu, kasih template JSON untuk pesannya, lalu
-menampilkan balasannya, termasuk streaming. GraphQL punya schema explorer, jadi
-tinggal klik untuk dapat query awal.
+Bukan cuma HTTP. Request bisa berupa koneksi **WebSocket**, **Server-Sent
+Events**, **Socket.IO**, atau **MQTT** (connect, kirim atau publish, lihat log
+langsung) atau panggilan **gRPC**: PakPos membaca service dari server reflection
+atau file `.proto` kamu, kasih template JSON untuk pesannya, lalu menampilkan
+balasannya. Stream client dan dua arah tetap terbuka, jadi pesan bisa dikirim
+satu per satu dan balasannya muncul langsung. GraphQL punya schema explorer,
+jadi tinggal klik untuk dapat query awal. Lagi bikin **server MCP**? Request bisa
+memanggil tool, membaca resource, dan mengambil prompt-nya, dengan test yang
+sama seperti request REST.
+
+Response bisa dicari (`Ctrl/⌘ + F`), dilihat sebagai pohon JSON, dan
+dipratinjau kalau isinya gambar atau HTML. Cookie dari server masuk ke cookie
+jar yang bisa dilihat dan diedit. Urutan request dan folder bisa diatur dengan
+drag & drop.
 
 Request disusun dalam collection dan folder. Environment menyimpan variabel
 seperti `{{base_url}}` dan `{{token}}`: ganti dari Staging ke Production di
@@ -55,8 +65,9 @@ Untuk mengecek response ada dua cara. Pengecekan sederhana seperti `status
 equals 200` atau `json.data.id exists` sudah cukup untuk kebanyakan kebutuhan
 dan gampang di-review. Kalau butuh lebih, tulis JavaScript dengan API `pm.*`
 (`pm.test`, `pm.expect`, `pm.environment.set`…). Script jalan di sandbox tanpa
-akses file dan jaringan, dan script dari collection hasil import baru jalan
-setelah kamu menyatakan percaya.
+akses file, script dari collection hasil import baru jalan setelah kamu
+menyatakan percaya, dan `pm.sendRequest` cuma bisa dipakai di collection yang
+juga kamu beri akses jaringan.
 
 Response bisa disimpan sebagai **example**, lalu PakPos bisa menyajikannya sebagai
 mock API. Cocok kalau frontend sudah siap duluan sebelum backend.
@@ -65,15 +76,22 @@ Punya collection dari tool lain? File berformat Collection v2.1 JSON beserta
 environment-nya bisa [langsung diimport](docs/src/tutorial/import.md): folder, auth (termasuk OAuth 2.0), body GraphQL, script, dan example ikut
 terbawa. Bisa juga paste perintah `curl` langsung ke kolom URL, atau sebaliknya
 pakai tombol `</>` untuk dapat snippet cURL, Python, JavaScript, atau HTTPie.
+Spec OpenAPI 3 dan Swagger 2 (JSON atau YAML) juga bisa diimport, dan collection
+apa pun bisa diekspor balik ke OpenAPI 3.
 
 Sengaja nggak pakai cloud. Kalau mau berbagi dengan tim, tombol **⇅ Sync** menjadikan
 workspace sebuah repo git, lalu commit, pull, dan push memakai git yang sudah
 terpasang di komputer kamu. Riwayat dan hak akses tetap di GitHub/GitLab/tempat
 kode kamu berada.
 
-Ada mode terang juga:
+Tampilannya tersedia dalam bahasa Inggris dan Bahasa Indonesia (Pengaturan →
+Bahasa). Ada mode terang juga:
 
 ![PakPos mode terang](docs/screenshots/light.png)
+
+Dan ini tampilannya dalam Bahasa Indonesia:
+
+![PakPos dalam Bahasa Indonesia](docs/screenshots/bahasa.png)
 
 ## Command line dan CI
 
@@ -86,7 +104,10 @@ pakpos-cli run api/collection.json -e api/staging.json --var token=$API_TOKEN \
 ```
 
 Exit code-nya bukan nol kalau ada test yang gagal, bisa output JUnit untuk GitHub
-Actions/GitLab/Jenkins, dan bisa baca file Collection v2.1 juga.
+Actions/GitLab/Jenkins, dan bisa baca file Collection v2.1 dan OpenAPI juga.
+Tambahkan `-d users.csv` untuk menjalankan collection sekali per baris data.
+Selain itu ada `pakpos-cli grpc`, `ws`, `sse`, `socketio`, `mqtt`, `mcp-client`,
+dan `mock` untuk dipakai langsung dari terminal.
 
 ## Dipakai AI agent
 
@@ -102,8 +123,11 @@ Ambil build untuk OS kamu di [halaman releases](https://github.com/sansob/PakPos
 installer atau zip portable untuk Windows (x64 dan ARM64), `.dmg` untuk macOS
 (Apple Silicon dan Intel jadi satu), dan `.deb` atau tarball untuk Linux (x86_64 dan arm64).
 
-Build-nya belum di-code-sign, jadi OS kamu akan protes saat pertama dibuka. Di
-macOS klik kanan aplikasi lalu pilih **Open**; di Windows klik **More info → Run anyway**.
+Build-nya nggak di-code-sign, jadi OS kamu akan protes saat pertama dibuka. Di
+macOS 15 ke atas buka **System Settings → Privacy & Security** lalu klik
+**Open Anyway** (versi lama: klik kanan aplikasi → **Open**); di Windows klik
+**More info → Run anyway**. Tiap rilis juga menyertakan manifest Homebrew,
+winget, AUR, dan Flatpak.
 
 Mau build sendiri? Butuh Rust 1.95 atau lebih baru:
 
@@ -117,11 +141,10 @@ tekan **Send** (`Ctrl/⌘ + Enter`).
 
 ## Yang belum bisa
 
-Proyek ini masih muda. Supaya jujur soal kekurangannya: script
-belum bisa melakukan panggilan jaringan (`pm.sendRequest`) atau memuat library
-npm, streaming gRPC dua arah belum interaktif (input dikirim di awal), belum ada
-Socket.IO/MQTT, runner koleksi hanya menjalankan request HTTP, dan belum ada
-data-driven run dari CSV. Build-nya juga belum di-sign. Lihat
+Proyek ini masih muda. Supaya jujur soal kekurangannya: script belum bisa
+memuat library npm, runner koleksi melewati request WebSocket, SSE, Socket.IO,
+dan MQTT (karena sifatnya interaktif), manifest paketnya belum dipublikasikan
+ke Homebrew, winget, Flathub, atau AUR, dan build-nya belum di-sign. Lihat
 [roadmap](docs/src/roadmap.md); semuanya boleh diambil kalau mau bantu.
 
 ## Mau bantu?
