@@ -1,0 +1,22 @@
+[package]
+name = "pakpos-cli"
+description = "Command-line runner for PakPos collections (CI-friendly, JUnit output)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "pakpos-cli"
+path = "src/main.rs"
+
+[dependencies]
+pakpos-core.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+clap = { version = "4", features = ["derive", "env"] }

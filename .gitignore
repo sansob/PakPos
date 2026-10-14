@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+*.json.tmp
+.DS_Store
+/dist
+/docs/book

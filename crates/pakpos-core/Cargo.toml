@@ -1,0 +1,27 @@
+[package]
+name = "pakpos-core"
+description = "Core engine of PakPos: request model, variables, HTTP execution, Postman/cURL import and assertions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+reqwest.workspace = true
+directories.workspace = true
+rand.workspace = true
+base64.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
