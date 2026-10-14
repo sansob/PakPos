@@ -20,6 +20,9 @@ All notable changes to this project are documented here. The format follows
 - Persistent cookie jar (`cookies.json`, git-ignored) with RFC 6265 matching,
   cookies from redirects included, and a viewer/editor (**Cookies** in the top
   bar). Runs share the jar between requests.
+- Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
+  view (copy a value or its test path), image preview and a simplified HTML
+  preview with *Open in browser*; *Save* picks the extension from the content type.
 
 ## [0.2.0-rc.1] - 2026-10-14
 

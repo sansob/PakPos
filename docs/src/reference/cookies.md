@@ -19,3 +19,5 @@ other names are appended to it.
   what the run collected.
 - `pakpos-cli run` starts every run with an empty jar, so CI runs don't depend
   on earlier ones; cookies set during the run are sent to later requests.
+
+![Cookies](https://raw.githubusercontent.com/sansob/PakPos/main/docs/screenshots/cookies.png)

@@ -57,6 +57,13 @@ pub struct Outcome {
     pub logs: Vec<String>,
     /// Variables set by scripts, to persist.
     pub script_changes: pakpos_core::scripts::VarChanges,
+    /// Parsed JSON body for the tree view (bodies up to 8 MB).
+    pub json: Option<serde_json::Value>,
+}
+
+/// The body as JSON, parsed once when the response arrives.
+pub fn json_of(response: &Response) -> Option<serde_json::Value> {
+    (response.body.len() <= 8_000_000).then(|| response.json()).flatten()
 }
 
 pub enum ResponseState {
@@ -76,7 +83,8 @@ pub struct Tab {
     pub section: ReqSection,
     pub resp_section: RespSection,
     pub response: ResponseState,
-    pub raw_view: bool,
+    pub body_view: crate::body_view::BodyView,
+    pub body_search: String,
     /// Text of the URL bar (base URL + query), kept in sync with params.
     pub url_edit: String,
     pub ws: crate::ws_view::WsState,
@@ -313,7 +321,8 @@ impl PakPosApp {
             section: ReqSection::Params,
             resp_section: RespSection::Body,
             response: ResponseState::Empty,
-            raw_view: false,
+            body_view: Default::default(),
+            body_search: String::new(),
         });
         self.next_uid += 1;
         self.tabs.len() - 1
@@ -480,7 +489,18 @@ impl PakPosApp {
                         changes.merge(t.changes);
                     }
                     tests.extend(script_tests);
-                    Outcome { prepared, response, pretty, tests, extracted, new_token, logs, script_changes: changes }
+                    let json = json_of(&response);
+                    Outcome {
+                        prepared,
+                        response,
+                        pretty,
+                        tests,
+                        extracted,
+                        new_token,
+                        logs,
+                        script_changes: changes,
+                        json,
+                    }
                 })
                 .map_err(|e| e.to_string());
             let _ = tx.send(result);

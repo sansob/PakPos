@@ -102,7 +102,7 @@ impl PakPosApp {
                                     .add(
                                         egui::TextEdit::singleline(&mut c.value)
                                             .font(egui::TextStyle::Monospace)
-                                            .min_size(egui::vec2(0.0, theme::CONTROL_HEIGHT))
+                                            .min_size(egui::vec2(260.0, theme::CONTROL_HEIGHT))
                                             .vertical_align(egui::Align::Center)
                                             .desired_width(260.0),
                                     )

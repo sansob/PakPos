@@ -60,6 +60,8 @@ available. JUnit test names get a `#2`, `#3`… suffix per iteration. In the
 desktop app, **Run** on a collection opens the same options (data file with a
 preview, iterations, delay, stop on failure).
 
+![Run options with a data file](https://raw.githubusercontent.com/sansob/PakPos/main/docs/screenshots/runner-data.png)
+
 gRPC requests run in the runner as well (their status code is the `status`
 target, see [gRPC](../reference/grpc.md)); WebSocket requests are skipped
 because they are interactive.

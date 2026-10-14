@@ -723,7 +723,12 @@ impl PakPosApp {
                     ui.end_row();
                     ui.label("Iterations");
                     ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut setup.iterations).range(0..=10_000));
+                        ui.add(
+                            egui::DragValue::new(&mut setup.iterations)
+                                .range(0..=10_000)
+                                .custom_formatter(|n, _| if n < 1.0 { "auto".into() } else { format!("{n}") })
+                                .custom_parser(|s| if s.trim() == "auto" { Some(0.0) } else { s.trim().parse().ok() }),
+                        );
                         let effective = match (setup.iterations, setup.data.len()) {
                             (0, 0) => "1 run".to_string(),
                             (0, n) => format!("{n} (one per data row)"),

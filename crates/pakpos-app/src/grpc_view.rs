@@ -283,6 +283,7 @@ impl PakPosApp {
                 let r = grpc::call(&prepared.url, &pool, &cfg.method, &message, &prepared.headers, &settings, 500)
                     .map_err(|e| e.to_string())?;
                 let response = r.to_response(&prepared.url);
+                let json = crate::app::json_of(&response);
                 let pretty = response.pretty_body();
                 let tests = pakpos_core::assertions::run_all(&response, &req.assertions, |s| scope.resolve(s));
                 let extracted = pakpos_core::assertions::extract_all(&response, &req.extractions);
@@ -299,6 +300,7 @@ impl PakPosApp {
                     new_token,
                     logs: Vec::new(),
                     script_changes: Default::default(),
+                    json,
                 })
             })();
             let _ = tx.send(result);

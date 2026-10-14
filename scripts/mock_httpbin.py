@@ -262,7 +262,21 @@ class Handler(BaseHTTPRequestHandler):
                 {"title": "Halo", "type": "all"},
                 {"title": "Overview", "type": "all", "items": ["Fast", "Native", "Open source"]}]}})
         if path == "/html":
-            return self._send(200, b"<html><body><h1>PakPos</h1></body></html>", "text/html")
+            page = (
+                "<!doctype html><html><head><title>Kantor Pos</title><style>body{font-family:sans-serif}</style></head>"
+                "<body><h1>Selamat datang di PakPos</h1>"
+                "<p>Status pengiriman untuk resi <b>PP-2026-0042</b>: <em>sedang diantar</em>.</p>"
+                "<h2>Riwayat</h2><ul><li>08:10 &mdash; diterima di gudang Jakarta</li>"
+                "<li>11:45 &mdash; berangkat ke Bandung</li><li>15:20 &mdash; tiba di kantor cabang</li></ul>"
+                "<p>Pertanyaan? Hubungi <a href='mailto:halo@example.com'>halo@example.com</a> atau lihat "
+                "<code>GET /v1/shipments/PP-2026-0042</code>.</p><script>console.log('not rendered')</script>"
+                "</body></html>"
+            )
+            return self._send(200, page.encode(), "text/html; charset=utf-8")
+        if path == "/image/png":
+            here = __file__.rsplit("/", 2)[0] if "/" in __file__ else "."
+            with open(f"{here}/assets/icon-256.png", "rb") as f:
+                return self._send(200, f.read(), "image/png")
         return self._send(404, {"error": "not found", "path": path})
 
     do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_HEAD = do_OPTIONS = handle_any

@@ -19,6 +19,8 @@ impl PakPosApp {
         let mut cancel = false;
         let mut save_to_file: Option<Vec<u8>> = None;
         let mut save_example = false;
+        let mut open_html: Option<Vec<u8>> = None;
+        let mut save_name = String::from("response.txt");
 
         match &tab.response {
             ResponseState::Empty => {
@@ -98,6 +100,7 @@ impl PakPosApp {
                         }
                         if ui.button("⬇ Save").on_hover_text("Save response body to a file").clicked() {
                             save_to_file = Some(resp.body.clone());
+                            save_name = file_name_for(resp);
                         }
                         if ui.button("📋 Copy").on_hover_text("Copy response body").clicked() {
                             copy = Some(outcome.pretty.clone());
@@ -123,30 +126,118 @@ impl PakPosApp {
 
                 match tab.resp_section {
                     RespSection::Body => {
-                        let is_json = resp.is_json();
-                        if is_json {
-                            ui.horizontal(|ui| {
-                                ui.selectable_value(&mut tab.raw_view, false, "Pretty");
-                                ui.selectable_value(&mut tab.raw_view, true, "Raw");
-                            });
+                        use crate::body_view::{self, BodyKind, BodyView};
+                        let kind = body_view::kind_of(resp);
+                        let views = body_view::views_for(kind);
+                        if !views.is_empty() && !views.iter().any(|(v, _)| *v == tab.body_view) {
+                            tab.body_view = views[0].0;
                         }
-                        let text: String =
-                            if tab.raw_view || !is_json { resp_text(resp) } else { outcome.pretty.clone() };
+                        if views.is_empty() {
+                            tab.body_view = BodyView::Pretty;
+                        }
+                        let image = kind == BodyKind::Image && tab.body_view == BodyView::Preview;
+                        let focus_search = ui.input_mut(|i| {
+                            i.consume_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::F))
+                        });
+                        let text: String = match tab.body_view {
+                            BodyView::Pretty if kind == BodyKind::Json => outcome.pretty.clone(),
+                            _ => resp_text(resp),
+                        };
+                        let matches = if tab.body_view == BodyView::Tree || image {
+                            Vec::new()
+                        } else {
+                            body_view::find_matches(&text, tab.body_search.trim())
+                        };
+                        ui.horizontal(|ui| {
+                            for (v, label) in views {
+                                ui.selectable_value(&mut tab.body_view, *v, *label);
+                            }
+                            if kind == BodyKind::Html
+                                && tab.body_view == BodyView::Preview
+                                && ui
+                                    .button("Open in browser")
+                                    .on_hover_text("Write the page to a temporary file and open it")
+                                    .clicked()
+                            {
+                                open_html = Some(resp.body.clone());
+                            }
+                            if !image {
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    let r = ui.add(
+                                        egui::TextEdit::singleline(&mut tab.body_search)
+                                            .hint_text("Search (Ctrl+F)")
+                                            .min_size(egui::vec2(0.0, theme::CONTROL_HEIGHT))
+                                            .vertical_align(egui::Align::Center)
+                                            .desired_width(200.0),
+                                    );
+                                    if focus_search {
+                                        r.request_focus();
+                                    }
+                                    if !tab.body_search.trim().is_empty() && tab.body_view != BodyView::Tree {
+                                        let n = matches.len();
+                                        let c = if n == 0 { theme::RED } else { p.text_weak };
+                                        ui.label(
+                                            RichText::new(format!("{n} match{}", if n == 1 { "" } else { "es" }))
+                                                .small()
+                                                .color(c),
+                                        );
+                                    }
+                                });
+                            }
+                        });
                         egui::ScrollArea::both().id_salt(("resp_body", tab.uid)).auto_shrink([false, false]).show(
                             ui,
-                            |ui| {
-                                let lang = guess_lang(resp.header("content-type").unwrap_or(""), is_json);
-                                let mut view = text.as_str();
-                                if text.len() < 300_000 && lang != "txt" {
+                            |ui| match (kind, tab.body_view) {
+                                (BodyKind::Image, BodyView::Preview) => {
+                                    let uri = format!("bytes://response-{}-{}.img", tab.uid, resp.elapsed_ms);
+                                    ui.add(
+                                        egui::Image::from_bytes(uri, resp.body.clone())
+                                            .max_size(ui.available_size())
+                                            .fit_to_original_size(1.0),
+                                    );
+                                }
+                                (BodyKind::Html, BodyView::Preview) => {
+                                    let job = body_view::html_preview_job(&text, &p, ui.available_width());
+                                    egui::Frame::new().fill(p.surface).corner_radius(8).inner_margin(14).show(ui, |ui| {
+                                        ui.set_width(ui.available_width());
+                                        ui.label(job);
+                                    });
+                                    ui.label(
+                                        RichText::new("Simplified preview: text, headings, lists and links. Styles, images and scripts are not rendered.")
+                                            .small()
+                                            .color(p.text_weak),
+                                    );
+                                }
+                                (BodyKind::Json, BodyView::Tree) => match &outcome.json {
+                                    Some(v) => {
+                                        if let Some(body_view::TreeAction::Copy(t)) =
+                                            body_view::json_tree(ui, v, tab.body_search.trim(), tab.uid, &p)
+                                        {
+                                            copy = Some(t);
+                                        }
+                                    }
+                                    None => {
+                                        ui.label(RichText::new("The body is too large for the tree view.").color(p.text_weak));
+                                    }
+                                },
+                                _ => {
+                                    let lang = guess_lang(resp.header("content-type").unwrap_or(""), kind == BodyKind::Json);
+                                    let mut view = text.as_str();
+                                    let highlight = text.len() < 300_000;
                                     let theme = egui_extras::syntax_highlighting::CodeTheme::from_style(ui.style());
+                                    let search_bg = theme::ORANGE.gamma_multiply(0.35);
                                     let mut layouter = |ui: &Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
-                                        let mut job = egui_extras::syntax_highlighting::highlight(
-                                            ui.ctx(),
-                                            ui.style(),
-                                            &theme,
-                                            buf.as_str(),
-                                            lang,
-                                        );
+                                        let mut job = if highlight && lang != "txt" {
+                                            egui_extras::syntax_highlighting::highlight(ui.ctx(), ui.style(), &theme, buf.as_str(), lang)
+                                        } else {
+                                            egui::text::LayoutJob::simple(
+                                                buf.as_str().to_string(),
+                                                egui::TextStyle::Monospace.resolve(ui.style()),
+                                                ui.visuals().text_color(),
+                                                wrap_width,
+                                            )
+                                        };
+                                        body_view::highlight_ranges(&mut job, &matches, search_bg, None);
                                         job.wrap.max_width = wrap_width;
                                         ui.ctx().fonts_mut(|f| f.layout_job(job))
                                     };
@@ -156,13 +247,6 @@ impl PakPosApp {
                                             .frame(egui::Frame::NONE)
                                             .desired_width(f32::INFINITY)
                                             .layouter(&mut layouter),
-                                    );
-                                } else {
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut view)
-                                            .code_editor()
-                                            .frame(egui::Frame::NONE)
-                                            .desired_width(f32::INFINITY),
                                     );
                                 }
                             },
@@ -296,10 +380,22 @@ impl PakPosApp {
         }
         if let Some(text) = copy {
             ui.ctx().copy_text(text);
-            self.toast("Copied response to clipboard");
+            self.toast("Copied to clipboard");
+        }
+        if let Some(html) = open_html {
+            let path = std::env::temp_dir()
+                .join(format!("pakpos-preview-{}.html", self.tabs.get(idx).map(|t| t.uid).unwrap_or(0)));
+            match std::fs::write(&path, html) {
+                Ok(()) => {
+                    if webbrowser::open(&format!("file://{}", path.display())).is_err() {
+                        self.toast_error("Could not open a browser");
+                    }
+                }
+                Err(e) => self.toast_error(e.to_string()),
+            }
         }
         if let Some(bytes) = save_to_file {
-            if let Some(path) = rfd::FileDialog::new().set_file_name("response.txt").save_file() {
+            if let Some(path) = rfd::FileDialog::new().set_file_name(save_name).save_file() {
                 match std::fs::write(&path, bytes) {
                     Ok(()) => self.toast(format!("Saved {}", path.display())),
                     Err(e) => self.toast_error(e.to_string()),
@@ -307,6 +403,31 @@ impl PakPosApp {
             }
         }
     }
+}
+
+/// `response.json`, `response.png`, … from the content type.
+fn file_name_for(resp: &pakpos_core::http::Response) -> String {
+    let ct = resp.header("content-type").unwrap_or("").to_ascii_lowercase();
+    let ext = [
+        ("json", "json"),
+        ("html", "html"),
+        ("xml", "xml"),
+        ("png", "png"),
+        ("jpeg", "jpg"),
+        ("gif", "gif"),
+        ("webp", "webp"),
+        ("svg", "svg"),
+        ("pdf", "pdf"),
+        ("csv", "csv"),
+        ("javascript", "js"),
+        ("css", "css"),
+        ("zip", "zip"),
+    ]
+    .iter()
+    .find(|(k, _)| ct.contains(k))
+    .map(|(_, e)| *e)
+    .unwrap_or(if resp.is_json() { "json" } else { "txt" });
+    format!("response.{ext}")
 }
 
 fn resp_text(resp: &pakpos_core::http::Response) -> String {

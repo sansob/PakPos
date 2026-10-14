@@ -176,6 +176,53 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             open_by_name(app, "Get with query params");
             app.dialog = Some(Dialog::Settings);
         }
+        "tree" => {
+            open_by_name(app, "JSON document");
+            let t = &mut app.tabs[app.active];
+            t.body_view = crate::body_view::BodyView::Tree;
+            t.body_search = "title".into();
+            app.send(app.active, ctx);
+        }
+        "search" => {
+            open_by_name(app, "Create user (JSON)");
+            app.tabs[app.active].body_search = "budi".into();
+            app.send(app.active, ctx);
+        }
+        "html" | "image" => {
+            let path = if name == "html" { "/html" } else { "/image/png" };
+            let mut req = pakpos_core::Request::new(pakpos_core::HttpMethod::Get, format!("{{{{base_url}}}}{path}"));
+            req.name = if name == "html" { "Shipment page".into() } else { "Logo".into() };
+            let idx = app.push_tab(req, None);
+            app.active = idx;
+            app.tabs[idx].body_view = crate::body_view::BodyView::Preview;
+            app.send(idx, ctx);
+        }
+        "cookies" => {
+            open_by_name(app, "Set a cookie");
+            app.send(app.active, ctx);
+            app.cookie_jar.with(|j| {
+                j.set_cookie(
+                    "https://api.example.com/v1/login",
+                    "session=8f3a91c2e7; Path=/; Secure; HttpOnly; Max-Age=86400",
+                );
+                j.set_cookie("https://api.example.com/", "lang=id; Domain=example.com; Path=/");
+            });
+            app.dialog = Some(Dialog::Cookies(Default::default()));
+        }
+        "runner-data" => {
+            open_by_name(app, "Get with query params");
+            let id = app.ws.collections[0].id.clone();
+            let name = app.ws.collections[0].name.clone();
+            let mut setup = crate::app::RunnerSetup::new(&id, &name);
+            let csv = app.ws.root.join("users.csv");
+            let _ = std::fs::write(
+                &csv,
+                "user,city,expected_status\nbudi,Jakarta,200\nsiti,Bandung,200\nagus,Medan,200\nwayan,Denpasar,200\n",
+            );
+            setup.load_data(csv.display().to_string());
+            setup.delay_ms = 50;
+            app.runner_setup = Some(setup);
+        }
         _ => {
             open_by_name(app, "Create user (JSON)");
             app.tabs[app.active].section = ReqSection::Body;
@@ -188,7 +235,7 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
 fn is_ready(app: &PakPosApp, name: &str) -> bool {
     match name {
         "runner" => app.runner.as_ref().is_some_and(|r| r.report.is_some()),
-        "environments" | "curl" | "snippet" | "settings" => true,
+        "environments" | "curl" | "snippet" | "settings" | "runner-data" => true,
         "git" => app.git.job.is_none() && app.git.status.as_ref().is_some_and(|s| s.as_ref().is_ok_and(|s| s.is_repo)),
         "grpc" => app.tabs.get(app.active).is_some_and(|t| {
             t.grpc.job.is_none() && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))

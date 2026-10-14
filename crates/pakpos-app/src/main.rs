@@ -4,6 +4,7 @@
 
 mod actions;
 mod app;
+mod body_view;
 mod cookies_view;
 mod dialogs;
 mod git_view;
