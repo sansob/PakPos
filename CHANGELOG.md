@@ -12,6 +12,11 @@ All notable changes to this project are documented here. The format follows
   and Collection v2.1 import/export.
 - Client certificates (mTLS) per host, with an optional private CA, for HTTPS
   and gRPC; `--cert`, `--key` and `--cacert` on `run`, `send` and `grpc`.
+- Data-driven runs: CSV or JSON data files, one iteration per row, with
+  `{{column}}` variables, `pm.iterationData` and `pm.info.iteration`;
+  `pakpos-cli run --data / --iterations`, a run options dialog in the app and a
+  `data` argument for the MCP `run_collection` tool.
+- gRPC requests run in the collection runner (app, CLI and MCP).
 
 ## [0.2.0-rc.1] - 2026-10-14
 

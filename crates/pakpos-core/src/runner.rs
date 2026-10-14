@@ -19,6 +19,9 @@ pub struct RequestReport {
     pub error: Option<String>,
     pub assertions: Vec<AssertionResult>,
     pub extracted: Vec<(String, String)>,
+    /// Zero-based iteration (data row) this result belongs to.
+    #[serde(default)]
+    pub iteration: usize,
     /// `console.log` output and script notices.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub logs: Vec<String>,
@@ -36,6 +39,9 @@ pub struct RunReport {
     pub collection: String,
     pub environment: Option<String>,
     pub requests: Vec<RequestReport>,
+    /// Number of iterations run (data rows).
+    #[serde(default)]
+    pub iterations: usize,
     pub total_ms: u128,
     /// Token store after the run (new / refreshed OAuth 2.0 tokens), for the caller to persist.
     #[serde(skip)]
@@ -70,6 +76,8 @@ impl RunReport {
         let mut tests = 0;
         let mut failures = 0;
         for r in &self.requests {
+            let suffix = if self.iterations > 1 { format!(" #{}", r.iteration + 1) } else { String::new() };
+            let r = &RequestReport { name: format!("{}{suffix}", r.name), ..r.clone() };
             let class = esc(&if r.folder.is_empty() {
                 self.collection.clone()
             } else {
@@ -135,6 +143,21 @@ pub struct RunOptions {
     pub tokens: crate::oauth2::TokenStore,
     /// Run JavaScript scripts (only for trusted collections).
     pub allow_scripts: bool,
+    /// Data-driven run: one iteration per row (see [`crate::data`]).
+    pub data: Vec<crate::data::Row>,
+    /// Number of iterations; `0` means one per data row (or a single run).
+    pub iterations: usize,
+}
+
+impl RunOptions {
+    /// How many times the collection runs.
+    pub fn iteration_count(&self) -> usize {
+        match (self.iterations, self.data.len()) {
+            (0, 0) => 1,
+            (0, rows) => rows,
+            (n, _) => n,
+        }
+    }
 }
 
 /// Runs every request in `collection` sequentially.
@@ -166,102 +189,174 @@ pub fn run_collection(
     };
 
     let filter = options.filter.as_ref().map(|f| f.to_lowercase());
-    for (folder, mut req) in collection.flatten() {
-        // Only HTTP requests are runnable in a sequential test run.
-        if !req.kind.is_http() {
-            continue;
-        }
-        if let Some(f) = &filter {
-            let hay = format!("{} {}", folder.join("/"), req.name).to_lowercase();
-            if !hay.contains(f) {
+    let mut grpc_pools: std::collections::HashMap<String, prost_reflect::DescriptorPool> = Default::default();
+    let iterations = options.iteration_count();
+    'iterations: for iteration in 0..iterations {
+        report.iterations = iteration + 1;
+        scope.iteration = iteration;
+        scope.data =
+            options.data.get(iteration % options.data.len().max(1)).cloned().unwrap_or_default().into_iter().collect();
+        for (folder, mut req) in collection.flatten() {
+            // WebSocket sessions are interactive; HTTP and gRPC requests run.
+            if req.kind == crate::model::RequestKind::WebSocket {
                 continue;
             }
-        }
-        if options.delay_ms > 0 && !report.requests.is_empty() {
-            std::thread::sleep(std::time::Duration::from_millis(options.delay_ms));
-        }
-        let mut entry = RequestReport {
-            name: req.name.clone(),
-            folder: folder.clone(),
-            method: req.method.to_string(),
-            url: scope.resolve(&req.url),
-            status: None,
-            elapsed_ms: None,
-            size_bytes: None,
-            error: None,
-            assertions: Vec::new(),
-            extracted: Vec::new(),
-            logs: Vec::new(),
-        };
-        let chain = crate::scripts::chain_for(Some(collection), &req);
-        let run_scripts = !chain.is_empty() && options.allow_scripts;
-        if !chain.is_empty() && !options.allow_scripts {
-            entry.logs.push("scripts skipped: the collection is not trusted (pakpos-cli run --allow-scripts)".into());
-        }
-        let mut script_failures = Vec::new();
-        if run_scripts {
-            let pre = crate::scripts::run_pre_request(&chain, &mut req, &mut scope, crate::scripts::Limits::default());
-            persist_env(environment.as_deref_mut(), &pre.changes);
-            script_failures.extend(pre.error_results());
-            entry.logs.extend(pre.logs.iter().cloned());
-            report.script_changes.merge(pre.changes);
-        }
-        // The token endpoint is a host too: keep it inside the allow-list.
-        let token = match &req.auth {
-            crate::model::Auth::OAuth2(c)
-                if !http::host_allowed(&c.resolved(&scope).token_url, &options.allowed_hosts) =>
-            {
-                Err(format!("OAuth 2.0 token URL `{}` is not in the allow-list", c.resolved(&scope).token_url))
-            }
-            _ => crate::oauth2::ensure_token(&req.auth, &mut scope, &mut report.tokens, &options.settings)
-                .map_err(|e| e.to_string()),
-        };
-        let outcome = match token {
-            Err(e) => Err(http::HttpError::Transport(e)),
-            Ok(_) => http::prepare(&req, &scope, None).and_then(|p| {
-                if !http::host_allowed(&p.url, &options.allowed_hosts) {
-                    return Err(http::HttpError::Transport(format!("host of `{}` is not in the allow-list", p.url)));
+            if let Some(f) = &filter {
+                let hay = format!("{} {}", folder.join("/"), req.name).to_lowercase();
+                if !hay.contains(f) {
+                    continue;
                 }
-                let client = clients.for_url(&p.url)?;
-                http::send(client, &p).map(|r| (p, r))
-            }),
-        };
-        match outcome {
-            Ok((prepared, resp)) => {
-                entry.url = prepared.url;
-                entry.status = Some(resp.status);
-                entry.elapsed_ms = Some(resp.elapsed_ms);
-                entry.size_bytes = Some(resp.size_bytes());
-                entry.assertions = assertions::run_all(&resp, &req.assertions, |s| scope.resolve(s));
-                entry.extracted = assertions::extract_all(&resp, &req.extractions);
-                for (k, v) in &entry.extracted {
-                    scope.runtime.insert(k.clone(), v.clone());
-                    if let Some(env) = environment.as_deref_mut() {
-                        env.set(k, v.clone());
+            }
+            if options.delay_ms > 0 && !report.requests.is_empty() {
+                std::thread::sleep(std::time::Duration::from_millis(options.delay_ms));
+            }
+            let mut entry = RequestReport {
+                name: req.name.clone(),
+                folder: folder.clone(),
+                method: req.method.to_string(),
+                url: scope.resolve(&req.url),
+                status: None,
+                elapsed_ms: None,
+                size_bytes: None,
+                error: None,
+                assertions: Vec::new(),
+                extracted: Vec::new(),
+                iteration,
+                logs: Vec::new(),
+            };
+            if req.kind == crate::model::RequestKind::Grpc {
+                entry.method = "gRPC".into();
+            }
+            let chain = crate::scripts::chain_for(Some(collection), &req);
+            let run_scripts = !chain.is_empty() && options.allow_scripts;
+            if !chain.is_empty() && !options.allow_scripts {
+                entry
+                    .logs
+                    .push("scripts skipped: the collection is not trusted (pakpos-cli run --allow-scripts)".into());
+            }
+            let mut script_failures = Vec::new();
+            if run_scripts {
+                let pre =
+                    crate::scripts::run_pre_request(&chain, &mut req, &mut scope, crate::scripts::Limits::default());
+                persist_env(environment.as_deref_mut(), &pre.changes);
+                script_failures.extend(pre.error_results());
+                entry.logs.extend(pre.logs.iter().cloned());
+                report.script_changes.merge(pre.changes);
+            }
+            // The token endpoint is a host too: keep it inside the allow-list.
+            let token = match &req.auth {
+                crate::model::Auth::OAuth2(c)
+                    if !http::host_allowed(&c.resolved(&scope).token_url, &options.allowed_hosts) =>
+                {
+                    Err(format!("OAuth 2.0 token URL `{}` is not in the allow-list", c.resolved(&scope).token_url))
+                }
+                _ => crate::oauth2::ensure_token(&req.auth, &mut scope, &mut report.tokens, &options.settings)
+                    .map_err(|e| e.to_string()),
+            };
+            let outcome = match token {
+                Err(e) => Err(http::HttpError::Transport(e)),
+                Ok(_) if req.kind == crate::model::RequestKind::Grpc => {
+                    run_grpc(&req, &scope, options, &mut grpc_pools).map_err(http::HttpError::Transport)
+                }
+                Ok(_) => http::prepare(&req, &scope, None).and_then(|p| {
+                    if !http::host_allowed(&p.url, &options.allowed_hosts) {
+                        return Err(http::HttpError::Transport(format!(
+                            "host of `{}` is not in the allow-list",
+                            p.url
+                        )));
                     }
+                    let client = clients.for_url(&p.url)?;
+                    http::send(client, &p).map(|r| (p, r))
+                }),
+            };
+            match outcome {
+                Ok((prepared, resp)) => {
+                    entry.url = prepared.url;
+                    entry.status = Some(resp.status);
+                    entry.elapsed_ms = Some(resp.elapsed_ms);
+                    entry.size_bytes = Some(resp.size_bytes());
+                    entry.assertions = assertions::run_all(&resp, &req.assertions, |s| scope.resolve(s));
+                    entry.extracted = assertions::extract_all(&resp, &req.extractions);
+                    for (k, v) in &entry.extracted {
+                        scope.runtime.insert(k.clone(), v.clone());
+                        if let Some(env) = environment.as_deref_mut() {
+                            env.set(k, v.clone());
+                        }
+                    }
+                    if run_scripts {
+                        let t = crate::scripts::run_tests(
+                            &chain,
+                            &req,
+                            &resp,
+                            &mut scope,
+                            crate::scripts::Limits::default(),
+                        );
+                        persist_env(environment.as_deref_mut(), &t.changes);
+                        entry.assertions.extend(t.tests.iter().cloned());
+                        script_failures.extend(t.error_results());
+                        entry.logs.extend(t.logs.iter().cloned());
+                        report.script_changes.merge(t.changes);
+                    }
+                    entry.assertions.extend(script_failures);
                 }
-                if run_scripts {
-                    let t =
-                        crate::scripts::run_tests(&chain, &req, &resp, &mut scope, crate::scripts::Limits::default());
-                    persist_env(environment.as_deref_mut(), &t.changes);
-                    entry.assertions.extend(t.tests.iter().cloned());
-                    script_failures.extend(t.error_results());
-                    entry.logs.extend(t.logs.iter().cloned());
-                    report.script_changes.merge(t.changes);
-                }
-                entry.assertions.extend(script_failures);
+                Err(e) => entry.error = Some(e.to_string()),
             }
-            Err(e) => entry.error = Some(e.to_string()),
-        }
-        on_progress(&entry);
-        let failed = !entry.passed();
-        report.requests.push(entry);
-        if failed && options.stop_on_failure {
-            break;
+            on_progress(&entry);
+            let failed = !entry.passed();
+            report.requests.push(entry);
+            if failed && options.stop_on_failure {
+                break 'iterations;
+            }
         }
     }
     report.total_ms = started.elapsed().as_millis();
     report
+}
+
+/// Calls a gRPC request: headers and auth become metadata, the raw body is the JSON message.
+fn run_grpc(
+    req: &crate::model::Request,
+    scope: &VarScope,
+    options: &RunOptions,
+    pools: &mut std::collections::HashMap<String, prost_reflect::DescriptorPool>,
+) -> Result<(http::PreparedRequest, http::Response), String> {
+    let cfg = req.grpc.clone().unwrap_or_default();
+    if cfg.method.trim().is_empty() {
+        return Err("no gRPC method selected".into());
+    }
+    let mut meta = req.clone();
+    meta.body = crate::model::Body::None;
+    let mut prepared = http::prepare(&meta, scope, None).map_err(|e| e.to_string())?;
+    if !http::host_allowed(
+        &crate::grpc::endpoint_url(&prepared.url).map_err(|e| e.to_string())?.0,
+        &options.allowed_hosts,
+    ) {
+        return Err(format!("host of `{}` is not in the allow-list", prepared.url));
+    }
+    let key = format!("{}|{}|{}", prepared.url, cfg.proto_files.join(","), cfg.import_paths.join(","));
+    if !pools.contains_key(&key) {
+        let pool = crate::grpc::load_pool(&cfg, &prepared.url, &options.settings).map_err(|e| e.to_string())?;
+        pools.insert(key.clone(), pool);
+    }
+    let message = match &req.body {
+        crate::model::Body::Raw { content, .. } if !content.trim().is_empty() => scope.resolve(content),
+        _ => "{}".to_string(),
+    };
+    let r = crate::grpc::call(
+        &prepared.url,
+        &pools[&key],
+        &cfg.method,
+        &message,
+        &prepared.headers,
+        &options.settings,
+        100,
+    )
+    .map_err(|e| e.to_string())?;
+    let response = r.to_response(&prepared.url);
+    prepared.method = "gRPC".into();
+    prepared.url = format!("{} {}", prepared.url, cfg.method);
+    prepared.body = http::PreparedBody::Text(message);
+    Ok((prepared, response))
 }
 
 /// Writes script environment changes into the environment being run.
@@ -295,6 +390,7 @@ mod tests {
                         AssertionResult { name: "t".into(), passed: false, message: "\"bad\"".into() },
                     ],
                     extracted: vec![],
+                    iteration: 0,
                     logs: vec![],
                 },
                 RequestReport {
@@ -308,9 +404,11 @@ mod tests {
                     error: Some("boom".into()),
                     assertions: vec![],
                     extracted: vec![],
+                    iteration: 0,
                     logs: vec![],
                 },
             ],
+            iterations: 1,
             total_ms: 20,
             tokens: Default::default(),
             script_changes: Default::default(),

@@ -47,8 +47,9 @@ value with an [extraction](tests.md#extractions) or `pm.environment.set`.
 | `pm.response` | `.code`, `.status`, `.headers.get(name)`, `.responseTime`, `.responseSize`, `.text()`, `.json()`, `.to.have.status(n)`, `.to.have.header(k)`, `.to.be.ok` |
 | `pm.request` | `.url` and `.method` (read/write), `.headers.add / upsert / remove / get`, `.body.raw` (read/write) |
 | `pm.environment`, `pm.collectionVariables`, `pm.globals` | `.get`, `.set`, `.unset`, `.has`, `.toObject()`, `.replaceIn("{{x}}")` |
-| `pm.variables` | Local to the current run; `.get` falls back to environment → collection → globals |
-| `pm.info` | `.requestName`, `.eventName` |
+| `pm.variables` | Local to the current run; `.get` falls back to the data row → environment → collection → globals |
+| `pm.iterationData` | The current row of a data-driven run: `.get`, `.has`, `.toObject()` |
+| `pm.info` | `.requestName`, `.eventName`, `.iteration` (zero-based) |
 | `console.log / info / warn / error` | Shown in the response's **Console** tab and in CLI output |
 | Legacy | `tests["name"] = bool`, `responseBody`, `responseCode.code`, `responseTime`, `postman.setEnvironmentVariable` |
 
@@ -77,5 +78,5 @@ console.log("created", json.id);
 Imported collections keep their scripts (collection, folder and request
 level). Most `pm.test` / `pm.expect` / variable scripts work unchanged. Not
 available: `pm.sendRequest`, `pm.cookies`, `pm.vault`, `pm.visualizer`,
-`pm.iterationData`, `require(...)` of npm libraries (`lodash`,
+`require(...)` of npm libraries (`lodash`,
 `moment`, `crypto-js`, `cheerio`, …) and asynchronous code that waits on timers.

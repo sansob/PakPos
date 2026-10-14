@@ -34,10 +34,10 @@ const __env = __store(__in.environment, __out.env);
 const __coll = __store(__in.collection, __out.coll);
 const __glob = __store(__in.globals, __out.glob);
 const __vars = __store(__in.variables, __out.vars);
-// Local values first, then environment, collection and globals.
+// Local values first, then the data row, environment, collection and globals.
 const __varsGet = __vars.get;
 const __lookup = (k) => {
-  for (const get of [__varsGet, __env.get, __coll.get, __glob.get]) { const v = get(k); if (v !== undefined) return v; }
+  for (const get of [__varsGet, (d) => __in.data[d], __env.get, __coll.get, __glob.get]) { const v = get(k); if (v !== undefined) return v; }
   return undefined;
 };
 const __replaceIn = (text) => String(text).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (m, k) => { const v = __lookup(k); return v === undefined ? m : v; });
@@ -174,7 +174,12 @@ if (__in.response) {
 }
 
 const pm = {
-  info: { requestName: __in.info.requestName, eventName: __in.info.eventName, iteration: 0 },
+  info: { requestName: __in.info.requestName, eventName: __in.info.eventName, iteration: __in.info.iteration },
+  iterationData: {
+    get: (k) => __in.data[k],
+    has: (k) => k in __in.data,
+    toObject: () => Object.assign({}, __in.data),
+  },
   environment: __env,
   collectionVariables: __coll,
   globals: __glob,

@@ -4,7 +4,7 @@ use crate::app::{Action, Dialog, PakPosApp, RenameTarget};
 use pakpos_core::model::{Folder, Item};
 use pakpos_core::{postman, storage, Environment, Request};
 
-pub fn apply(app: &mut PakPosApp, action: Action, ctx: &egui::Context) {
+pub fn apply(app: &mut PakPosApp, action: Action) {
     match action {
         Action::OpenRequest { collection, request } => app.open_saved(&collection, &request),
         Action::NewTab(req) => {
@@ -77,7 +77,11 @@ pub fn apply(app: &mut PakPosApp, action: Action, ctx: &egui::Context) {
                 }
             }
         }
-        Action::RunCollection(id) => app.start_runner(&id, ctx),
+        Action::RunCollection(id) => {
+            if let Some(name) = app.collection(&id).map(|c| c.name.clone()) {
+                app.runner_setup = Some(crate::app::RunnerSetup::new(&id, &name));
+            }
+        }
         Action::ImportPostmanCollection => {
             if let Some(paths) = rfd::FileDialog::new().add_filter("JSON", &["json"]).pick_files() {
                 for path in paths {

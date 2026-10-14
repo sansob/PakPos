@@ -157,3 +157,32 @@ fn runner_executes_trusted_scripts_only() {
     assert_eq!(r.logs, vec!["done"]);
     assert_eq!(env.get("seen"), Some("yes"));
 }
+
+#[test]
+fn data_driven_run_uses_each_row() {
+    let base = echo_server();
+    let mut c = Collection::new("Data");
+    let mut req = Request::new(HttpMethod::Get, format!("{base}/users/{{{{user}}}}"));
+    req.name = "Get user".into();
+    req.assertions = vec![Assertion {
+        enabled: true,
+        target: "json.path".into(),
+        op: Operator::Equals,
+        expected: "/users/{{user}}".into(),
+    }];
+    c.items.push(Item::Request(req));
+    let data = pakpos_core::data::parse("user,city\nbudi,Jakarta\nsiti,Bandung\nagus,Medan\n").unwrap();
+    let options = RunOptions { data, ..Default::default() };
+    let report = run_collection(&c, None, &options, |_| {});
+    assert_eq!(report.iterations, 3);
+    let paths: Vec<_> = report.requests.iter().map(|r| r.url.rsplit('/').next().unwrap().to_string()).collect();
+    assert_eq!(paths, ["budi", "siti", "agus"]);
+    assert!(report.passed(), "{:?}", report.requests);
+    assert!(report.to_junit().contains("Get user #3"));
+
+    // Explicit iteration count repeats the rows.
+    let options = RunOptions { iterations: 4, ..options };
+    let report = run_collection(&c, None, &options, |_| {});
+    assert_eq!(report.requests.len(), 4);
+    assert!(report.requests[3].url.ends_with("/budi"));
+}

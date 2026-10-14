@@ -392,6 +392,28 @@ impl GrpcResponse {
         self.code == 0
     }
 
+    /// The status as the generic response shape, so the Body / Headers /
+    /// Tests views and assertions work: status = gRPC code, headers include
+    /// `trailer: …`, `grpc-status` and `grpc-message`.
+    pub fn to_response(&self, url: &str) -> crate::http::Response {
+        let mut headers = self.headers.clone();
+        headers.extend(self.trailers.iter().map(|(k, v)| (format!("trailer: {k}"), v.clone())));
+        headers.push(("grpc-status".into(), self.code.to_string()));
+        if !self.status_message.is_empty() {
+            headers.push(("grpc-message".into(), self.status_message.clone()));
+        }
+        let body = if self.messages.is_empty() { String::new() } else { self.body() };
+        crate::http::Response {
+            status: self.code as u16,
+            status_text: self.code_name.clone(),
+            headers,
+            body: body.into_bytes(),
+            elapsed_ms: self.elapsed_ms,
+            url: url.to_string(),
+            http_version: "gRPC".into(),
+        }
+    }
+
     /// The single response, or all of them as a JSON array.
     pub fn body(&self) -> String {
         match self.messages.len() {

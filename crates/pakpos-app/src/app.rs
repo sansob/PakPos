@@ -142,7 +142,50 @@ pub enum RunnerMsg {
     Done(RunReport, Option<Environment>),
 }
 
+/// Runner options picked before a run starts.
+#[derive(Clone)]
+pub struct RunnerSetup {
+    pub collection_id: String,
+    pub collection: String,
+    pub iterations: usize,
+    pub delay_ms: u64,
+    pub stop_on_failure: bool,
+    pub data_path: Option<String>,
+    pub data: Vec<pakpos_core::data::Row>,
+    pub data_error: Option<String>,
+}
+
+impl RunnerSetup {
+    pub fn new(collection_id: &str, collection: &str) -> Self {
+        Self {
+            collection_id: collection_id.to_string(),
+            collection: collection.to_string(),
+            iterations: 0,
+            delay_ms: 0,
+            stop_on_failure: false,
+            data_path: None,
+            data: Vec::new(),
+            data_error: None,
+        }
+    }
+
+    pub fn load_data(&mut self, path: String) {
+        match pakpos_core::data::load(&path) {
+            Ok(rows) => {
+                self.data = rows;
+                self.data_error = None;
+            }
+            Err(e) => {
+                self.data.clear();
+                self.data_error = Some(e.to_string());
+            }
+        }
+        self.data_path = Some(path);
+    }
+}
+
 pub struct RunnerState {
+    pub setup: RunnerSetup,
     pub collection: String,
     pub environment: Option<String>,
     pub rx: Receiver<RunnerMsg>,
@@ -190,6 +233,7 @@ pub struct PakPosApp {
     /// Collection edited in the settings dialog, saved after a short pause.
     pub collection_dirty: Option<(String, Instant)>,
     pub runner: Option<RunnerState>,
+    pub runner_setup: Option<RunnerSetup>,
     pub oauth_job: Option<crate::oauth_view::OAuthJob>,
     pub graphql: crate::graphql_view::GqlState,
     pub mock: Option<crate::mock_view::MockState>,
@@ -215,6 +259,7 @@ impl PakPosApp {
             env_dirty: None,
             collection_dirty: None,
             runner: None,
+            runner_setup: None,
             oauth_job: None,
             graphql: Default::default(),
             mock: None,
@@ -616,23 +661,39 @@ impl PakPosApp {
 
     // ----- runner -------------------------------------------------------------
 
+    /// Runs a collection with default options.
     pub fn start_runner(&mut self, collection_id: &str, ctx: &egui::Context) {
-        let Some(collection) = self.collection(collection_id).cloned() else { return };
+        let Some(name) = self.collection(collection_id).map(|c| c.name.clone()) else { return };
+        self.start_runner_with(RunnerSetup::new(collection_id, &name), ctx);
+    }
+
+    pub fn start_runner_with(&mut self, setup: RunnerSetup, ctx: &egui::Context) {
+        let Some(collection) = self.collection(&setup.collection_id).cloned() else { return };
         let env = self.ws.active_environment().cloned();
         let options = RunOptions {
             settings: self.ws.settings.http.clone(),
             globals: self.ws.globals.clone(),
+            tokens: self.ws.tokens.clone(),
+            allow_scripts: self.ws.is_trusted(&collection.id),
+            data: setup.data.clone(),
+            iterations: setup.iterations,
+            delay_ms: setup.delay_ms,
+            stop_on_failure: setup.stop_on_failure,
             ..Default::default()
         };
+        let runnable =
+            collection.flatten().iter().filter(|(_, r)| r.kind != pakpos_core::model::RequestKind::WebSocket).count();
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
+        let total = runnable * options.iteration_count();
         self.runner = Some(RunnerState {
+            setup,
             collection: collection.name.clone(),
             environment: env.as_ref().map(|e| e.name.clone()),
             rx,
             progress: Vec::new(),
             report: None,
-            total: collection.request_count(),
+            total,
             open: true,
         });
         std::thread::spawn(move || {
@@ -655,6 +716,10 @@ impl PakPosApp {
                 match msg {
                     RunnerMsg::Progress(p) => r.progress.push(p),
                     RunnerMsg::Done(report, env) => {
+                        if report.tokens != self.ws.tokens {
+                            self.ws.tokens = report.tokens.clone();
+                            let _ = self.ws.save_tokens();
+                        }
                         r.report = Some(report);
                         done_env = env;
                     }
@@ -879,10 +944,10 @@ impl PakPosApp {
         ctx.request_repaint_after(Duration::from_millis(250));
     }
 
-    pub fn apply_actions(&mut self, ctx: &egui::Context) {
+    pub fn apply_actions(&mut self) {
         let actions = std::mem::take(&mut self.actions);
         for action in actions {
-            crate::actions::apply(self, action, ctx);
+            crate::actions::apply(self, action);
         }
     }
 }
@@ -951,11 +1016,12 @@ impl eframe::App for PakPosApp {
         self.workbench(ui);
 
         self.dialogs(&ctx);
+        self.runner_setup_window(&ctx);
         self.runner_window(&ctx);
         self.mock_window(&ctx);
         self.git_window(&ctx);
         self.show_toasts(&ctx);
-        self.apply_actions(&ctx);
+        self.apply_actions();
 
         if self.oauth_job.is_some()
             || self.graphql.job.is_some()

@@ -122,3 +122,26 @@ fn mutual_tls_with_client_certificate() {
     assert!(ok.is_ok(), "{ok:?}");
     assert!(ok.messages[0].contains("\"status\": 1"), "{}", ok.messages[0]);
 }
+
+#[test]
+fn grpc_requests_run_in_the_runner() {
+    use pakpos_core::assertions::Operator;
+    use pakpos_core::model::{Assertion, Item, RequestKind};
+    use pakpos_core::runner::{run_collection, RunOptions};
+    use pakpos_core::{Body, Collection, HttpMethod, Request};
+    let url = start_server();
+    let mut req = Request::new(HttpMethod::Post, url);
+    req.kind = RequestKind::Grpc;
+    req.grpc = Some(GrpcConfig { method: "grpc.health.v1.Health/Check".into(), ..Default::default() });
+    req.body = Body::Raw { content: r#"{"service": "{{svc}}"}"#.into(), language: Default::default() };
+    req.assertions =
+        vec![Assertion { enabled: true, target: "status".into(), op: Operator::Equals, expected: "{{code}}".into() }];
+    let mut c = Collection::new("gRPC");
+    c.items.push(Item::Request(req));
+    let data = pakpos_core::data::parse(r#"[{"svc": "", "code": 0}, {"svc": "nope", "code": 5}]"#).unwrap();
+    let report = run_collection(&c, None, &RunOptions { data, ..Default::default() }, |_| {});
+    assert_eq!(report.requests.len(), 2);
+    assert_eq!(report.requests[0].method, "gRPC");
+    assert_eq!(report.requests[1].status, Some(5));
+    assert!(report.passed(), "{:?}", report.requests);
+}

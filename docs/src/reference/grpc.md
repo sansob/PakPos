@@ -70,7 +70,10 @@ service `pakpos.demo` streams a status change every 2 seconds.
 ## Limitations
 
 - No interactive bidirectional streaming: inputs are sent up front.
-- TLS uses the system's root certificates; client certificates (mTLS) and the
-  *verify TLS* switch are not applied to gRPC yet.
+- TLS uses the system's root certificates plus the CA of a matching client
+  certificate entry ([mTLS](auth.md#client-certificates-mtls)); the *verify
+  TLS* switch is not applied to gRPC.
 - Binary metadata (`-bin` keys) is shown as a byte count and cannot be sent.
-- gRPC requests are skipped by the collection runner.
+
+gRPC requests run in the collection runner: the status code is the `status`
+target (`0` = OK) and the response message is the body.

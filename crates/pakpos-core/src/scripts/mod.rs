@@ -67,6 +67,7 @@ struct Input<'a> {
     collection: &'a HashMap<String, String>,
     globals: &'a HashMap<String, String>,
     variables: &'a HashMap<String, String>,
+    data: &'a HashMap<String, String>,
     info: Info,
 }
 
@@ -76,6 +77,7 @@ struct Info {
     request_name: String,
     #[serde(rename = "eventName")]
     event_name: &'static str,
+    iteration: usize,
 }
 
 #[derive(Serialize)]
@@ -263,7 +265,9 @@ pub fn run(
         collection: &scope.collection,
         globals: &scope.globals,
         variables: &scope.runtime,
+        data: &scope.data,
         info: Info {
+            iteration: scope.iteration,
             request_name: request_name.to_string(),
             event_name: match phase {
                 Phase::PreRequest => "prerequest",

@@ -66,9 +66,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p pakpos-cli --locked
+      - run: cargo build -p pakpos-core --example grpc_demo_server --locked
       - name: Run example collection against the mock API
         run: |
           python3 scripts/mock_httpbin.py 8787 &
+          ./target/debug/examples/grpc_demo_server &
           sleep 1
           ./target/debug/pakpos-cli run examples/pakpos-demo.collection.json \
             -e examples/local.environment.json --reporter junit --out junit.xml

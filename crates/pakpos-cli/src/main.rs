@@ -193,6 +193,13 @@ struct RunArgs {
     /// Collections trusted in the desktop app run their scripts without this flag.
     #[arg(long)]
     allow_scripts: bool,
+    /// Data file (CSV with a header row, or a JSON array of objects): the
+    /// collection runs once per row, with the row's columns as variables.
+    #[arg(short, long)]
+    data: Option<PathBuf>,
+    /// Number of iterations (default: one per data row, or 1).
+    #[arg(short = 'n', long, default_value_t = 0)]
+    iterations: usize,
     #[command(flatten)]
     tls: TlsArgs,
 }
@@ -469,6 +476,10 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         None => None,
     };
     let (mut ws, _) = Workspace::load(storage::default_root());
+    let data = match &args.data {
+        Some(p) => pakpos_core::data::load(&p.display().to_string())?,
+        None => Vec::new(),
+    };
     let options = RunOptions {
         settings: HttpSettings {
             timeout_secs: args.timeout,
@@ -484,7 +495,10 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         allowed_hosts: Vec::new(),
         tokens: ws.tokens.clone(),
         allow_scripts: args.allow_scripts || ws.is_trusted(&collection.id),
+        data,
+        iterations: args.iterations,
     };
+    let iteration_count = options.iteration_count();
 
     let cli_reporter = args.reporter == Reporter::Cli;
     if cli_reporter {
@@ -495,9 +509,14 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
             env.as_ref().map(|(e, _)| style.dim(&format!("  ·  env: {}", e.name))).unwrap_or_default()
         );
     }
+    let mut last_iteration = usize::MAX;
     let print = |r: &RequestReport| {
         if !cli_reporter {
             return;
+        }
+        if iteration_count > 1 && r.iteration != last_iteration {
+            last_iteration = r.iteration;
+            println!("{}", style.bold(&format!("── iteration {}/{iteration_count}", r.iteration + 1)));
         }
         let folder =
             if r.folder.is_empty() { String::new() } else { style.dim(&format!("{} / ", r.folder.join(" / "))) };
@@ -540,8 +559,10 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         Reporter::Cli => {
             let (passed, total) = report.assertion_counts();
             let failed_reqs = report.failed_requests();
+            let iterations =
+                if report.iterations > 1 { format!("iterations: {}  ·  ", report.iterations) } else { String::new() };
             println!(
-                "\n{}  requests: {}  ·  assertions: {}/{}  ·  {} ms\n",
+                "\n{}  {iterations}requests: {}  ·  assertions: {}/{}  ·  {} ms\n",
                 if report.passed() { style.green("PASSED") } else { style.red("FAILED") },
                 report.requests.len(),
                 passed,

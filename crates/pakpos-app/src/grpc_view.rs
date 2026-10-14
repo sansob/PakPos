@@ -5,7 +5,7 @@ use crate::theme::Palette;
 use crate::widgets;
 use egui::{RichText, Ui};
 use pakpos_core::grpc::{self, MethodInfo};
-use pakpos_core::http::{self, PreparedBody, Response};
+use pakpos_core::http::{self, PreparedBody};
 use pakpos_core::model::{Auth, Body, GrpcConfig, RawLanguage};
 use prost_reflect::DescriptorPool;
 use std::sync::mpsc::{self, Receiver};
@@ -163,26 +163,6 @@ pub fn editor(
     changed
 }
 
-/// gRPC status → the generic response shape, so the Body / Headers / Tests views work.
-fn to_response(r: &grpc::GrpcResponse, url: &str) -> Response {
-    let mut headers = r.headers.clone();
-    headers.extend(r.trailers.iter().map(|(k, v)| (format!("trailer: {k}"), v.clone())));
-    headers.push(("grpc-status".into(), r.code.to_string()));
-    if !r.status_message.is_empty() {
-        headers.push(("grpc-message".into(), r.status_message.clone()));
-    }
-    let body = if r.messages.is_empty() { String::new() } else { r.body() };
-    Response {
-        status: r.code as u16,
-        status_text: r.code_name.clone(),
-        headers,
-        body: body.into_bytes(),
-        elapsed_ms: r.elapsed_ms,
-        url: url.to_string(),
-        http_version: "gRPC".into(),
-    }
-}
-
 impl PakPosApp {
     pub fn handle_grpc_action(&mut self, idx: usize, action: GrpcAction, ctx: &egui::Context) {
         match action {
@@ -302,7 +282,7 @@ impl PakPosApp {
                 }
                 let r = grpc::call(&prepared.url, &pool, &cfg.method, &message, &prepared.headers, &settings, 500)
                     .map_err(|e| e.to_string())?;
-                let response = to_response(&r, &prepared.url);
+                let response = r.to_response(&prepared.url);
                 let pretty = response.pretty_body();
                 let tests = pakpos_core::assertions::run_all(&response, &req.assertions, |s| scope.resolve(s));
                 let extracted = pakpos_core::assertions::extract_all(&response, &req.extractions);

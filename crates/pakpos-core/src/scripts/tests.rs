@@ -171,3 +171,27 @@ fn legacy_tests_object() {
     assert!(out.tests[0].passed);
     assert!(!out.tests[1].passed);
 }
+
+#[test]
+fn iteration_data_is_visible() {
+    let mut scope = VarScope::new();
+    scope.data.insert("user".into(), "siti".into());
+    scope.iteration = 2;
+    let out = run(
+        r#"
+        pm.test("data", () => {
+            pm.expect(pm.iterationData.get("user")).to.eql("siti");
+            pm.expect(pm.variables.get("user")).to.eql("siti");
+            pm.expect(pm.info.iteration).to.eql(2);
+        });
+        "#,
+        Phase::Test,
+        "r",
+        &req(),
+        Some(&resp(200, "{}")),
+        &scope,
+        Limits::default(),
+    );
+    assert!(out.error.is_none(), "{:?}", out.error);
+    assert!(out.tests.iter().all(|t| t.passed), "{:?}", out.tests);
+}

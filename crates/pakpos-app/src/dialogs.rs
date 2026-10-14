@@ -675,8 +675,115 @@ impl PakPosApp {
         }
     }
 
+    /// Options before a run: iterations, data file, delay, stop on failure.
+    pub fn runner_setup_window(&mut self, ctx: &egui::Context) {
+        let p = self.palette;
+        let Some(setup) = &mut self.runner_setup else { return };
+        let mut open = true;
+        let mut start = false;
+        egui::Window::new(format!("Run — {}", setup.collection))
+            .id(Id::new("runner_setup"))
+            .open(&mut open)
+            .default_width(520.0)
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
+            .collapsible(false)
+            .resizable(false)
+            .frame(modal_frame(&p))
+            .show(ctx, |ui| {
+                egui::Grid::new("runner_setup_grid").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
+                    ui.label("Data file");
+                    ui.horizontal(|ui| {
+                        let name = setup
+                            .data_path
+                            .as_deref()
+                            .map(|p| {
+                                std::path::Path::new(p)
+                                    .file_name()
+                                    .map(|f| f.to_string_lossy().into_owned())
+                                    .unwrap_or_default()
+                            })
+                            .unwrap_or_else(|| "none".into());
+                        ui.label(RichText::new(name).monospace());
+                        if ui.button("Choose CSV / JSON…").clicked() {
+                            if let Some(path) = rfd::FileDialog::new().add_filter("Data", &["csv", "json"]).pick_file()
+                            {
+                                setup.load_data(path.display().to_string());
+                            }
+                        }
+                        if setup.data_path.is_some() && ui.button("×").on_hover_text("No data file").clicked() {
+                            setup.data_path = None;
+                            setup.data.clear();
+                            setup.data_error = None;
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("Iterations");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut setup.iterations).range(0..=10_000));
+                        let effective = match (setup.iterations, setup.data.len()) {
+                            (0, 0) => "1 run".to_string(),
+                            (0, n) => format!("{n} (one per data row)"),
+                            (n, _) => format!("{n}"),
+                        };
+                        ui.label(RichText::new(effective).small().color(p.text_weak));
+                    });
+                    ui.end_row();
+                    ui.label("Delay");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut setup.delay_ms).range(0..=60_000).suffix(" ms"));
+                        ui.label(RichText::new("between requests").small().color(p.text_weak));
+                    });
+                    ui.end_row();
+                    ui.label("");
+                    ui.checkbox(&mut setup.stop_on_failure, "Stop at the first failure");
+                    ui.end_row();
+                });
+                if let Some(e) = &setup.data_error {
+                    ui.label(RichText::new(e).small().color(theme::RED));
+                }
+                if !setup.data.is_empty() {
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(format!(
+                            "DATA PREVIEW · {} rows · columns are {{{{variables}}}}",
+                            setup.data.len()
+                        ))
+                        .small()
+                        .strong()
+                        .color(p.text_weak),
+                    );
+                    egui::ScrollArea::both().max_height(150.0).show(ui, |ui| {
+                        egui::Grid::new("data_preview").striped(true).spacing([14.0, 4.0]).show(ui, |ui| {
+                            for (k, _) in &setup.data[0] {
+                                ui.label(RichText::new(k).strong().monospace());
+                            }
+                            ui.end_row();
+                            for row in setup.data.iter().take(8) {
+                                for (_, v) in row {
+                                    ui.label(RichText::new(v).monospace());
+                                }
+                                ui.end_row();
+                            }
+                        });
+                    });
+                }
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    start = widgets::primary_button(ui, "▶ Run").clicked();
+                });
+            });
+        if start {
+            let setup = self.runner_setup.take().expect("open");
+            self.start_runner_with(setup, ctx);
+        } else if !open {
+            self.runner_setup = None;
+        }
+    }
+
     pub fn runner_window(&mut self, ctx: &egui::Context) {
         let p = self.palette;
+        let mut rerun = None;
         let Some(r) = &mut self.runner else { return };
         let mut open = r.open;
         egui::Window::new(format!("Runner — {}", r.collection))
@@ -700,6 +807,14 @@ impl PakPosApp {
                         widgets::pill(ui, if rep.passed() { "PASSED" } else { "FAILED" }, c, c.gamma_multiply(0.16));
                         widgets::pill(ui, format!("tests {passed}/{total}"), p.text, p.surface_alt);
                         widgets::pill(ui, format!("{} ms", rep.total_ms), p.text, p.surface_alt);
+                        if rep.iterations > 1 {
+                            widgets::pill(ui, format!("{} iterations", rep.iterations), p.text, p.surface_alt);
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("⟳ Run again").clicked() {
+                                rerun = Some(r.setup.clone());
+                            }
+                        });
                     } else {
                         ui.add(egui::Spinner::new().color(theme::ORANGE));
                         ui.label(format!("{finished}/{} requests", r.total));
@@ -711,8 +826,20 @@ impl PakPosApp {
                         .desired_height(6.0),
                 );
                 ui.add_space(6.0);
+                let many = r.progress.iter().any(|x| x.iteration > 0);
                 egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    let mut last = usize::MAX;
                     for rep in &r.progress {
+                        if many && rep.iteration != last {
+                            last = rep.iteration;
+                            ui.add_space(4.0);
+                            ui.label(
+                                RichText::new(format!("ITERATION {}", rep.iteration + 1))
+                                    .small()
+                                    .strong()
+                                    .color(p.text_weak),
+                            );
+                        }
                         ui.horizontal(|ui| {
                             let (mark, c) = if rep.passed() { ("✔", theme::GREEN) } else { ("✖", theme::RED) };
                             ui.label(RichText::new(mark).color(c).strong());
@@ -750,6 +877,9 @@ impl PakPosApp {
         r.open = open;
         if !open && r.report.is_some() {
             self.runner = None;
+        }
+        if let Some(setup) = rerun {
+            self.start_runner_with(setup, ctx);
         }
     }
 }
