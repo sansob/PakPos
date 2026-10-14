@@ -195,3 +195,83 @@ fn iteration_data_is_visible() {
     assert!(out.error.is_none(), "{:?}", out.error);
     assert!(out.tests.iter().all(|t| t.passed), "{:?}", out.tests);
 }
+
+/// A one-shot HTTP server answering `{"pong": <request path>}`.
+fn pong_server() -> String {
+    use std::io::{BufRead, BufReader, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let mut stream = stream;
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let path = line.split_whitespace().nth(1).unwrap_or("").to_string();
+            loop {
+                let mut h = String::new();
+                if reader.read_line(&mut h).unwrap_or(0) == 0 || h.trim().is_empty() {
+                    break;
+                }
+            }
+            let body = format!("{{\"pong\":\"{path}\"}}");
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    format!("http://{addr}")
+}
+
+#[test]
+fn send_request_needs_network_access() {
+    let base = pong_server();
+    let mut scope = VarScope::new();
+    scope.environment.insert("base".into(), base.clone());
+    let src = r#"
+        pm.sendRequest("{{base}}/token", (err, res) => {
+            pm.test("no error", () => pm.expect(err).to.be.null);
+            pm.test("pong", () => pm.expect(res.json().pong).to.eql("/token"));
+            pm.environment.set("token", res.json().pong);
+        });
+        const again = pm.sendRequest({ url: "{{base}}/again", method: "POST", body: { mode: "raw", raw: "x" } });
+        pm.test("returned", () => pm.response.to.have.status(200) && pm.expect(again.code).to.eql(200));
+    "#;
+    let denied = run(r#"pm.sendRequest("{{base}}/x")"#, Phase::Test, "r", &req(), None, &scope, Limits::default());
+    assert!(denied.error.as_deref().is_some_and(|e| e.contains("disabled")), "{:?}", denied.error);
+    let denied_cb = run(
+        r#"pm.sendRequest("{{base}}/x", (err) => pm.test("err", () => pm.expect(err.message).to.include("network access")))"#,
+        Phase::Test,
+        "r",
+        &req(),
+        None,
+        &scope,
+        Limits::default(),
+    );
+    assert!(denied_cb.tests.iter().all(|t| t.passed) && denied_cb.tests.len() == 1, "{:?}", denied_cb.tests);
+
+    let limits = Limits::with_network(Network::default());
+    let out = run(src, Phase::Test, "r", &req(), Some(&resp(200, "{}")), &scope, limits);
+    assert!(out.error.is_none(), "{:?}", out.error);
+    assert_eq!(out.tests.len(), 3);
+    assert!(out.tests.iter().all(|t| t.passed), "{:?}", out.tests);
+    assert_eq!(out.changes.environment, vec![("token".to_string(), Some("/token".to_string()))]);
+
+    // Allow-list and request cap.
+    let limits = Limits::with_network(Network { allowed_hosts: vec!["api.example.com".into()], ..Default::default() });
+    let out = run(r#"pm.sendRequest("{{base}}/x")"#, Phase::Test, "r", &req(), None, &scope, limits);
+    assert!(out.error.as_deref().is_some_and(|e| e.contains("allow-list")), "{:?}", out.error);
+    let limits = Limits::with_network(Network { max_requests: 1, ..Default::default() });
+    let out = run(
+        r#"pm.sendRequest("{{base}}/1"); pm.sendRequest("{{base}}/2")"#,
+        Phase::Test,
+        "r",
+        &req(),
+        None,
+        &scope,
+        limits,
+    );
+    assert!(out.error.as_deref().is_some_and(|e| e.contains("at most 1")), "{:?}", out.error);
+}

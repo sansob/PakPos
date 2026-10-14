@@ -146,6 +146,8 @@ pub struct RunOptions {
     pub tokens: crate::oauth2::TokenStore,
     /// Run JavaScript scripts (only for trusted collections).
     pub allow_scripts: bool,
+    /// Let those scripts call `pm.sendRequest` (collection network access).
+    pub allow_network: bool,
     /// Data-driven run: one iteration per row (see [`crate::data`]).
     pub data: Vec<crate::data::Row>,
     /// Number of iterations; `0` means one per data row (or a single run).
@@ -194,6 +196,16 @@ pub fn run_collection(
         ..Default::default()
     };
 
+    let script_limits = if options.allow_network {
+        crate::scripts::Limits::with_network(crate::scripts::Network {
+            settings: options.settings.clone(),
+            allowed_hosts: options.allowed_hosts.clone(),
+            cookies: Some(jar.clone()),
+            max_requests: 0,
+        })
+    } else {
+        crate::scripts::Limits::default()
+    };
     let filter = options.filter.as_ref().map(|f| f.to_lowercase());
     let mut grpc_pools: std::collections::HashMap<String, prost_reflect::DescriptorPool> = Default::default();
     let iterations = options.iteration_count();
@@ -242,8 +254,7 @@ pub fn run_collection(
             }
             let mut script_failures = Vec::new();
             if run_scripts {
-                let pre =
-                    crate::scripts::run_pre_request(&chain, &mut req, &mut scope, crate::scripts::Limits::default());
+                let pre = crate::scripts::run_pre_request(&chain, &mut req, &mut scope, script_limits.clone());
                 persist_env(environment.as_deref_mut(), &pre.changes);
                 script_failures.extend(pre.error_results());
                 entry.logs.extend(pre.logs.iter().cloned());
@@ -291,13 +302,7 @@ pub fn run_collection(
                         }
                     }
                     if run_scripts {
-                        let t = crate::scripts::run_tests(
-                            &chain,
-                            &req,
-                            &resp,
-                            &mut scope,
-                            crate::scripts::Limits::default(),
-                        );
+                        let t = crate::scripts::run_tests(&chain, &req, &resp, &mut scope, script_limits.clone());
                         persist_env(environment.as_deref_mut(), &t.changes);
                         entry.assertions.extend(t.tests.iter().cloned());
                         script_failures.extend(t.error_results());

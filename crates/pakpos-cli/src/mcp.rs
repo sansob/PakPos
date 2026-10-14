@@ -317,6 +317,7 @@ impl Server {
                     allowed_hosts: self.config.allowed_hosts.clone(),
                     tokens: ws.tokens.clone(),
                     allow_scripts: self.config.allow_scripts && ws.is_trusted(&c.id),
+                    allow_network: self.config.allow_scripts && ws.has_network(&c.id),
                     data: match args.get("data") {
                         Some(d @ Value::Array(_)) => pakpos_core::data::parse_json(&d.to_string())?,
                         _ => Vec::new(),

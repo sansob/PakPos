@@ -193,6 +193,10 @@ struct RunArgs {
     /// Collections trusted in the desktop app run their scripts without this flag.
     #[arg(long)]
     allow_scripts: bool,
+    /// Let those scripts send requests with pm.sendRequest (implies --allow-scripts).
+    /// Collections with network access in the desktop app have it without this flag.
+    #[arg(long)]
+    allow_network: bool,
     /// Data file (CSV with a header row, or a JSON array of objects): the
     /// collection runs once per row, with the row's columns as variables.
     #[arg(short, long)]
@@ -494,7 +498,8 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         overrides: args.vars.clone(),
         allowed_hosts: Vec::new(),
         tokens: ws.tokens.clone(),
-        allow_scripts: args.allow_scripts || ws.is_trusted(&collection.id),
+        allow_scripts: args.allow_scripts || args.allow_network || ws.is_trusted(&collection.id),
+        allow_network: args.allow_network || ws.has_network(&collection.id),
         data,
         iterations: args.iterations,
         // Each CLI run starts with an empty jar, so CI runs are reproducible.

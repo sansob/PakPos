@@ -26,7 +26,8 @@ output is not a terminal or `NO_COLOR` is set.
 ```text
 pakpos-cli run <COLLECTION> [-e ENV] [--var k=v]... [--filter TEXT] [--bail]
                [--delay MS] [--timeout S] [-k] [-r cli|json|junit] [-o FILE] [--save-env]
-               [--allow-scripts] [--cert PEM [--key PEM]] [--cacert PEM]
+               [--allow-scripts] [--allow-network] [-d DATA] [-n N]
+               [--cert PEM [--key PEM]] [--cacert PEM]
 ```
 
 `COLLECTION` and `ENV` are file paths (PakPos or Collection v2.1 JSON) or names from the

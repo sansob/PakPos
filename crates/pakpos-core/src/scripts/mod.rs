@@ -6,7 +6,9 @@
 //! no file, process or network access, a memory cap and a time limit.
 //!
 //! Scripts from a collection only run when the user trusts it; see
-//! [`crate::storage::Settings::trusted_collections`].
+//! [`crate::storage::Settings::trusted_collections`]. `pm.sendRequest` also
+//! needs network access for the collection
+//! ([`crate::storage::Settings::network_collections`]).
 
 use crate::assertions::AssertionResult;
 use crate::http::Response;
@@ -19,15 +21,94 @@ use std::time::{Duration, Instant};
 const PRELUDE: &str = include_str!("prelude.js");
 
 /// Limits for one script run.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Limits {
     pub timeout: Duration,
     pub memory_bytes: usize,
+    /// `pm.sendRequest` is only available when this is set (the collection
+    /// has network access, see [`crate::storage::Settings::network_collections`]).
+    pub network: Option<std::sync::Arc<Network>>,
 }
 
 impl Default for Limits {
     fn default() -> Self {
-        Self { timeout: Duration::from_secs(3), memory_bytes: 64 * 1024 * 1024 }
+        Self { timeout: Duration::from_secs(3), memory_bytes: 64 * 1024 * 1024, network: None }
+    }
+}
+
+impl Limits {
+    /// Default limits with network access for `pm.sendRequest`.
+    pub fn with_network(network: Network) -> Self {
+        Self { network: Some(std::sync::Arc::new(network)), ..Default::default() }
+    }
+}
+
+/// What `pm.sendRequest` may do.
+#[derive(Debug, Clone, Default)]
+pub struct Network {
+    pub settings: crate::http::HttpSettings,
+    /// If non-empty, only these hosts (see [`crate::http::host_allowed`]).
+    pub allowed_hosts: Vec<String>,
+    /// Cookie jar shared with the main requests.
+    pub cookies: Option<std::sync::Arc<crate::cookies::SharedJar>>,
+    /// Requests per script run.
+    pub max_requests: usize,
+}
+
+const DEFAULT_MAX_SCRIPT_REQUESTS: usize = 20;
+
+#[derive(Deserialize)]
+struct SendSpec {
+    url: String,
+    #[serde(default)]
+    method: Option<String>,
+    #[serde(default)]
+    headers: Vec<ScriptHeader>,
+    #[serde(default)]
+    body: Option<String>,
+}
+
+/// One `pm.sendRequest` call: JSON spec in, JSON response (or error) out.
+fn script_send(network: &Network, spec_json: &str, count: &std::sync::atomic::AtomicUsize) -> String {
+    let fail = |e: String| serde_json::json!({ "error": e }).to_string();
+    let max = if network.max_requests == 0 { DEFAULT_MAX_SCRIPT_REQUESTS } else { network.max_requests };
+    if count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) >= max {
+        return fail(format!("pm.sendRequest: at most {max} requests per script"));
+    }
+    let spec: SendSpec = match serde_json::from_str(spec_json) {
+        Ok(s) => s,
+        Err(e) => return fail(format!("pm.sendRequest: invalid request ({e})")),
+    };
+    let method = spec.method.unwrap_or_else(|| "GET".into()).to_ascii_uppercase();
+    let url = if spec.url.contains("://") { spec.url } else { format!("http://{}", spec.url) };
+    if !crate::http::host_allowed(&url, &network.allowed_hosts) {
+        return fail(format!("pm.sendRequest: host of `{url}` is not in the allow-list"));
+    }
+    let prepared = crate::http::PreparedRequest {
+        method,
+        url: url.clone(),
+        headers: spec.headers.into_iter().map(|h| (h.key, h.value)).collect(),
+        body: match spec.body {
+            Some(b) => crate::http::PreparedBody::Text(b),
+            None => crate::http::PreparedBody::None,
+        },
+        challenge: None,
+    };
+    let client = match &network.cookies {
+        Some(jar) => crate::http::client_with_jar(&network.settings, &url, jar),
+        None => crate::http::client_for(&network.settings, &url),
+    };
+    match client.and_then(|c| crate::http::send(&c, &prepared)) {
+        Ok(r) => serde_json::json!({
+            "code": r.status,
+            "status": r.status_text,
+            "headers": r.headers.iter().map(|(k, v)| serde_json::json!({ "key": k, "value": v })).collect::<Vec<_>>(),
+            "body": r.text(),
+            "time": r.elapsed_ms as u64,
+            "size": r.size_bytes(),
+        })
+        .to_string(),
+        Err(e) => fail(e.to_string()),
     }
 }
 
@@ -304,12 +385,23 @@ fn execute(source: &str, input_json: &str, limits: Limits) -> Result<Output, Str
     let rt = Runtime::new().map_err(|e| e.to_string())?;
     rt.set_memory_limit(limits.memory_bytes);
     rt.set_max_stack_size(512 * 1024);
-    let deadline = Instant::now() + limits.timeout;
+    let started = Instant::now();
+    // Time spent waiting on pm.sendRequest does not count against the limit.
+    let network_ms = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let past_deadline = {
+        let network_ms = network_ms.clone();
+        let timeout = limits.timeout;
+        move || {
+            let paused = Duration::from_millis(network_ms.load(std::sync::atomic::Ordering::Relaxed));
+            started.elapsed() > timeout + paused
+        }
+    };
     // Disarmed after the user script so results can still be read back.
     let armed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let armed_handler = armed.clone();
+    let check = past_deadline.clone();
     rt.set_interrupt_handler(Some(Box::new(move || {
-        armed_handler.load(std::sync::atomic::Ordering::Relaxed) && Instant::now() > deadline
+        armed_handler.load(std::sync::atomic::Ordering::Relaxed) && check()
     })));
     let ctx = Context::full(&rt).map_err(|e| e.to_string())?;
     ctx.with(|ctx| {
@@ -330,6 +422,18 @@ fn execute(source: &str, input_json: &str, limits: Limits) -> Result<Output, Str
             e.to_string()
         };
         ctx.globals().set("__PAKPOS_INPUT", input_json).map_err(|e| e.to_string())?;
+        if let Some(network) = limits.network.clone() {
+            let count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let waited = network_ms.clone();
+            let send = rquickjs::Function::new(ctx.clone(), move |spec: String| -> String {
+                let t = Instant::now();
+                let out = script_send(&network, &spec, &count);
+                waited.fetch_add(t.elapsed().as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
+                out
+            })
+            .map_err(|e| e.to_string())?;
+            ctx.globals().set("__pakpos_send", send).map_err(|e| e.to_string())?;
+        }
         ctx.eval::<(), _>(PRELUDE).map_err(|e| format!("prelude: {}", describe(&ctx, e)))?;
         // The user script runs in its own function scope; an uncaught error is
         // recorded instead of aborting so tests that already ran still count.
@@ -341,7 +445,7 @@ fn execute(source: &str, input_json: &str, limits: Limits) -> Result<Output, Str
         armed.store(false, std::sync::atomic::Ordering::Relaxed);
         if let Err(e) = result {
             let msg = describe(&ctx, e);
-            let timed_out = Instant::now() > deadline;
+            let timed_out = past_deadline();
             // Interrupted or syntax error: still try to read what was collected.
             let partial: Option<String> = ctx.eval("JSON.stringify(__out)").ok();
             let mut out: Output = partial.and_then(|p| serde_json::from_str(&p).ok()).unwrap_or_default();
@@ -401,7 +505,7 @@ pub fn run_pre_request(
 ) -> ChainResult {
     let mut result = ChainResult::default();
     for s in chain.iter().filter(|s| !s.pre_request.trim().is_empty()) {
-        let out = run(&s.pre_request, Phase::PreRequest, &req.name, &script_request(req), None, scope, limits);
+        let out = run(&s.pre_request, Phase::PreRequest, &req.name, &script_request(req), None, scope, limits.clone());
         if let Some(changed) = &out.request {
             apply_request(req, changed);
         }
@@ -421,7 +525,7 @@ pub fn run_tests(
     let mut result = ChainResult::default();
     let snapshot = script_request(req);
     for s in chain.iter().filter(|s| !s.test.trim().is_empty()) {
-        let out = run(&s.test, Phase::Test, &req.name, &snapshot, Some(response), scope, limits);
+        let out = run(&s.test, Phase::Test, &req.name, &snapshot, Some(response), scope, limits.clone());
         result.absorb("test script", out, scope);
     }
     result

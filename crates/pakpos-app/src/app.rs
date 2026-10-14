@@ -433,12 +433,23 @@ impl PakPosApp {
         let chain = pakpos_core::scripts::chain_for(collection, &req);
         // Unsaved requests are the user's own; saved ones follow collection trust.
         let trusted = tab.source.as_ref().is_none_or(|(c, _)| self.ws.is_trusted(c));
+        // Unsaved requests may use pm.sendRequest; saved ones need the collection's permission.
+        let network = tab.source.as_ref().is_none_or(|(c, _)| self.ws.has_network(c));
+        let script_network = pakpos_core::scripts::Network {
+            settings: self.ws.settings.http.clone(),
+            cookies: Some(self.cookie_jar.clone()),
+            ..Default::default()
+        };
         let run_scripts = trusted && !chain.is_empty();
         let skipped = !trusted && !chain.is_empty();
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let limits = pakpos_core::scripts::Limits::default();
+            let limits = if network {
+                pakpos_core::scripts::Limits::with_network(script_network)
+            } else {
+                pakpos_core::scripts::Limits::default()
+            };
             let mut logs = Vec::new();
             let mut script_tests = Vec::new();
             let mut changes = pakpos_core::scripts::VarChanges::default();
@@ -448,7 +459,7 @@ impl PakPosApp {
                 );
             }
             if run_scripts {
-                let pre = pakpos_core::scripts::run_pre_request(&chain, &mut req, &mut scope, limits);
+                let pre = pakpos_core::scripts::run_pre_request(&chain, &mut req, &mut scope, limits.clone());
                 script_tests.extend(pre.error_results());
                 logs.extend(pre.logs);
                 changes.merge(pre.changes);
@@ -714,6 +725,7 @@ impl PakPosApp {
             tokens: self.ws.tokens.clone(),
             cookies: self.cookie_jar.snapshot(),
             allow_scripts: self.ws.is_trusted(&collection.id),
+            allow_network: self.ws.has_network(&collection.id),
             data: setup.data.clone(),
             iterations: setup.iterations,
             delay_ms: setup.delay_ms,

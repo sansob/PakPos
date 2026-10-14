@@ -34,6 +34,7 @@ or file error. So a failing API check fails the pipeline.
 | `-r, --reporter cli\|json\|junit` and `-o, --out <file>` | Report format and destination |
 | `--save-env` | Write extracted variables back to the environment file |
 | `--allow-scripts` | Run the collection's JavaScript scripts (sandboxed) |
+| `--allow-network` | Also let scripts call `pm.sendRequest` |
 | `-d, --data <file>` | Data-driven run: once per CSV row / JSON object |
 | `-n, --iterations <n>` | Run the collection `n` times (default: one per data row) |
 | `--cert` / `--key` / `--cacert` | Client certificate and private CA (mTLS) |

@@ -250,3 +250,33 @@ fn cookies_from_redirects_are_kept_for_the_next_request() {
     assert_eq!(report.cookies.cookies.len(), 1);
     assert!(report.cookies.cookies[0].http_only);
 }
+
+#[test]
+fn pre_request_script_fetches_a_token_with_send_request() {
+    let base = echo_server();
+    let mut c = Collection::new("Token");
+    let mut req = Request::new(HttpMethod::Get, format!("{base}/api"));
+    req.headers.push(KeyValue::new("Authorization", "Bearer {{token}}"));
+    req.scripts.pre_request = format!(
+        r#"pm.sendRequest({{ url: "{base}/login", method: "POST", body: {{ mode: "raw", raw: "u=budi" }} }}, (err, res) => {{
+            pm.environment.set("token", res.json().token);
+        }});"#
+    );
+    req.assertions = vec![Assertion {
+        enabled: true,
+        target: "json.auth".into(),
+        op: Operator::Equals,
+        expected: "Bearer tok-123".into(),
+    }];
+    c.items.push(Item::Request(req));
+    let mut env = Environment::new("Local");
+
+    let without =
+        run_collection(&c, Some(&mut env.clone()), &RunOptions { allow_scripts: true, ..Default::default() }, |_| {});
+    assert!(!without.passed());
+
+    let options = RunOptions { allow_scripts: true, allow_network: true, ..Default::default() };
+    let report = run_collection(&c, Some(&mut env), &options, |_| {});
+    assert!(report.passed(), "{:?}", report.requests);
+    assert_eq!(env.get("token"), Some("tok-123"));
+}

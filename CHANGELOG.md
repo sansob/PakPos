@@ -23,6 +23,9 @@ All notable changes to this project are documented here. The format follows
 - Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
   view (copy a value or its test path), image preview and a simplified HTML
   preview with *Open in browser*; *Save* picks the extension from the content type.
+- `pm.sendRequest` in scripts, behind a per-collection network permission
+  (trusted collections only, stored in settings); `pakpos-cli run --allow-network`;
+  host allow-list, request cap and cookie jar apply.
 - Drag & drop in the sidebar: reorder requests and folders, move them into
   folders or to another collection; open tabs follow moved requests.
 

@@ -528,6 +528,8 @@ impl PakPosApp {
         use crate::app::CollectionTab;
         let p = self.palette;
         let trusted = self.ws.is_trusted(id);
+        let mut network = self.ws.settings.network_collections.iter().any(|c| c == id);
+        let network_before = network;
         let Some(idx) = self.ws.collections.iter().position(|c| c.id == id) else { return false };
         let mut open = true;
         let mut changed = false;
@@ -590,11 +592,31 @@ impl PakPosApp {
                         if action.is_some() {
                             trust = Some(c.id.clone());
                         }
+                        ui.add_space(8.0);
+                        ui.add_enabled_ui(trusted, |ui| {
+                            ui.checkbox(&mut network, "Allow network access for scripts (pm.sendRequest)")
+                                .on_disabled_hover_text("Trust the collection first");
+                        });
+                        ui.label(
+                            RichText::new(
+                                "Lets this collection's scripts send their own HTTP requests (e.g. to fetch a token). Stored in your settings, not in the collection file.",
+                            )
+                            .small()
+                            .color(p.text_weak),
+                        );
                     }
                 });
             });
         if let Some(cid) = trust {
             self.trust_collection(&cid);
+        }
+        if network != network_before {
+            let list = &mut self.ws.settings.network_collections;
+            list.retain(|c| c != id);
+            if network {
+                list.push(id.to_string());
+            }
+            let _ = self.ws.save_settings();
         }
         if changed {
             self.collection_dirty = Some((id.to_string(), std::time::Instant::now()));

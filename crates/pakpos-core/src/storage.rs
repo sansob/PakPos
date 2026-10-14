@@ -53,6 +53,9 @@ pub struct Settings {
     /// collection file, so a shared or imported collection cannot trust itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub trusted_collections: Vec<String>,
+    /// Trusted collections whose scripts may also call `pm.sendRequest`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub network_collections: Vec<String>,
 }
 
 fn default_theme() -> Theme {
@@ -71,6 +74,7 @@ impl Default for Settings {
             active_environment: None,
             font_scale_percent: 100,
             trusted_collections: Vec::new(),
+            network_collections: Vec::new(),
         }
     }
 }
@@ -244,6 +248,11 @@ impl Workspace {
 
     pub fn is_trusted(&self, collection_id: &str) -> bool {
         self.settings.trusted_collections.iter().any(|c| c == collection_id)
+    }
+
+    /// May this collection's scripts send requests (`pm.sendRequest`)? Only trusted ones can.
+    pub fn has_network(&self, collection_id: &str) -> bool {
+        self.is_trusted(collection_id) && self.settings.network_collections.iter().any(|c| c == collection_id)
     }
 
     pub fn active_environment(&self) -> Option<&Environment> {
