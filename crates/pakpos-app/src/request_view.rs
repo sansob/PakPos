@@ -130,6 +130,18 @@ impl PakPosApp {
         let gql_loading = self.graphql.job.as_ref().is_some_and(|(k, _)| k == &gql_key);
         let mut gql_action = None;
         let mut ws_action = None;
+        let mut script_action = None;
+        let (script_trust, inherited_scripts, source_collection) = {
+            let t = &self.tabs[idx];
+            match t.source.as_ref().and_then(|(c, _)| self.collection(c)) {
+                Some(c) => (
+                    Some(self.ws.is_trusted(&c.id) || !c.has_scripts()),
+                    c.script_chain(&t.request.id).len(),
+                    Some(c.id.clone()),
+                ),
+                None => (None, 0, None),
+            }
+        };
         let oauth_job = self.oauth_job.as_ref();
         let tab = &mut self.tabs[idx];
         let mut changed = false;
@@ -289,10 +301,11 @@ impl PakPosApp {
             (ReqSection::Body, body_label),
             (ReqSection::Tests, widgets::counted("Tests", r.assertions.len())),
             (ReqSection::Extract, widgets::counted("Extract", r.extractions.len())),
+            (ReqSection::Scripts, if r.scripts.is_empty() { "Scripts".to_string() } else { "Scripts ●".to_string() }),
             (ReqSection::Docs, "Docs".to_string()),
         ];
         if r.kind == RequestKind::WebSocket {
-            items.retain(|(s, _)| !matches!(s, ReqSection::Tests | ReqSection::Extract));
+            items.retain(|(s, _)| !matches!(s, ReqSection::Tests | ReqSection::Extract | ReqSection::Scripts));
             items[3].1 = "Message".to_string();
         }
         widgets::tab_bar(ui, &mut tab.section, &items);
@@ -355,6 +368,17 @@ impl PakPosApp {
                 }
                 ReqSection::Tests => changed |= tests_editor(ui, &mut tab.request.assertions, &p),
                 ReqSection::Extract => changed |= extract_editor(ui, &mut tab.request.extractions, &p),
+                ReqSection::Scripts => {
+                    changed |= crate::scripts_view::scripts_editor(
+                        ui,
+                        &mut tab.request.scripts,
+                        tab.uid,
+                        script_trust,
+                        inherited_scripts,
+                        &p,
+                        &mut script_action,
+                    );
+                }
                 ReqSection::Docs => {
                     widgets::section_title(ui, "Description (Markdown)");
                     changed |= ui
@@ -371,6 +395,9 @@ impl PakPosApp {
 
         if changed {
             tab.dirty = true;
+        }
+        if let (Some(crate::scripts_view::ScriptAction::Trust), Some(cid)) = (script_action, source_collection) {
+            self.trust_collection(&cid);
         }
         if let Some(a) = ws_action {
             let ctx = ui.ctx().clone();

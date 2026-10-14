@@ -96,6 +96,7 @@ impl PakPosApp {
                             format!("Tests ({passed}/{})", outcome.tests.len())
                         },
                     ),
+                    (RespSection::Console, widgets::counted("Console", outcome.logs.len())),
                     (RespSection::Request, "Request".to_string()),
                 ];
                 widgets::tab_bar(ui, &mut tab.resp_section, &items);
@@ -201,6 +202,7 @@ impl PakPosApp {
                             },
                         );
                     }
+                    RespSection::Console => crate::scripts_view::console(ui, &outcome.logs, tab.uid, &p),
                     RespSection::Request => {
                         let pr = &outcome.prepared;
                         egui::ScrollArea::vertical().id_salt(("resp_req", tab.uid)).auto_shrink([false, false]).show(

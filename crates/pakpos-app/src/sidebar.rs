@@ -164,6 +164,12 @@ impl PakPosApp {
                     if ui.button("📁 Add folder").clicked() {
                         pending.push(Action::NewFolderIn { collection: c.id.clone(), folder: None });
                     }
+                    if ui.button("⚙ Edit collection…").clicked() {
+                        pending.push(Action::Dialog(Dialog::CollectionSettings {
+                            id: c.id.clone(),
+                            tab: crate::app::CollectionTab::General,
+                        }));
+                    }
                     if ui.button("▶ Run collection").clicked() {
                         pending.push(Action::RunCollection(c.id.clone()));
                     }

@@ -361,6 +361,50 @@
               "query": []
             }
           }
+        },
+        {
+          "name": "Scripted checks (JavaScript)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/json",
+              "query": []
+            },
+            "description": "Postman-style pm.* scripts, run in a sandbox. Collections you import must be trusted before their scripts run."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Runs before sending: add a trace header.",
+                  "pm.request.headers.upsert({ key: \"X-Trace-Id\", value: pm.variables.replaceIn(\"{{$guid}}\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Slideshow has slides\", () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.slideshow.slides).to.be.an(\"array\").that.is.not.empty;",
+                  "  pm.expect(json.slideshow.author).to.eql(\"PakPos\");",
+                  "});",
+                  "",
+                  "pm.environment.set(\"slide_count\", pm.response.json().slideshow.slides.length);",
+                  "console.log(\"slides:\", pm.environment.get(\"slide_count\"));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

@@ -23,6 +23,7 @@ pub enum ReqSection {
     Body,
     Tests,
     Extract,
+    Scripts,
     Docs,
 }
 
@@ -31,6 +32,7 @@ pub enum RespSection {
     Body,
     Headers,
     Tests,
+    Console,
     Request,
 }
 
@@ -50,6 +52,10 @@ pub struct Outcome {
     pub extracted: Vec<(String, String)>,
     /// OAuth 2.0 token obtained or refreshed for this send, to store.
     pub new_token: Option<(String, pakpos_core::oauth2::OAuthToken)>,
+    /// Script console output.
+    pub logs: Vec<String>,
+    /// Variables set by scripts, to persist.
+    pub script_changes: pakpos_core::scripts::VarChanges,
 }
 
 pub enum ResponseState {
@@ -103,7 +109,15 @@ pub enum DeleteTarget {
     Environment(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollectionTab {
+    General,
+    Variables,
+    Scripts,
+}
+
 pub enum Dialog {
+    CollectionSettings { id: String, tab: CollectionTab },
     ImportCurl { text: String, error: Option<String> },
     SaveRequest { tab: usize, collection: Option<String>, new_collection: String, name: String },
     Rename { target: RenameTarget, name: String },
@@ -168,6 +182,8 @@ pub struct PakPosApp {
     pub dialog: Option<Dialog>,
     pub toasts: Vec<Toast>,
     pub env_dirty: Option<Instant>,
+    /// Collection edited in the settings dialog, saved after a short pause.
+    pub collection_dirty: Option<(String, Instant)>,
     pub runner: Option<RunnerState>,
     pub oauth_job: Option<crate::oauth_view::OAuthJob>,
     pub graphql: crate::graphql_view::GqlState,
@@ -190,6 +206,7 @@ impl PakPosApp {
             dialog: None,
             toasts: Vec::new(),
             env_dirty: None,
+            collection_dirty: None,
             runner: None,
             oauth_job: None,
             graphql: Default::default(),
@@ -337,9 +354,30 @@ impl PakPosApp {
         let fallback = self.inherited_auth(tab);
         let settings = self.ws.settings.http.clone();
         let mut tokens = self.ws.tokens.clone();
+        let collection = tab.source.as_ref().and_then(|(c, _)| self.collection(c));
+        let chain = pakpos_core::scripts::chain_for(collection, &req);
+        // Unsaved requests are the user's own; saved ones follow collection trust.
+        let trusted = tab.source.as_ref().is_none_or(|(c, _)| self.ws.is_trusted(c));
+        let run_scripts = trusted && !chain.is_empty();
+        let skipped = !trusted && !chain.is_empty();
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
+            let limits = pakpos_core::scripts::Limits::default();
+            let mut logs = Vec::new();
+            let mut script_tests = Vec::new();
+            let mut changes = pakpos_core::scripts::VarChanges::default();
+            if skipped {
+                logs.push(
+                    "Scripts were not run: this collection is not trusted (see the banner in the Scripts tab).".into(),
+                );
+            }
+            if run_scripts {
+                let pre = pakpos_core::scripts::run_pre_request(&chain, &mut req, &mut scope, limits);
+                script_tests.extend(pre.error_results());
+                logs.extend(pre.logs);
+                changes.merge(pre.changes);
+            }
             let effective = match &req.auth {
                 Auth::Inherit => fallback.clone().unwrap_or(Auth::None),
                 a => a.clone(),
@@ -366,9 +404,17 @@ impl PakPosApp {
                 })
                 .map(|(prepared, response)| {
                     let pretty = if response.body.len() > 2_000_000 { response.text() } else { response.pretty_body() };
-                    let tests = assertions::run_all(&response, &req.assertions, |s| scope.resolve(s));
+                    let mut tests = assertions::run_all(&response, &req.assertions, |s| scope.resolve(s));
                     let extracted = assertions::extract_all(&response, &req.extractions);
-                    Outcome { prepared, response, pretty, tests, extracted, new_token }
+                    if run_scripts {
+                        let t = pakpos_core::scripts::run_tests(&chain, &req, &response, &mut scope, limits);
+                        tests.extend(t.tests.iter().cloned());
+                        script_tests.extend(t.error_results());
+                        logs.extend(t.logs.iter().cloned());
+                        changes.merge(t.changes);
+                    }
+                    tests.extend(script_tests);
+                    Outcome { prepared, response, pretty, tests, extracted, new_token, logs, script_changes: changes }
                 })
                 .map_err(|e| e.to_string());
             let _ = tx.send(result);
@@ -399,6 +445,8 @@ impl PakPosApp {
                         self.ws.tokens.insert(key, token);
                         let _ = self.ws.save_tokens();
                     }
+                    let source = self.tabs[i].source.clone();
+                    self.apply_script_changes(&outcome.script_changes, source.as_ref().map(|(c, _)| c.as_str()));
                     if !outcome.extracted.is_empty() {
                         let names: Vec<String> =
                             outcome.extracted.iter().map(|(k, _)| format!("{{{{{k}}}}}")).collect();
@@ -435,6 +483,39 @@ impl PakPosApp {
                 }
             }
             let _ = self.ws.save_history();
+        }
+    }
+
+    pub fn trust_collection(&mut self, id: &str) {
+        if !self.ws.is_trusted(id) {
+            self.ws.settings.trusted_collections.push(id.to_string());
+            self.persist_settings();
+            self.toast("Collection trusted: its scripts will run");
+        }
+    }
+
+    /// Persists variables set by scripts (environment, collection, globals).
+    pub fn apply_script_changes(&mut self, changes: &pakpos_core::scripts::VarChanges, collection: Option<&str>) {
+        use pakpos_core::scripts::VarChanges;
+        if changes.is_empty() {
+            return;
+        }
+        if !changes.environment.is_empty() {
+            match self.ws.active_environment_mut() {
+                Some(env) => VarChanges::apply_to_list(&mut env.variables, &changes.environment),
+                None => VarChanges::apply_to_list(&mut self.ws.globals, &changes.environment),
+            }
+            self.env_dirty = Some(Instant::now());
+        }
+        if !changes.globals.is_empty() {
+            VarChanges::apply_to_list(&mut self.ws.globals, &changes.globals);
+            self.env_dirty = Some(Instant::now());
+        }
+        if let (false, Some(cid)) = (changes.collection.is_empty(), collection) {
+            if let Some(c) = self.collection_mut(cid) {
+                VarChanges::apply_to_list(&mut c.variables, &changes.collection);
+            }
+            self.persist_collection(cid);
         }
     }
 
@@ -778,6 +859,12 @@ impl eframe::App for PakPosApp {
         if let Some(t) = self.env_dirty {
             if t.elapsed() > Duration::from_millis(600) {
                 self.persist_environments();
+            }
+        }
+        if let Some((id, t)) = self.collection_dirty.clone() {
+            if t.elapsed() > Duration::from_millis(600) {
+                self.persist_collection(&id);
+                self.collection_dirty = None;
             }
         }
     }

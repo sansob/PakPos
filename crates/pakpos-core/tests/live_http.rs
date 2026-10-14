@@ -119,3 +119,41 @@ fn connection_error_is_reported() {
     let settings = HttpSettings { timeout_secs: 2, ..Default::default() };
     assert!(http::execute(&req, &VarScope::new(), None, &settings).is_err());
 }
+
+#[test]
+fn runner_executes_trusted_scripts_only() {
+    use pakpos_core::model::Scripts;
+    let base = echo_server();
+    let mut env = Environment::new("e");
+    env.set("base", base);
+    let mut c = Collection::new("scripted");
+    c.scripts = Scripts { pre_request: "pm.variables.set('tok', 's1');".into(), test: String::new() };
+    let mut r = Request::new(HttpMethod::Get, "{{base}}/me");
+    r.name = "Me".into();
+    r.scripts = Scripts {
+        pre_request: "pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + pm.variables.get('tok') });"
+            .into(),
+        test: r#"
+            pm.test("server saw the header", () => pm.expect(pm.response.json().auth).to.equal("Bearer s1"));
+            pm.environment.set("seen", "yes");
+            console.log("done");
+        "#
+        .into(),
+    };
+    c.items = vec![Item::Request(r)];
+
+    // Untrusted: scripts are skipped and the run says so.
+    let report = run_collection(&c, Some(&mut env), &RunOptions::default(), |_| {});
+    assert!(report.requests[0].assertions.is_empty());
+    assert!(report.requests[0].logs[0].contains("not trusted"));
+    assert_eq!(env.get("seen"), None);
+
+    // Trusted.
+    let opts = RunOptions { allow_scripts: true, ..Default::default() };
+    let report = run_collection(&c, Some(&mut env), &opts, |_| {});
+    let r = &report.requests[0];
+    assert!(r.passed(), "{:?} {:?}", r.assertions, r.logs);
+    assert_eq!(r.assertions.len(), 1);
+    assert_eq!(r.logs, vec!["done"]);
+    assert_eq!(env.get("seen"), Some("yes"));
+}

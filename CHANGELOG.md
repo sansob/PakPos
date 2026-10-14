@@ -15,6 +15,12 @@ All notable changes to this project are documented here. The format follows
   explorer powered by introspection, and Postman GraphQL import/export.
 - WebSocket requests: connect with params, headers and auth, compose and send
   messages, live message log; `pakpos-cli ws` for the terminal.
+- Postman-compatible JavaScript pre-request and post-response scripts (`pm.*`,
+  chai-style `expect`, console) at collection, folder and request level, run in
+  a QuickJS sandbox without file/network access and with time/memory limits.
+  Imported collections must be trusted before their scripts run; the CLI needs
+  `--allow-scripts`. Postman scripts are now imported instead of dropped.
+- Collection settings dialog: description, collection variables and scripts.
 
 ## [0.1.0-rc.1] - 2026-10-14
 

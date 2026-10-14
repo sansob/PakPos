@@ -50,8 +50,10 @@ stopping the app.
 ```
 
 - `url` never contains the query string; query parameters live in `params`.
-- `kind` is omitted for HTTP; `"websocket"` marks a WebSocket request (its raw
+- `protocol` is omitted for HTTP; `"websocket"` marks a WebSocket request (its raw
   `body` is the message draft).
+- `scripts` (`pre_request`, `test`) holds JavaScript; it may also appear on
+  folders and the collection.
 - `body.mode`: `none`, `raw` (`language`: `json`, `text`, `xml`, `html`, `javascript`),
   `form_url_encoded` (`fields`), `multipart` (`fields` with `is_file`), `binary` (`path`),
   `graphql` (`query`, `variables` as JSON text, `operation_name`).

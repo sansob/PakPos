@@ -23,6 +23,7 @@ pub mod oauth2;
 pub mod postman;
 pub mod runner;
 pub mod samples;
+pub mod scripts;
 pub mod storage;
 pub mod vars;
 pub mod ws;

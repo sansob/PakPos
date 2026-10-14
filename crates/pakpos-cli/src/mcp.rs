@@ -23,6 +23,8 @@ const MAX_BODY_CHARS: usize = 100_000;
 pub struct McpConfig {
     pub allowed_hosts: Vec<String>,
     pub allow_write: bool,
+    /// Run scripts of collections trusted in the app.
+    pub allow_scripts: bool,
     pub workspace_root: PathBuf,
 }
 
@@ -309,6 +311,7 @@ impl Server {
                     globals: ws.globals.clone(),
                     allowed_hosts: self.config.allowed_hosts.clone(),
                     tokens: ws.tokens.clone(),
+                    allow_scripts: self.config.allow_scripts && ws.is_trusted(&c.id),
                     ..Default::default()
                 };
                 let report = run_collection(&c, env.as_mut(), &options, |_| {});
@@ -427,7 +430,12 @@ mod tests {
     use super::*;
 
     fn server(dir: &std::path::Path, hosts: Vec<String>) -> Server {
-        Server::new(McpConfig { allowed_hosts: hosts, allow_write: true, workspace_root: dir.to_path_buf() })
+        Server::new(McpConfig {
+            allowed_hosts: hosts,
+            allow_write: true,
+            allow_scripts: false,
+            workspace_root: dir.to_path_buf(),
+        })
     }
 
     #[test]

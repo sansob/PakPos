@@ -49,6 +49,10 @@ pub struct Settings {
     pub active_environment: Option<String>,
     #[serde(default = "default_font_scale")]
     pub font_scale_percent: u32,
+    /// Collections whose JavaScript scripts may run. Stored here, not in the
+    /// collection file, so a shared or imported collection cannot trust itself.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trusted_collections: Vec<String>,
 }
 
 fn default_theme() -> Theme {
@@ -61,7 +65,13 @@ fn default_font_scale() -> u32 {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { http: HttpSettings::default(), theme: Theme::Dark, active_environment: None, font_scale_percent: 100 }
+        Self {
+            http: HttpSettings::default(),
+            theme: Theme::Dark,
+            active_environment: None,
+            font_scale_percent: 100,
+            trusted_collections: Vec::new(),
+        }
     }
 }
 
@@ -223,6 +233,10 @@ impl Workspace {
             HistoryEntry { id: crate::model::new_id(), timestamp: chrono::Utc::now(), request, status, elapsed_ms },
         );
         self.history.truncate(HISTORY_LIMIT);
+    }
+
+    pub fn is_trusted(&self, collection_id: &str) -> bool {
+        self.settings.trusted_collections.iter().any(|c| c == collection_id)
     }
 
     pub fn active_environment(&self) -> Option<&Environment> {

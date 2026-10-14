@@ -99,12 +99,19 @@ pub fn demo_collection() -> Collection {
     };
     ws.description = "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds.".into();
 
+    let mut scripted = req("Scripted checks (JavaScript)", HttpMethod::Get, "{{base_url}}/json");
+    scripted.scripts = crate::model::Scripts {
+        pre_request: "// Runs before sending: add a trace header.\npm.request.headers.upsert({ key: \"X-Trace-Id\", value: pm.variables.replaceIn(\"{{$guid}}\") });\n".into(),
+        test: "pm.test(\"Status code is 200\", () => {\n  pm.response.to.have.status(200);\n});\n\npm.test(\"Slideshow has slides\", () => {\n  const json = pm.response.json();\n  pm.expect(json.slideshow.slides).to.be.an(\"array\").that.is.not.empty;\n  pm.expect(json.slideshow.author).to.eql(\"PakPos\");\n});\n\npm.environment.set(\"slide_count\", pm.response.json().slideshow.slides.length);\nconsole.log(\"slides:\", pm.environment.get(\"slide_count\"));\n".into(),
+    };
+    scripted.description = "Postman-style pm.* scripts, run in a sandbox. Collections you import must be trusted before their scripts run.".into();
+
     let mut basics = Folder::new("Basics");
     basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
     auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(oauth)];
     let mut responses = Folder::new("Responses");
-    responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found)];
+    responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found), Item::Request(scripted)];
     let mut graphql = Folder::new("GraphQL");
     graphql.items = vec![Item::Request(gql)];
     let mut realtime = Folder::new("Realtime");
@@ -138,7 +145,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 14);
+        assert_eq!(c.request_count(), 15);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

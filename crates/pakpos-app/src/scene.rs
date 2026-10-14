@@ -102,6 +102,12 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].section = ReqSection::Auth;
             app.send(app.active, ctx);
         }
+        "scripts" => {
+            open_by_name(app, "Scripted checks (JavaScript)");
+            app.tabs[app.active].section = ReqSection::Scripts;
+            app.tabs[app.active].resp_section = RespSection::Tests;
+            app.send(app.active, ctx);
+        }
         "websocket" => {
             open_by_name(app, "Live prices (WebSocket)");
             app.tabs[app.active].section = ReqSection::Body;

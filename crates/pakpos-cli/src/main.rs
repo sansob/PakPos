@@ -90,6 +90,9 @@ enum Command {
         /// Allow saving new requests into the workspace.
         #[arg(long)]
         allow_write: bool,
+        /// Run JavaScript scripts of collections you trusted in the app.
+        #[arg(long)]
+        allow_scripts: bool,
     },
 }
 
@@ -142,6 +145,10 @@ struct RunArgs {
     /// Write extracted variables back into the environment file.
     #[arg(long)]
     save_env: bool,
+    /// Run the collection's JavaScript pre-request / test scripts (sandboxed).
+    /// Collections trusted in the desktop app run their scripts without this flag.
+    #[arg(long)]
+    allow_scripts: bool,
 }
 
 #[derive(clap::Args)]
@@ -269,10 +276,11 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Command::Mcp { allow_hosts, allow_write } => {
+        Command::Mcp { allow_hosts, allow_write, allow_scripts } => {
             mcp::serve(mcp::McpConfig {
                 allowed_hosts: allow_hosts,
                 allow_write,
+                allow_scripts,
                 workspace_root: storage::default_root(),
             })?;
             Ok(ExitCode::SUCCESS)
@@ -361,6 +369,7 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         overrides: args.vars.clone(),
         allowed_hosts: Vec::new(),
         tokens: ws.tokens.clone(),
+        allow_scripts: args.allow_scripts || ws.is_trusted(&collection.id),
     };
 
     let cli_reporter = args.reporter == Reporter::Cli;
@@ -396,6 +405,9 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
             } else {
                 println!("    {} {} {}", style.red("✗"), a.name, style.dim(&format!("({})", a.message)));
             }
+        }
+        for line in &r.logs {
+            println!("    {} {}", style.dim("›"), style.dim(line));
         }
         for (k, v) in &r.extracted {
             println!("    {} {{{{{k}}}}} = {}", style.dim("↳"), style.dim(&truncate(v, 60)));

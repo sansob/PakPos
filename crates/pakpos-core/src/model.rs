@@ -505,6 +505,21 @@ pub struct Extraction {
     pub source: String,
 }
 
+/// JavaScript run before the request is sent and after the response arrives.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Scripts {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pre_request: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub test: String,
+}
+
+impl Scripts {
+    pub fn is_empty(&self) -> bool {
+        self.pre_request.trim().is_empty() && self.test.trim().is_empty()
+    }
+}
+
 /// Protocol of a request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -528,7 +543,8 @@ pub struct Request {
     #[serde(default = "new_id")]
     pub id: String,
     pub name: String,
-    #[serde(default, skip_serializing_if = "RequestKind::is_http")]
+    /// Serialized as `protocol` because `kind` is the tree item tag.
+    #[serde(default, rename = "protocol", skip_serializing_if = "RequestKind::is_http")]
     pub kind: RequestKind,
     #[serde(default)]
     pub method: HttpMethod,
@@ -545,6 +561,8 @@ pub struct Request {
     pub assertions: Vec<Assertion>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extractions: Vec<Extraction>,
+    #[serde(default, skip_serializing_if = "Scripts::is_empty")]
+    pub scripts: Scripts,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
@@ -563,6 +581,7 @@ impl Default for Request {
             auth: Auth::Inherit,
             assertions: Vec::new(),
             extractions: Vec::new(),
+            scripts: Scripts::default(),
             description: String::new(),
         }
     }
@@ -595,13 +614,22 @@ pub struct Folder {
     pub items: Vec<Item>,
     #[serde(default)]
     pub auth: Auth,
+    #[serde(default, skip_serializing_if = "Scripts::is_empty")]
+    pub scripts: Scripts,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
 
 impl Folder {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { id: new_id(), name: name.into(), items: Vec::new(), auth: Auth::Inherit, description: String::new() }
+        Self {
+            id: new_id(),
+            name: name.into(),
+            items: Vec::new(),
+            auth: Auth::Inherit,
+            scripts: Scripts::default(),
+            description: String::new(),
+        }
     }
 }
 
@@ -645,6 +673,9 @@ pub struct Collection {
     /// Collection-level auth applied to requests that inherit.
     #[serde(default = "auth_none")]
     pub auth: Auth,
+    /// Scripts that run around every request of the collection.
+    #[serde(default, skip_serializing_if = "Scripts::is_empty")]
+    pub scripts: Scripts,
 }
 
 fn auth_none() -> Auth {
@@ -660,6 +691,7 @@ impl Collection {
             items: Vec::new(),
             variables: Vec::new(),
             auth: Auth::None,
+            scripts: Scripts::default(),
         }
     }
 
@@ -687,6 +719,44 @@ impl Collection {
         let mut out = Vec::new();
         walk(&self.items, &mut Vec::new(), &self.auth, &mut out);
         out
+    }
+
+    /// Collection and folder scripts that wrap a request, outermost first
+    /// (the request's own scripts are not included).
+    pub fn script_chain(&self, request_id: &str) -> Vec<Scripts> {
+        fn walk(items: &[Item], id: &str, chain: &mut Vec<Scripts>) -> bool {
+            for item in items {
+                match item {
+                    Item::Request(r) if r.id == id => return true,
+                    Item::Folder(f) => {
+                        chain.push(f.scripts.clone());
+                        if walk(&f.items, id, chain) {
+                            return true;
+                        }
+                        chain.pop();
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        let mut chain = vec![self.scripts.clone()];
+        if !walk(&self.items, request_id, &mut chain) {
+            chain.truncate(1);
+        }
+        chain.retain(|s| !s.is_empty());
+        chain
+    }
+
+    /// Whether any script exists anywhere in the collection.
+    pub fn has_scripts(&self) -> bool {
+        fn walk(items: &[Item]) -> bool {
+            items.iter().any(|i| match i {
+                Item::Request(r) => !r.scripts.is_empty(),
+                Item::Folder(f) => !f.scripts.is_empty() || walk(&f.items),
+            })
+        }
+        !self.scripts.is_empty() || walk(&self.items)
     }
 
     pub fn find_request(&self, id: &str) -> Option<&Request> {
@@ -837,6 +907,16 @@ mod tests {
         c.items.push(Item::Folder(f));
         assert!(c.remove_item(&id).is_some());
         assert_eq!(c.request_count(), 0);
+    }
+
+    #[test]
+    fn every_request_kind_and_body_roundtrips_in_a_tree() {
+        // The demo uses every protocol, body type and auth kind.
+        let c = crate::samples::demo_collection();
+        let json = serde_json::to_string_pretty(&c).unwrap();
+        let back: Collection = serde_json::from_str(&json).unwrap();
+        assert_eq!(c, back);
+        assert!(json.contains("\"protocol\": \"websocket\""));
     }
 
     #[test]

@@ -5,7 +5,7 @@
 
 use crate::model::{
     ApiKeyLocation, Auth, Body, ClientAuthMethod, Collection, Environment, Folder, FormField, HttpMethod, Item,
-    KeyValue, OAuth2Config, OAuth2Grant, RawLanguage, Request,
+    KeyValue, OAuth2Config, OAuth2Grant, RawLanguage, Request, Scripts,
 };
 use serde_json::{json, Map, Value};
 
@@ -250,6 +250,40 @@ fn parse_body(v: Option<&Value>, warnings: &mut Vec<String>) -> Body {
     }
 }
 
+/// Postman `event` array → pre-request / test scripts.
+fn parse_events(v: Option<&Value>) -> Scripts {
+    let mut scripts = Scripts::default();
+    for e in v.and_then(Value::as_array).into_iter().flatten() {
+        let exec = match e.pointer("/script/exec") {
+            Some(Value::Array(lines)) => lines.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("\n"),
+            Some(Value::String(s)) => s.clone(),
+            _ => continue,
+        };
+        if e.get("disabled").and_then(Value::as_bool).unwrap_or(false) || exec.trim().is_empty() {
+            continue;
+        }
+        match e.get("listen").and_then(Value::as_str) {
+            Some("prerequest") => scripts.pre_request = exec,
+            Some("test") => scripts.test = exec,
+            _ => {}
+        }
+    }
+    scripts
+}
+
+fn events_to_json(s: &Scripts) -> Option<Value> {
+    let mut out = Vec::new();
+    for (listen, src) in [("prerequest", &s.pre_request), ("test", &s.test)] {
+        if !src.trim().is_empty() {
+            out.push(json!({
+                "listen": listen,
+                "script": { "type": "text/javascript", "exec": src.lines().collect::<Vec<_>>() }
+            }));
+        }
+    }
+    (!out.is_empty()).then_some(Value::Array(out))
+}
+
 fn parse_items(items: Option<&Value>, warnings: &mut Vec<String>) -> Vec<Item> {
     let Some(items) = items.and_then(Value::as_array) else {
         return Vec::new();
@@ -257,18 +291,13 @@ fn parse_items(items: Option<&Value>, warnings: &mut Vec<String>) -> Vec<Item> {
     items
         .iter()
         .map(|it| {
-            if it.get("event").and_then(Value::as_array).is_some_and(|e| !e.is_empty()) {
-                warnings.push(format!(
-                    "`{}`: JavaScript scripts are not executed by PakPos; use Tests/Extract instead",
-                    s(it, "name")
-                ));
-            }
             if it.get("item").is_some() {
                 Item::Folder(Folder {
                     id: crate::model::new_id(),
                     name: s(it, "name"),
                     items: parse_items(it.get("item"), warnings),
                     auth: parse_auth(it.get("auth"), warnings),
+                    scripts: parse_events(it.get("event")),
                     description: description(it),
                 })
             } else {
@@ -302,6 +331,7 @@ fn parse_items(items: Option<&Value>, warnings: &mut Vec<String>) -> Vec<Item> {
                     body,
                     auth,
                     description: desc,
+                    scripts: parse_events(it.get("event")),
                     ..Default::default()
                 })
             }
@@ -335,7 +365,12 @@ pub fn import_collection(json_text: &str) -> Result<Imported<Collection>, Postma
         items: parse_items(root.get("item"), &mut warnings),
         variables: kv_list(root.get("variable")),
         auth,
+        scripts: parse_events(root.get("event")),
     };
+    if collection.has_scripts() {
+        warnings
+            .push("this collection contains JavaScript scripts; they only run after you trust the collection".into());
+    }
     warnings.dedup();
     Ok(Imported { value: collection, warnings })
 }
@@ -493,6 +528,9 @@ fn items_to_json(items: &[Item]) -> Value {
                     let mut m = Map::new();
                     m.insert("name".into(), json!(f.name));
                     m.insert("item".into(), items_to_json(&f.items));
+                    if let Some(ev) = events_to_json(&f.scripts) {
+                        m.insert("event".into(), ev);
+                    }
                     if let Some(a) = auth_to_json(&f.auth) {
                         m.insert("auth".into(), a);
                     }
@@ -515,7 +553,11 @@ fn items_to_json(items: &[Item]) -> Value {
                     if !r.description.is_empty() {
                         req.insert("description".into(), json!(r.description));
                     }
-                    json!({ "name": r.name, "request": Value::Object(req) })
+                    let mut item = json!({ "name": r.name, "request": Value::Object(req) });
+                    if let Some(ev) = events_to_json(&r.scripts) {
+                        item["event"] = ev;
+                    }
+                    item
                 }
             })
             .collect(),
@@ -535,6 +577,9 @@ pub fn export_collection(c: &Collection) -> String {
         }),
     );
     root.insert("item".into(), items_to_json(&c.items));
+    if let Some(ev) = events_to_json(&c.scripts) {
+        root.insert("event".into(), ev);
+    }
     if let Some(a) = auth_to_json(&c.auth) {
         root.insert("auth".into(), a);
     }

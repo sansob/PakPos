@@ -22,6 +22,7 @@ output is not a terminal or `NO_COLOR` is set.
 ```text
 pakpos-cli run <COLLECTION> [-e ENV] [--var k=v]... [--filter TEXT] [--bail]
                [--delay MS] [--timeout S] [-k] [-r cli|json|junit] [-o FILE] [--save-env]
+               [--allow-scripts]
 ```
 
 `COLLECTION` and `ENV` are file paths (PakPos or Postman JSON) or names from the
@@ -61,7 +62,7 @@ See [WebSocket](websocket.md).
 ## mcp
 
 ```text
-pakpos-cli mcp [--allow-host HOST]... [--allow-write]
+pakpos-cli mcp [--allow-host HOST]... [--allow-write] [--allow-scripts]
 ```
 
 See [MCP server](mcp.md).

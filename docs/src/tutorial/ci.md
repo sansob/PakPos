@@ -33,6 +33,7 @@ or file error. So a failing API check fails the pipeline.
 | `--timeout <s>` / `-k, --insecure` | Timeout / skip TLS verification |
 | `-r, --reporter cli\|json\|junit` and `-o, --out <file>` | Report format and destination |
 | `--save-env` | Write extracted variables back to the environment file |
+| `--allow-scripts` | Run the collection's JavaScript scripts (sandboxed) |
 
 ## GitHub Actions
 

@@ -5,12 +5,12 @@
   "items": [
     {
       "kind": "folder",
-      "id": "fd708cd0-4c24-45ac-a184-20b91898f1ad",
+      "id": "d3c51827-dfa8-4a3a-b77e-f1d709008da7",
       "name": "Basics",
       "items": [
         {
           "kind": "request",
-          "id": "1014f1d6-d1a1-4d1c-b8db-3db9912a85ac",
+          "id": "824995c7-f92c-41d8-9074-f07ab053696c",
           "name": "Get with query params",
           "method": "GET",
           "url": "{{base_url}}/get",
@@ -63,7 +63,7 @@
         },
         {
           "kind": "request",
-          "id": "a7175607-9138-41af-b633-1f4e5d9ca0bc",
+          "id": "fa3f9920-055c-47ee-b850-2bba7f3b309c",
           "name": "Create user (JSON)",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -98,7 +98,7 @@
         },
         {
           "kind": "request",
-          "id": "27714396-e242-4ccd-b2ab-edf319739791",
+          "id": "4a65d416-cafe-48b6-a43c-bb66a5576cda",
           "name": "Submit form",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -131,7 +131,7 @@
         },
         {
           "kind": "request",
-          "id": "b4b6c8e3-bb09-4a59-8411-c7d277276fcf",
+          "id": "fb912a51-afef-4f86-ae3b-0970e16bff73",
           "name": "Update user",
           "method": "PUT",
           "url": "{{base_url}}/put",
@@ -146,7 +146,7 @@
         },
         {
           "kind": "request",
-          "id": "68c8200b-f930-4b63-94c3-9f4f07926af4",
+          "id": "2417c8bf-b220-49d8-bb7e-6df3681b207f",
           "name": "Patch user",
           "method": "PATCH",
           "url": "{{base_url}}/patch",
@@ -161,7 +161,7 @@
         },
         {
           "kind": "request",
-          "id": "a81711e6-3d20-43a2-9809-0e3265c23947",
+          "id": "9d44b94c-3ec9-418b-ae56-6b2856558bd3",
           "name": "Delete user",
           "method": "DELETE",
           "url": "{{base_url}}/delete",
@@ -187,12 +187,12 @@
     },
     {
       "kind": "folder",
-      "id": "f14b41c4-4428-482f-8d34-f93cc7cf494b",
+      "id": "a3726497-9dd7-4a8a-ab88-c61830a0454f",
       "name": "Auth",
       "items": [
         {
           "kind": "request",
-          "id": "f4a88062-a4e6-468e-a842-c57e50deb429",
+          "id": "f80f30ce-fd2e-4b44-9f03-89ce93da2fc0",
           "name": "Bearer token",
           "method": "GET",
           "url": "{{base_url}}/bearer",
@@ -214,7 +214,7 @@
         },
         {
           "kind": "request",
-          "id": "07de5aa2-c4e2-41eb-a14f-9fb1e42f0c45",
+          "id": "ba61eff7-cfb3-4558-b097-afb34e598454",
           "name": "Basic auth",
           "method": "GET",
           "url": "{{base_url}}/basic-auth/pakpos/rahasia",
@@ -237,7 +237,7 @@
         },
         {
           "kind": "request",
-          "id": "28f1bff1-f1a9-4c99-86d7-a003ece4f8fe",
+          "id": "3ab7ef2f-fb5e-4f19-91d8-75c2d92f3655",
           "name": "Profile (OAuth 2.0)",
           "method": "GET",
           "url": "{{base_url}}/oauth/me",
@@ -280,12 +280,12 @@
     },
     {
       "kind": "folder",
-      "id": "42a24986-c6ef-438e-80c4-c737e0c805ce",
+      "id": "99147b45-08de-4efe-905c-7ec9c9054fc3",
       "name": "GraphQL",
       "items": [
         {
           "kind": "request",
-          "id": "06499f5c-d35c-41a3-9609-c7c3ccb8a218",
+          "id": "4538c47b-99ff-4b54-b8d0-7a577fac80b0",
           "name": "Users by city (GraphQL)",
           "method": "POST",
           "url": "{{base_url}}/graphql",
@@ -320,14 +320,14 @@
     },
     {
       "kind": "folder",
-      "id": "11d04647-adfd-4df7-9e29-489d8358e1e9",
+      "id": "53f7b7f7-7864-48e4-84cd-82604d759ec6",
       "name": "Realtime",
       "items": [
         {
           "kind": "request",
-          "id": "73e84bf9-d2a9-4c94-b573-8bfc7d2de147",
+          "id": "81323502-cdf5-4a6d-a8da-000473cd6d1d",
           "name": "Live prices (WebSocket)",
-          "kind": "websocket",
+          "protocol": "websocket",
           "method": "GET",
           "url": "{{ws_url}}/ws",
           "body": {
@@ -348,12 +348,12 @@
     },
     {
       "kind": "folder",
-      "id": "72585eb4-a4fb-46fd-991d-6b9c28d268ae",
+      "id": "a5104959-532e-4846-a68e-f64484d482b3",
       "name": "Responses",
       "items": [
         {
           "kind": "request",
-          "id": "b948aeeb-5d0a-465b-ad3b-4e658ed08348",
+          "id": "a2a43b18-a2f8-4ed3-8499-de99856422af",
           "name": "Get UUID (extract)",
           "method": "GET",
           "url": "{{base_url}}/uuid",
@@ -381,7 +381,7 @@
         },
         {
           "kind": "request",
-          "id": "a0afa0cc-ecc9-430e-9969-6622c19d26f5",
+          "id": "330e4de9-5fff-4955-8f93-1720f9cf9b33",
           "name": "JSON document",
           "method": "GET",
           "url": "{{base_url}}/json",
@@ -402,7 +402,7 @@
         },
         {
           "kind": "request",
-          "id": "8c657044-b21d-4277-96d9-0114d15856ad",
+          "id": "0a735cb0-28b7-49c6-afa7-631786bfad0a",
           "name": "Expect 404",
           "method": "GET",
           "url": "{{base_url}}/status/404",
@@ -420,6 +420,24 @@
               "expected": "404"
             }
           ]
+        },
+        {
+          "kind": "request",
+          "id": "356d5855-191a-4c5e-b0e7-15cb05ddcef4",
+          "name": "Scripted checks (JavaScript)",
+          "method": "GET",
+          "url": "{{base_url}}/json",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "scripts": {
+            "pre_request": "// Runs before sending: add a trace header.\npm.request.headers.upsert({ key: \"X-Trace-Id\", value: pm.variables.replaceIn(\"{{$guid}}\") });\n",
+            "test": "pm.test(\"Status code is 200\", () => {\n  pm.response.to.have.status(200);\n});\n\npm.test(\"Slideshow has slides\", () => {\n  const json = pm.response.json();\n  pm.expect(json.slideshow.slides).to.be.an(\"array\").that.is.not.empty;\n  pm.expect(json.slideshow.author).to.eql(\"PakPos\");\n});\n\npm.environment.set(\"slide_count\", pm.response.json().slideshow.slides.length);\nconsole.log(\"slides:\", pm.environment.get(\"slide_count\"));\n"
+          },
+          "description": "Postman-style pm.* scripts, run in a sandbox. Collections you import must be trusted before their scripts run."
         }
       ],
       "auth": {

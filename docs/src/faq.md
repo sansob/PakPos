@@ -5,11 +5,10 @@ For sending requests, collections, environments, basic auth types, tests and CI
 runs: mostly yes. For JavaScript scripts, OAuth 2, GraphQL/WebSocket/gRPC, mock
 servers and team cloud features: not yet (see the [roadmap](roadmap.md)).
 
-**Why not JavaScript tests like Postman?**
-Embedding a JS engine adds size and complexity, and running someone else's
-collection would mean running their code. Declarative tests cover most checks,
-are easy to review in a diff, and run the same way in the app, the CLI and the
-MCP server.
+**Does PakPos run Postman's JavaScript tests?**
+Yes, in a sandbox (no file, process or network access) and only for collections
+you trust; see [JavaScript scripts](reference/scripts.md). For new work, the
+declarative tests are easier to review in a diff and need no trust at all.
 
 **Where is my data? Is anything uploaded?**
 Nothing is uploaded; there is no telemetry. Data is in the workspace folder shown
