@@ -217,8 +217,9 @@ pub fn refresh_token(cfg: &OAuth2Config, refresh: &str, settings: &HttpSettings)
     Ok(t)
 }
 
+/// Random alphanumeric string: URL-safe without encoding (also valid for PKCE).
 fn random_string(len: usize) -> String {
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let mut rng = rand::rng();
     (0..len).map(|_| CHARS[rng.random_range(0..CHARS.len())] as char).collect()
 }
