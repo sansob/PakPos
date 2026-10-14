@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0-rc.1] - 2026-10-14
+
 ### Added
 - The UI in Bahasa Indonesia (Settings → Language; follows the system locale
   by default), with a test that fails on untranslated UI text.
@@ -97,5 +99,6 @@ Release candidate for the first public release.
   (rebase, auto-reload), push, or one-click Sync, scoped to the workspace folder,
   using the installed git and its credentials; personal files are git-ignored.
 
-[Unreleased]: https://github.com/sansob/PakPos/compare/v0.2.0-rc.1...HEAD
+[Unreleased]: https://github.com/sansob/PakPos/compare/v0.3.0-rc.1...HEAD
+[0.3.0-rc.1]: https://github.com/sansob/PakPos/compare/v0.2.0-rc.1...v0.3.0-rc.1
 [0.2.0-rc.1]: https://github.com/sansob/PakPos/releases/tag/v0.2.0-rc.1
