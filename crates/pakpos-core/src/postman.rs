@@ -4,8 +4,8 @@
 //! test *scripts* (JavaScript) are skipped and reported as warnings.
 
 use crate::model::{
-    ApiKeyLocation, Auth, Body, Collection, Environment, Folder, FormField, HttpMethod, Item, KeyValue, RawLanguage,
-    Request,
+    ApiKeyLocation, Auth, Body, ClientAuthMethod, Collection, Environment, Folder, FormField, HttpMethod, Item,
+    KeyValue, OAuth2Config, OAuth2Grant, RawLanguage, Request, Scripts,
 };
 use serde_json::{json, Map, Value};
 
@@ -130,6 +130,53 @@ fn parse_auth(v: Option<&Value>, warnings: &mut Vec<String>) -> Auth {
                 },
             }
         }
+        "oauth2" => {
+            let sec = auth.get("oauth2");
+            let p = |k: &str| auth_param(sec, k);
+            let grant = match p("grant_type").as_str() {
+                "password_credentials" => OAuth2Grant::Password,
+                "authorization_code" | "authorization_code_with_pkce" => OAuth2Grant::AuthorizationCode,
+                "implicit" => {
+                    warnings.push("OAuth 2.0 implicit grant is deprecated; imported as authorization code".into());
+                    OAuth2Grant::AuthorizationCode
+                }
+                _ => OAuth2Grant::ClientCredentials,
+            };
+            let mut cfg = OAuth2Config {
+                grant,
+                token_url: p("accessTokenUrl"),
+                auth_url: p("authUrl"),
+                client_id: p("clientId"),
+                client_secret: p("clientSecret"),
+                scope: p("scope"),
+                username: p("username"),
+                password: p("password"),
+                use_pkce: p("grant_type") != "authorization_code" || p("challengeAlgorithm") == "S256",
+                client_auth: if p("client_authentication") == "body" {
+                    ClientAuthMethod::Body
+                } else {
+                    ClientAuthMethod::Header
+                },
+                ..Default::default()
+            };
+            if !p("redirect_uri").is_empty() {
+                cfg.redirect_uri = p("redirect_uri");
+            }
+            if !p("headerPrefix").is_empty() {
+                cfg.header_prefix = p("headerPrefix");
+            }
+            if grant == OAuth2Grant::AuthorizationCode
+                && !cfg.redirect_uri.starts_with("http://127.0.0.1")
+                && !cfg.redirect_uri.starts_with("http://localhost")
+            {
+                warnings.push(format!(
+                    "OAuth 2.0 redirect `{}` replaced by http://127.0.0.1:7777/callback (PakPos listens locally); register it with your provider",
+                    cfg.redirect_uri
+                ));
+                cfg.redirect_uri = "http://127.0.0.1:7777/callback".into();
+            }
+            Auth::OAuth2(cfg)
+        }
         "" => Auth::Inherit,
         other => {
             warnings.push(format!("auth type `{other}` is not supported yet; skipped"));
@@ -186,25 +233,79 @@ fn parse_body(v: Option<&Value>, warnings: &mut Vec<String>) -> Body {
                 .unwrap_or_default(),
         },
         "file" => Body::Binary { path: body.get("file").map(|f| s(f, "src")).unwrap_or_default() },
-        "graphql" => {
-            let query = body.pointer("/graphql/query").and_then(Value::as_str).unwrap_or("");
-            let variables = body
-                .pointer("/graphql/variables")
-                .and_then(Value::as_str)
-                .and_then(|v| serde_json::from_str::<Value>(v).ok())
-                .unwrap_or(Value::Object(Map::new()));
-            Body::Raw {
-                content: serde_json::to_string_pretty(&json!({ "query": query, "variables": variables }))
-                    .unwrap_or_default(),
-                language: RawLanguage::Json,
-            }
-        }
+        "graphql" => Body::GraphQl {
+            query: body.pointer("/graphql/query").and_then(Value::as_str).unwrap_or("").to_string(),
+            variables: match body.pointer("/graphql/variables") {
+                Some(Value::String(v)) => v.clone(),
+                Some(Value::Null) | None => String::new(),
+                Some(other) => serde_json::to_string_pretty(other).unwrap_or_default(),
+            },
+            operation_name: String::new(),
+        },
         "" => Body::None,
         other => {
             warnings.push(format!("body mode `{other}` is not supported; skipped"));
             Body::None
         }
     }
+}
+
+/// Postman saved responses → examples.
+fn parse_examples(v: Option<&Value>) -> Vec<crate::model::Example> {
+    v.and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .map(|r| crate::model::Example {
+                    id: crate::model::new_id(),
+                    name: {
+                        let n = s(r, "name");
+                        if n.is_empty() {
+                            "Example".into()
+                        } else {
+                            n
+                        }
+                    },
+                    status: r.get("code").and_then(Value::as_u64).unwrap_or(200) as u16,
+                    headers: kv_list(r.get("header")),
+                    body: s(r, "body"),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Postman `event` array → pre-request / test scripts.
+fn parse_events(v: Option<&Value>) -> Scripts {
+    let mut scripts = Scripts::default();
+    for e in v.and_then(Value::as_array).into_iter().flatten() {
+        let exec = match e.pointer("/script/exec") {
+            Some(Value::Array(lines)) => lines.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("\n"),
+            Some(Value::String(s)) => s.clone(),
+            _ => continue,
+        };
+        if e.get("disabled").and_then(Value::as_bool).unwrap_or(false) || exec.trim().is_empty() {
+            continue;
+        }
+        match e.get("listen").and_then(Value::as_str) {
+            Some("prerequest") => scripts.pre_request = exec,
+            Some("test") => scripts.test = exec,
+            _ => {}
+        }
+    }
+    scripts
+}
+
+fn events_to_json(s: &Scripts) -> Option<Value> {
+    let mut out = Vec::new();
+    for (listen, src) in [("prerequest", &s.pre_request), ("test", &s.test)] {
+        if !src.trim().is_empty() {
+            out.push(json!({
+                "listen": listen,
+                "script": { "type": "text/javascript", "exec": src.lines().collect::<Vec<_>>() }
+            }));
+        }
+    }
+    (!out.is_empty()).then_some(Value::Array(out))
 }
 
 fn parse_items(items: Option<&Value>, warnings: &mut Vec<String>) -> Vec<Item> {
@@ -214,18 +315,13 @@ fn parse_items(items: Option<&Value>, warnings: &mut Vec<String>) -> Vec<Item> {
     items
         .iter()
         .map(|it| {
-            if it.get("event").and_then(Value::as_array).is_some_and(|e| !e.is_empty()) {
-                warnings.push(format!(
-                    "`{}`: JavaScript scripts are not executed by PakPos; use Tests/Extract instead",
-                    s(it, "name")
-                ));
-            }
             if it.get("item").is_some() {
                 Item::Folder(Folder {
                     id: crate::model::new_id(),
                     name: s(it, "name"),
                     items: parse_items(it.get("item"), warnings),
                     auth: parse_auth(it.get("auth"), warnings),
+                    scripts: parse_events(it.get("event")),
                     description: description(it),
                 })
             } else {
@@ -258,9 +354,10 @@ fn parse_items(items: Option<&Value>, warnings: &mut Vec<String>) -> Vec<Item> {
                     headers,
                     body,
                     auth,
-                    assertions: Vec::new(),
-                    extractions: Vec::new(),
                     description: desc,
+                    scripts: parse_events(it.get("event")),
+                    examples: parse_examples(it.get("response")),
+                    ..Default::default()
                 })
             }
         })
@@ -293,7 +390,12 @@ pub fn import_collection(json_text: &str) -> Result<Imported<Collection>, Postma
         items: parse_items(root.get("item"), &mut warnings),
         variables: kv_list(root.get("variable")),
         auth,
+        scripts: parse_events(root.get("event")),
     };
+    if collection.has_scripts() {
+        warnings
+            .push("this collection contains JavaScript scripts; they only run after you trust the collection".into());
+    }
     warnings.dedup();
     Ok(Imported { value: collection, warnings })
 }
@@ -366,6 +468,32 @@ fn auth_to_json(auth: &Auth) -> Option<Value> {
                 kv("in", match location { ApiKeyLocation::Header => "header", ApiKeyLocation::Query => "query" }),
             ]
         })),
+        Auth::OAuth2(c) => {
+            let grant = match c.grant {
+                OAuth2Grant::ClientCredentials => "client_credentials",
+                OAuth2Grant::Password => "password_credentials",
+                OAuth2Grant::AuthorizationCode if c.use_pkce => "authorization_code_with_pkce",
+                OAuth2Grant::AuthorizationCode => "authorization_code",
+            };
+            Some(json!({
+                "type": "oauth2",
+                "oauth2": [
+                    kv("grant_type", grant),
+                    kv("accessTokenUrl", &c.token_url),
+                    kv("authUrl", &c.auth_url),
+                    kv("clientId", &c.client_id),
+                    kv("clientSecret", &c.client_secret),
+                    kv("scope", &c.scope),
+                    kv("username", &c.username),
+                    kv("password", &c.password),
+                    kv("redirect_uri", &c.redirect_uri),
+                    kv("headerPrefix", &c.header_prefix),
+                    kv("challengeAlgorithm", "S256"),
+                    kv("client_authentication", match c.client_auth { ClientAuthMethod::Header => "header", ClientAuthMethod::Body => "body" }),
+                    kv("addTokenTo", "header"),
+                ]
+            }))
+        }
     }
 }
 
@@ -401,7 +529,14 @@ fn body_to_json(body: &Body) -> Option<Value> {
             }).collect::<Vec<_>>()
         })),
         Body::Binary { path } => Some(json!({ "mode": "file", "file": { "src": path } })),
+        Body::GraphQl { query, variables, .. } => {
+            Some(json!({ "mode": "graphql", "graphql": { "query": query, "variables": variables } }))
+        }
     }
+}
+
+fn http_reason(code: u16) -> &'static str {
+    reqwest::StatusCode::from_u16(code).ok().and_then(|c| c.canonical_reason()).unwrap_or("")
 }
 
 fn raw_url(req: &Request) -> String {
@@ -422,6 +557,9 @@ fn items_to_json(items: &[Item]) -> Value {
                     let mut m = Map::new();
                     m.insert("name".into(), json!(f.name));
                     m.insert("item".into(), items_to_json(&f.items));
+                    if let Some(ev) = events_to_json(&f.scripts) {
+                        m.insert("event".into(), ev);
+                    }
                     if let Some(a) = auth_to_json(&f.auth) {
                         m.insert("auth".into(), a);
                     }
@@ -444,7 +582,27 @@ fn items_to_json(items: &[Item]) -> Value {
                     if !r.description.is_empty() {
                         req.insert("description".into(), json!(r.description));
                     }
-                    json!({ "name": r.name, "request": Value::Object(req) })
+                    let mut item = json!({ "name": r.name, "request": Value::Object(req) });
+                    if !r.examples.is_empty() {
+                        item["response"] = Value::Array(
+                            r.examples
+                                .iter()
+                                .map(|e| {
+                                    json!({
+                                        "name": e.name,
+                                        "code": e.status,
+                                        "status": http_reason(e.status),
+                                        "header": kv_to_json(&e.headers),
+                                        "body": e.body,
+                                    })
+                                })
+                                .collect(),
+                        );
+                    }
+                    if let Some(ev) = events_to_json(&r.scripts) {
+                        item["event"] = ev;
+                    }
+                    item
                 }
             })
             .collect(),
@@ -464,6 +622,9 @@ pub fn export_collection(c: &Collection) -> String {
         }),
     );
     root.insert("item".into(), items_to_json(&c.items));
+    if let Some(ev) = events_to_json(&c.scripts) {
+        root.insert("event".into(), ev);
+    }
     if let Some(a) = auth_to_json(&c.auth) {
         root.insert("auth".into(), a);
     }

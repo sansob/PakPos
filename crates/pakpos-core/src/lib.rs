@@ -16,13 +16,20 @@
 
 pub mod assertions;
 pub mod codegen;
+pub mod git;
+pub mod graphql;
+pub mod grpc;
 pub mod http;
+pub mod mock;
 pub mod model;
+pub mod oauth2;
 pub mod postman;
 pub mod runner;
 pub mod samples;
+pub mod scripts;
 pub mod storage;
 pub mod vars;
+pub mod ws;
 
 pub use model::{Auth, Body, Collection, Environment, HttpMethod, Item, KeyValue, Request};
 

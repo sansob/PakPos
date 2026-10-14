@@ -11,9 +11,14 @@ impl PakPosApp {
         let p = self.palette;
         let idx = self.active;
         let Some(tab) = self.tabs.get_mut(idx) else { return };
+        if tab.request.kind == pakpos_core::model::RequestKind::WebSocket {
+            crate::ws_view::log_view(ui, &mut tab.ws, tab.uid, &p);
+            return;
+        }
         let mut copy: Option<String> = None;
         let mut cancel = false;
         let mut save_to_file: Option<Vec<u8>> = None;
+        let mut save_example = false;
 
         match &tab.response {
             ResponseState::Empty => {
@@ -62,8 +67,18 @@ impl PakPosApp {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Response").strong().color(p.text_weak));
                     ui.add_space(10.0);
-                    let sc = theme::status_color(resp.status);
-                    widgets::pill(ui, format!("{} {}", resp.status, resp.status_text), sc, sc.gamma_multiply(0.16));
+                    if resp.http_version == "gRPC" {
+                        let sc = if resp.status == 0 { theme::GREEN } else { theme::RED };
+                        widgets::pill(
+                            ui,
+                            format!("gRPC {} {}", resp.status, resp.status_text),
+                            sc,
+                            sc.gamma_multiply(0.16),
+                        );
+                    } else {
+                        let sc = theme::status_color(resp.status);
+                        widgets::pill(ui, format!("{} {}", resp.status, resp.status_text), sc, sc.gamma_multiply(0.16));
+                    }
                     widgets::pill(ui, format!("{} ms", resp.elapsed_ms), p.text, p.surface_alt);
                     widgets::pill(ui, format_size(resp.size_bytes()), p.text, p.surface_alt);
                     if !outcome.tests.is_empty() {
@@ -72,6 +87,15 @@ impl PakPosApp {
                         widgets::pill(ui, format!("Tests {passed}/{}", outcome.tests.len()), c, c.gamma_multiply(0.16));
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if resp.http_version != "gRPC"
+                            && ui
+                                .add_enabled(tab.source.is_some(), egui::Button::new("+ Example"))
+                                .on_hover_text("Save as an example of this request (used by the mock server)")
+                                .on_disabled_hover_text("Save the request to a collection first")
+                                .clicked()
+                        {
+                            save_example = true;
+                        }
                         if ui.button("⬇ Save").on_hover_text("Save response body to a file").clicked() {
                             save_to_file = Some(resp.body.clone());
                         }
@@ -92,6 +116,7 @@ impl PakPosApp {
                             format!("Tests ({passed}/{})", outcome.tests.len())
                         },
                     ),
+                    (RespSection::Console, widgets::counted("Console", outcome.logs.len())),
                     (RespSection::Request, "Request".to_string()),
                 ];
                 widgets::tab_bar(ui, &mut tab.resp_section, &items);
@@ -197,6 +222,7 @@ impl PakPosApp {
                             },
                         );
                     }
+                    RespSection::Console => crate::scripts_view::console(ui, &outcome.logs, tab.uid, &p),
                     RespSection::Request => {
                         let pr = &outcome.prepared;
                         egui::ScrollArea::vertical().id_salt(("resp_req", tab.uid)).auto_shrink([false, false]).show(
@@ -264,6 +290,9 @@ impl PakPosApp {
 
         if cancel {
             tab.response = ResponseState::Empty;
+        }
+        if save_example {
+            self.save_example(idx);
         }
         if let Some(text) = copy {
             ui.ctx().copy_text(text);

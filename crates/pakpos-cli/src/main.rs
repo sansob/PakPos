@@ -1,4 +1,4 @@
-//! `pakpos-cli`: run PakPos / Postman collections from the terminal or CI.
+//! `pakpos-cli`: run PakPos collections from the terminal or CI.
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -18,7 +18,7 @@ use std::process::ExitCode;
 #[command(
     name = "pakpos-cli",
     version,
-    about = "PakPos command-line runner: send requests and run collections (PakPos or Postman format).",
+    about = "PakPos command-line runner: send requests and run collections (PakPos or Collection v2.1 format).",
     long_about = None
 )]
 struct Cli {
@@ -35,9 +35,9 @@ enum Command {
     Run(RunArgs),
     /// Send a single request, like curl but with PakPos variables.
     Send(SendArgs),
-    /// Convert a Postman collection into PakPos format.
+    /// Convert a Collection v2.1 file into PakPos format.
     Import {
-        /// Postman collection JSON (v2.0 / v2.1).
+        /// Collection JSON (v2.0 / v2.1).
         input: PathBuf,
         /// Output file. Defaults to stdout.
         #[arg(short, long)]
@@ -46,7 +46,7 @@ enum Command {
         #[arg(long)]
         workspace: bool,
     },
-    /// Export a PakPos collection as Postman v2.1.
+    /// Export a PakPos collection as Collection v2.1.
     Export {
         input: PathBuf,
         #[arg(short, long)]
@@ -60,6 +60,66 @@ enum Command {
         #[arg(long, value_enum)]
         to: Option<Lang>,
     },
+    /// Open a WebSocket: lines from stdin are sent, messages are printed.
+    Ws {
+        /// ws:// or wss:// URL (http(s):// is converted), may contain {{variables}}.
+        url: String,
+        /// Header "Name: value" (repeatable), e.g. for Authorization.
+        #[arg(short = 'H', long = "header")]
+        headers: Vec<String>,
+        #[arg(short, long)]
+        environment: Option<String>,
+        #[arg(long = "var", value_parser = parse_kv)]
+        vars: Vec<(String, String)>,
+        /// Send this message after connecting (repeatable), then keep reading.
+        #[arg(short, long)]
+        send: Vec<String>,
+        /// Exit after this many seconds (default: run until stdin closes / Ctrl+C).
+        #[arg(long)]
+        timeout: Option<u64>,
+    },
+    /// Call a gRPC method (JSON in, JSON out) or list a server's methods.
+    Grpc {
+        /// grpc://host:port, grpcs://host (TLS) or host:port.
+        url: String,
+        /// package.Service/Method. Omit to list the available methods.
+        method: Option<String>,
+        /// Request message as JSON (use @file to read it from a file).
+        #[arg(short, long, default_value = "{}")]
+        data: String,
+        /// .proto file (repeatable). Without it, server reflection is used.
+        #[arg(long = "proto")]
+        protos: Vec<String>,
+        /// Import path for --proto (repeatable).
+        #[arg(short = 'I', long = "import-path")]
+        import_paths: Vec<String>,
+        /// Metadata "name: value" (repeatable), e.g. authorization.
+        #[arg(short = 'H', long = "header")]
+        headers: Vec<String>,
+        #[arg(short, long)]
+        environment: Option<String>,
+        #[arg(long = "var", value_parser = parse_kv)]
+        vars: Vec<(String, String)>,
+        /// Stop a stream after this many messages.
+        #[arg(long, default_value_t = 100)]
+        max_messages: usize,
+        /// Print an example request message instead of calling.
+        #[arg(long)]
+        template: bool,
+    },
+    /// Serve the saved examples of a collection as a mock API.
+    Mock {
+        /// Collection file (PakPos or v2.1 JSON) or workspace collection name.
+        collection: String,
+        #[arg(short, long, default_value_t = 8000)]
+        port: u16,
+        /// Interface to bind; use 0.0.0.0 to expose it on your network.
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Extra latency per response, in milliseconds.
+        #[arg(long, default_value_t = 0)]
+        delay: u64,
+    },
     /// Print the workspace location and its contents.
     Workspace,
     /// Start a Model Context Protocol (MCP) server on stdio, so AI agents
@@ -72,6 +132,9 @@ enum Command {
         /// Allow saving new requests into the workspace.
         #[arg(long)]
         allow_write: bool,
+        /// Run JavaScript scripts of collections you trusted in the app.
+        #[arg(long)]
+        allow_scripts: bool,
     },
 }
 
@@ -92,7 +155,7 @@ enum Reporter {
 
 #[derive(clap::Args)]
 struct RunArgs {
-    /// Collection file (PakPos or Postman JSON), or the name of a collection in the workspace.
+    /// Collection file (PakPos or v2.1 JSON), or the name of a collection in the workspace.
     collection: String,
     /// Environment file, or the name of an environment in the workspace.
     #[arg(short, long)]
@@ -124,6 +187,10 @@ struct RunArgs {
     /// Write extracted variables back into the environment file.
     #[arg(long)]
     save_env: bool,
+    /// Run the collection's JavaScript pre-request / test scripts (sandboxed).
+    /// Collections trusted in the desktop app run their scripts without this flag.
+    #[arg(long)]
+    allow_scripts: bool,
 }
 
 #[derive(clap::Args)]
@@ -251,14 +318,34 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Command::Mcp { allow_hosts, allow_write } => {
+        Command::Mcp { allow_hosts, allow_write, allow_scripts } => {
             mcp::serve(mcp::McpConfig {
                 allowed_hosts: allow_hosts,
                 allow_write,
+                allow_scripts,
                 workspace_root: storage::default_root(),
             })?;
             Ok(ExitCode::SUCCESS)
         }
+        Command::Ws { url, headers, environment, vars, send, timeout } => {
+            cmd_ws(url, headers, environment, vars, send, timeout, style)
+        }
+        Command::Grpc {
+            url,
+            method,
+            data,
+            protos,
+            import_paths,
+            headers,
+            environment,
+            vars,
+            max_messages,
+            template,
+        } => cmd_grpc(
+            GrpcArgs { url, method, data, protos, import_paths, headers, environment, vars, max_messages, template },
+            style,
+        ),
+        Command::Mock { collection, port, host, delay } => cmd_mock(&collection, &host, port, delay, style),
         Command::Workspace => {
             let (ws, errors) = Workspace::load(storage::default_root());
             println!("{} {}", style.bold("Workspace:"), ws.root.display());
@@ -330,7 +417,7 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         Some(e) => Some(load_env(e)?),
         None => None,
     };
-    let (ws, _) = Workspace::load(storage::default_root());
+    let (mut ws, _) = Workspace::load(storage::default_root());
     let options = RunOptions {
         settings: HttpSettings { timeout_secs: args.timeout, verify_tls: !args.insecure, ..Default::default() },
         filter: args.filter.clone(),
@@ -339,6 +426,8 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         globals: ws.globals.clone(),
         overrides: args.vars.clone(),
         allowed_hosts: Vec::new(),
+        tokens: ws.tokens.clone(),
+        allow_scripts: args.allow_scripts || ws.is_trusted(&collection.id),
     };
 
     let cli_reporter = args.reporter == Reporter::Cli;
@@ -375,12 +464,21 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
                 println!("    {} {} {}", style.red("✗"), a.name, style.dim(&format!("({})", a.message)));
             }
         }
+        for line in &r.logs {
+            println!("    {} {}", style.dim("›"), style.dim(line));
+        }
         for (k, v) in &r.extracted {
             println!("    {} {{{{{k}}}}} = {}", style.dim("↳"), style.dim(&truncate(v, 60)));
         }
     };
 
     let report = run_collection(&collection, env.as_mut().map(|(e, _)| e), &options, print);
+    // Reuse OAuth 2.0 tokens across runs, but only in an existing workspace
+    // (CI runs without one stay stateless).
+    if report.tokens != ws.tokens && ws.root.exists() {
+        ws.tokens = report.tokens.clone();
+        let _ = ws.save_tokens();
+    }
 
     match args.reporter {
         Reporter::Cli => {
@@ -474,4 +572,201 @@ fn cmd_send(args: SendArgs, style: &Style) -> Result<ExitCode> {
     }
     println!("{}", resp.pretty_body());
     Ok(if resp.status < 400 { ExitCode::SUCCESS } else { ExitCode::from(1) })
+}
+
+fn cmd_ws(
+    url: String,
+    headers: Vec<String>,
+    environment: Option<String>,
+    vars: Vec<(String, String)>,
+    send: Vec<String>,
+    timeout: Option<u64>,
+    style: &Style,
+) -> Result<ExitCode> {
+    use pakpos_core::ws::{Direction, WsEvent};
+    let mut req = Request::new(HttpMethod::Get, &url);
+    for h in &headers {
+        let (k, v) = h.split_once(':').with_context(|| format!("header must be `Name: value`, got `{h}`"))?;
+        req.headers.push(KeyValue::new(k.trim(), v.trim()));
+    }
+    let env = match &environment {
+        Some(e) => Some(load_env(e)?.0),
+        None => None,
+    };
+    let (ws, _) = Workspace::load(storage::default_root());
+    let mut scope = VarScope::new().with_environment(env.as_ref()).with_globals(&ws.globals);
+    for (k, v) in vars {
+        scope.runtime.insert(k, v);
+    }
+    let prepared = http::prepare(&req, &scope, None)?;
+    let handle = pakpos_core::ws::connect(&prepared, || {});
+    // Forward stdin lines as messages.
+    let tx = handle.tx.clone();
+    let stdin_scope = scope.clone();
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        for line in std::io::stdin().lock().lines().map_while(Result::ok) {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let _ = tx.send(pakpos_core::ws::WsCommand::Send(stdin_scope.resolve(&line)));
+        }
+    });
+    let deadline = timeout.map(|s| std::time::Instant::now() + std::time::Duration::from_secs(s));
+    let mut pending = send.into_iter().map(|m| scope.resolve(&m)).collect::<Vec<_>>();
+    loop {
+        if deadline.is_some_and(|d| std::time::Instant::now() > d) {
+            handle.close();
+            return Ok(ExitCode::SUCCESS);
+        }
+        match handle.rx.recv_timeout(std::time::Duration::from_millis(200)) {
+            Ok(WsEvent::Connected { status, .. }) => {
+                eprintln!(
+                    "{} {}",
+                    style.green("connected"),
+                    style.dim(&format!("HTTP {status} · {}", pakpos_core::ws::to_ws_url(&prepared.url)))
+                );
+                for m in pending.drain(..) {
+                    handle.send(m);
+                }
+            }
+            Ok(WsEvent::Message { direction: Direction::Sent, text, .. }) => {
+                eprintln!("{} {text}", style.paint("33", "↑"))
+            }
+            Ok(WsEvent::Message { direction: Direction::Received, text, .. }) => println!("{text}"),
+            Ok(WsEvent::Error(e)) => eprintln!("{} {e}", style.red("error:")),
+            Ok(WsEvent::Closed { reason }) => {
+                eprintln!("{} {reason}", style.dim("closed:"));
+                return Ok(ExitCode::SUCCESS);
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(ExitCode::from(1)),
+        }
+    }
+}
+
+fn load_collection_arg(arg: &str) -> Result<pakpos_core::Collection> {
+    let path = PathBuf::from(arg);
+    if path.exists() {
+        return Ok(storage::load_collection_file(&path).map_err(anyhow::Error::msg)?.0);
+    }
+    let (ws, _) = Workspace::load(storage::default_root());
+    ws.collections
+        .iter()
+        .find(|c| c.name.eq_ignore_ascii_case(arg))
+        .cloned()
+        .with_context(|| format!("collection `{arg}` not found"))
+}
+
+fn cmd_mock(collection: &str, host: &str, port: u16, delay: u64, style: &Style) -> Result<ExitCode> {
+    let c = load_collection_arg(collection)?;
+    let addr: std::net::SocketAddr =
+        format!("{host}:{port}").parse().with_context(|| format!("invalid address {host}:{port}"))?;
+    let server = pakpos_core::mock::start(
+        &c,
+        pakpos_core::mock::MockOptions { addr, delay: std::time::Duration::from_millis(delay) },
+    )
+    .with_context(|| format!("cannot listen on {addr}"))?;
+    let routes = server.routes();
+    println!(
+        "\n{} {}  {}\n",
+        style.bold("PakPos mock ▸"),
+        style.bold(&c.name),
+        style.green(&format!("http://{}", server.addr))
+    );
+    if routes.is_empty() {
+        println!("{}", style.paint("33", "No examples in this collection yet: save a response as an example first."));
+    }
+    for r in &routes {
+        let names: Vec<String> = r.examples.iter().map(|e| format!("{} {}", e.status, e.name)).collect();
+        println!("  {}  {}", style.bold(&r.pattern), style.dim(&names.join(" · ")));
+    }
+    println!(
+        "\n{}\n",
+        style.dim("Pick an example with the x-mock-response-name or x-mock-response-code header. Ctrl+C to stop.")
+    );
+    for hit in server.hits.iter() {
+        let time = hit.at.with_timezone(&chrono::Local).format("%H:%M:%S");
+        let matched = hit.matched.unwrap_or_else(|| style.red("no match"));
+        println!(
+            "{} {} {} {}  {}",
+            style.dim(&time.to_string()),
+            style.status(hit.status),
+            hit.method,
+            hit.path,
+            style.dim(&matched)
+        );
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+struct GrpcArgs {
+    url: String,
+    method: Option<String>,
+    data: String,
+    protos: Vec<String>,
+    import_paths: Vec<String>,
+    headers: Vec<String>,
+    environment: Option<String>,
+    vars: Vec<(String, String)>,
+    max_messages: usize,
+    template: bool,
+}
+
+fn cmd_grpc(a: GrpcArgs, style: &Style) -> Result<ExitCode> {
+    use pakpos_core::grpc;
+    let env = match &a.environment {
+        Some(e) => Some(load_env(e)?.0),
+        None => None,
+    };
+    let (ws, _) = Workspace::load(storage::default_root());
+    let mut scope = VarScope::new().with_environment(env.as_ref()).with_globals(&ws.globals);
+    for (k, v) in a.vars {
+        scope.runtime.insert(k, v);
+    }
+    let url = scope.resolve(&a.url);
+    let settings = HttpSettings::default();
+    let cfg = pakpos_core::model::GrpcConfig {
+        method: a.method.clone().unwrap_or_default(),
+        proto_files: a.protos,
+        import_paths: a.import_paths,
+    };
+    let pool = grpc::load_pool(&cfg, &url, &settings)?;
+    let Some(method) = a.method else {
+        for m in grpc::methods(&pool) {
+            println!(
+                "{}  {}",
+                style.bold(&m.full_name),
+                style.dim(&format!("{} → {} · {}", m.input, m.output, m.kind_label()))
+            );
+        }
+        return Ok(ExitCode::SUCCESS);
+    };
+    if a.template {
+        println!("{}", grpc::request_template(&pool, &method)?);
+        return Ok(ExitCode::SUCCESS);
+    }
+    let data = match a.data.strip_prefix('@') {
+        Some(file) => std::fs::read_to_string(file).with_context(|| format!("reading {file}"))?,
+        None => a.data,
+    };
+    let mut metadata = Vec::new();
+    for h in &a.headers {
+        let (k, v) = h.split_once(':').with_context(|| format!("metadata must be `name: value`, got `{h}`"))?;
+        metadata.push((scope.resolve(k.trim()), scope.resolve(v.trim())));
+    }
+    let r = grpc::call(&url, &pool, &method, &scope.resolve(&data), &metadata, &settings, a.max_messages)?;
+    let status = if r.is_ok() {
+        style.green(&format!("{} {}", r.code, r.code_name))
+    } else {
+        style.red(&format!("{} {}", r.code, r.code_name))
+    };
+    eprintln!("{status}  {}", style.dim(&format!("{} ms · {} message(s)", r.elapsed_ms, r.messages.len())));
+    if !r.status_message.is_empty() {
+        eprintln!("{}", style.dim(&r.status_message));
+    }
+    for m in &r.messages {
+        println!("{m}");
+    }
+    Ok(if r.is_ok() { ExitCode::SUCCESS } else { ExitCode::from(1) })
 }

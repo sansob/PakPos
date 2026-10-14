@@ -38,6 +38,22 @@ pub fn demo_collection() -> Collection {
         test("header.Content-Type", Operator::Contains, "json"),
     ];
 
+    let example = |name: &str, status: u16, body: &str| crate::model::Example {
+        id: crate::model::new_id(),
+        name: name.into(),
+        status,
+        headers: vec![KeyValue::new("Content-Type", "application/json")],
+        body: body.into(),
+    };
+    post.examples = vec![
+        example(
+            "Created",
+            201,
+            "{\n  \"id\": \"usr_1001\",\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\"\n}",
+        ),
+        example("Validation error", 422, "{\n  \"error\": \"name is required\"\n}"),
+    ];
+
     let mut form = req("Submit form", HttpMethod::Post, "{{base_url}}/post");
     form.body =
         Body::FormUrlEncoded { fields: vec![KeyValue::new("username", "budi"), KeyValue::new("remember", "true")] };
@@ -60,23 +76,89 @@ pub fn demo_collection() -> Collection {
     let mut uuid = req("Get UUID (extract)", HttpMethod::Get, "{{base_url}}/uuid");
     uuid.extractions = vec![Extraction { enabled: true, variable: "last_uuid".into(), source: "json.uuid".into() }];
     uuid.assertions = vec![test("json.uuid", Operator::Exists, "")];
+    uuid.examples = vec![crate::model::Example {
+        id: crate::model::new_id(),
+        name: "Random UUID".into(),
+        status: 200,
+        headers: vec![KeyValue::new("Content-Type", "application/json")],
+        body: "{ \"uuid\": \"0f8e6a7c-2b1d-4c3e-9f5a-8d7b6c5e4f3a\" }".into(),
+    }];
     let mut json = req("JSON document", HttpMethod::Get, "{{base_url}}/json");
     json.assertions = vec![test("json.slideshow.author", Operator::Exists, "")];
     let mut not_found = req("Expect 404", HttpMethod::Get, "{{base_url}}/status/404");
     not_found.assertions = vec![test("status", Operator::Equals, "404")];
 
+    let mut oauth = req("Profile (OAuth 2.0)", HttpMethod::Get, "{{base_url}}/oauth/me");
+    oauth.auth = Auth::OAuth2(crate::model::OAuth2Config {
+        grant: crate::model::OAuth2Grant::ClientCredentials,
+        token_url: "{{base_url}}/oauth/token".into(),
+        auth_url: "{{base_url}}/oauth/authorize".into(),
+        client_id: "pakpos-demo".into(),
+        client_secret: "demo-secret".into(),
+        scope: "read".into(),
+        ..Default::default()
+    });
+    oauth.assertions = vec![test("status", Operator::Equals, "200"), test("json.user", Operator::Equals, "budi")];
+    oauth.description = "The token is fetched automatically (client credentials). Switch the grant to Authorization code to try the browser login against the mock API.".into();
+
+    let mut gql = req("Users by city (GraphQL)", HttpMethod::Post, "{{base_url}}/graphql");
+    gql.body = Body::GraphQl {
+        query: "query Users($city: String) {\n  users(city: $city) {\n    id\n    name\n    city\n  }\n}\n".into(),
+        variables: "{ \"city\": \"Jakarta\" }".into(),
+        operation_name: String::new(),
+    };
+    gql.assertions = vec![
+        test("json.errors", Operator::NotExists, ""),
+        test("json.data.users[0].city", Operator::Equals, "Jakarta"),
+    ];
+    gql.description = "Click “Fetch schema” in the Body tab to browse the API.".into();
+
+    let mut ws = req("Live prices (WebSocket)", HttpMethod::Get, "{{ws_url}}/ws");
+    ws.kind = crate::model::RequestKind::WebSocket;
+    ws.auth = Auth::Bearer { token: "{{token}}".into() };
+    ws.body = Body::Raw {
+        content: "{\n  \"type\": \"subscribe\",\n  \"symbol\": \"IDR\"\n}".into(),
+        language: RawLanguage::Json,
+    };
+    ws.description = "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds.".into();
+
+    let mut scripted = req("Scripted checks (JavaScript)", HttpMethod::Get, "{{base_url}}/json");
+    scripted.scripts = crate::model::Scripts {
+        pre_request: "// Runs before sending: add a trace header.\npm.request.headers.upsert({ key: \"X-Trace-Id\", value: pm.variables.replaceIn(\"{{$guid}}\") });\n".into(),
+        test: "pm.test(\"Status code is 200\", () => {\n  pm.response.to.have.status(200);\n});\n\npm.test(\"Slideshow has slides\", () => {\n  const json = pm.response.json();\n  pm.expect(json.slideshow.slides).to.be.an(\"array\").that.is.not.empty;\n  pm.expect(json.slideshow.author).to.eql(\"PakPos\");\n});\n\npm.environment.set(\"slide_count\", pm.response.json().slideshow.slides.length);\nconsole.log(\"slides:\", pm.environment.get(\"slide_count\"));\n".into(),
+    };
+    scripted.description = "Postman-style pm.* scripts, run in a sandbox. Collections you import must be trusted before their scripts run.".into();
+
+    let mut grpc_req = req("Health check (gRPC)", HttpMethod::Post, "{{grpc_url}}");
+    grpc_req.kind = crate::model::RequestKind::Grpc;
+    grpc_req.grpc =
+        Some(crate::model::GrpcConfig { method: "grpc.health.v1.Health/Check".into(), ..Default::default() });
+    grpc_req.body = Body::Raw { content: "{\n  \"service\": \"pakpos.demo\"\n}".into(), language: RawLanguage::Json };
+    grpc_req.assertions = vec![test("status", Operator::Equals, "0"), test("json.status", Operator::Exists, "")];
+    grpc_req.description = "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send.".into();
+
     let mut basics = Folder::new("Basics");
     basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
-    auth.items = vec![Item::Request(bearer), Item::Request(basic)];
+    auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(oauth)];
     let mut responses = Folder::new("Responses");
-    responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found)];
+    responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found), Item::Request(scripted)];
+    let mut graphql = Folder::new("GraphQL");
+    graphql.items = vec![Item::Request(gql)];
+    let mut realtime = Folder::new("Realtime");
+    realtime.items = vec![Item::Request(ws), Item::Request(grpc_req)];
 
     let mut c = Collection::new("PakPos Demo");
     c.description =
         "Sample requests against an httpbin-compatible API. Select the “Demo (httpbin)” environment and press Send."
             .into();
-    c.items = vec![Item::Folder(basics), Item::Folder(auth), Item::Folder(responses)];
+    c.items = vec![
+        Item::Folder(basics),
+        Item::Folder(auth),
+        Item::Folder(graphql),
+        Item::Folder(realtime),
+        Item::Folder(responses),
+    ];
     c
 }
 
@@ -85,6 +167,8 @@ pub fn demo_environment(base_url: &str) -> Environment {
     let mut env = Environment::new("Demo (httpbin)");
     env.set("base_url", base_url);
     env.set("token", "pakpos-demo-token");
+    env.set("ws_url", crate::ws::to_ws_url(base_url));
+    env.set("grpc_url", "grpc://127.0.0.1:50051");
     env
 }
 
@@ -93,7 +177,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 11);
+        assert_eq!(c.request_count(), 16);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

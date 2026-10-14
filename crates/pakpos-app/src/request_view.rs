@@ -5,7 +5,7 @@ use crate::theme;
 use crate::widgets;
 use egui::{Margin, RichText, Sense, Stroke, Ui};
 use pakpos_core::assertions::Operator;
-use pakpos_core::model::{ApiKeyLocation, Assertion, Auth, Body, BodyKind, Extraction, RawLanguage};
+use pakpos_core::model::{ApiKeyLocation, Assertion, Auth, Body, BodyKind, Extraction, RawLanguage, RequestKind};
 use pakpos_core::vars::VarScope;
 use pakpos_core::HttpMethod;
 
@@ -28,7 +28,12 @@ impl PakPosApp {
                         .inner_margin(Margin::symmetric(16, 10))
                         .stroke(Stroke::new(1.0, p.border)),
                 )
-                .show(ui, |ui| self.response_panel(ui));
+                .show(ui, |ui| {
+                    self.response_panel(ui);
+                    // A resizable panel remembers the size its content used;
+                    // claim the rest so an empty response doesn't shrink it.
+                    ui.take_available_space();
+                });
             egui::CentralPanel::default()
                 .frame(egui::Frame::new().fill(p.surface).inner_margin(Margin::symmetric(16, 12)))
                 .show(ui, |ui| self.request_editor(ui));
@@ -53,7 +58,7 @@ impl PakPosApp {
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     ui.spacing_mut().item_spacing.x = 6.0;
-                                    widgets::method_label(ui, tab.request.method, true);
+                                    widgets::method_label(ui, &tab.request);
                                     let mut name = tab.request.name.clone();
                                     if name.chars().count() > 26 {
                                         name = format!("{}…", name.chars().take(26).collect::<String>());
@@ -118,6 +123,27 @@ impl PakPosApp {
         let mut send = false;
         let mut save = false;
         let mut snippet = false;
+        let tokens = self.ws.tokens.clone();
+        let mut oauth_action = None;
+        let gql_key = scope.resolve(&self.tabs[idx].request.url);
+        let gql_schema = self.graphql.schemas.get(&gql_key);
+        let gql_loading = self.graphql.job.as_ref().is_some_and(|(k, _)| k == &gql_key);
+        let mut gql_action = None;
+        let mut ws_action = None;
+        let mut script_action = None;
+        let mut grpc_action = None;
+        let (script_trust, inherited_scripts, source_collection) = {
+            let t = &self.tabs[idx];
+            match t.source.as_ref().and_then(|(c, _)| self.collection(c)) {
+                Some(c) => (
+                    Some(self.ws.is_trusted(&c.id) || !c.has_scripts()),
+                    c.script_chain(&t.request.id).len(),
+                    Some(c.id.clone()),
+                ),
+                None => (None, 0, None),
+            }
+        };
+        let oauth_job = self.oauth_job.as_ref();
         let tab = &mut self.tabs[idx];
         let mut changed = false;
 
@@ -129,6 +155,8 @@ impl PakPosApp {
                 ui.label(RichText::new("Unsaved  /").color(p.text_weak));
             }
             let name = egui::TextEdit::singleline(&mut tab.request.name)
+                .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                .vertical_align(egui::Align::Center)
                 .frame(egui::Frame::NONE)
                 .font(egui::TextStyle::Heading)
                 .desired_width(ui.available_width() - 200.0);
@@ -154,16 +182,57 @@ impl PakPosApp {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     let m = tab.request.method;
+                    let _ = m;
+                    let (badge, badge_color) = theme::badge(&tab.request);
+                    let shown = if tab.request.kind.is_http() { tab.request.method.as_str() } else { badge };
                     egui::ComboBox::from_id_salt(("method", tab.uid))
                         .width(92.0)
-                        .selected_text(RichText::new(m.as_str()).strong().monospace().color(theme::method_color(m)))
+                        .selected_text(RichText::new(shown).strong().monospace().color(badge_color))
                         .show_ui(ui, |ui| {
                             for method in HttpMethod::ALL {
                                 let label = RichText::new(method.as_str())
                                     .strong()
                                     .monospace()
                                     .color(theme::method_color(method));
-                                changed |= ui.selectable_value(&mut tab.request.method, method, label).changed();
+                                let selected = tab.request.kind.is_http() && tab.request.method == method;
+                                if ui.selectable_label(selected, label).clicked() && !selected {
+                                    tab.request.method = method;
+                                    tab.request.kind = RequestKind::Http;
+                                    changed = true;
+                                }
+                            }
+                            ui.separator();
+                            let g = tab.request.kind == RequestKind::Grpc;
+                            if ui
+                                .selectable_label(g, RichText::new("gRPC").strong().monospace().color(theme::LIME))
+                                .clicked()
+                                && !g
+                            {
+                                tab.request.kind = RequestKind::Grpc;
+                                tab.request.grpc.get_or_insert_with(Default::default);
+                                if !matches!(tab.section, ReqSection::Auth | ReqSection::Headers | ReqSection::Docs) {
+                                    tab.section = ReqSection::Body;
+                                }
+                                if tab.request.url.is_empty() {
+                                    tab.request.url = "grpc://localhost:50051".into();
+                                    tab.url_edit = tab.request.url.clone();
+                                }
+                                changed = true;
+                            }
+                            let ws = tab.request.kind == RequestKind::WebSocket;
+                            if ui
+                                .selectable_label(
+                                    ws,
+                                    RichText::new("WebSocket").strong().monospace().color(theme::TEAL),
+                                )
+                                .clicked()
+                                && !ws
+                            {
+                                tab.request.kind = RequestKind::WebSocket;
+                                if tab.section == ReqSection::Tests || tab.section == ReqSection::Extract {
+                                    tab.section = ReqSection::Params;
+                                }
+                                changed = true;
                             }
                         });
                     let send_w = 96.0;
@@ -194,12 +263,34 @@ impl PakPosApp {
                     if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         send = true;
                     }
-                    let loading = matches!(tab.response, crate::app::ResponseState::Loading { .. });
-                    if widgets::primary_button(ui, if loading { "Sending…" } else { "Send" })
-                        .on_hover_text("Ctrl+Enter")
-                        .clicked()
-                    {
-                        send = true;
+                    if tab.request.kind == RequestKind::WebSocket {
+                        let st = &tab.ws;
+                        let label = if st.connected {
+                            "Disconnect"
+                        } else if st.connecting {
+                            "Connecting…"
+                        } else {
+                            "Connect"
+                        };
+                        if widgets::primary_button(ui, label).clicked() {
+                            ws_action = Some(if st.connected || st.connecting {
+                                crate::ws_view::WsAction::Disconnect
+                            } else {
+                                crate::ws_view::WsAction::Connect
+                            });
+                        }
+                        if send && !st.connected {
+                            ws_action = Some(crate::ws_view::WsAction::Connect);
+                        }
+                        send = false;
+                    } else {
+                        let loading = matches!(tab.response, crate::app::ResponseState::Loading { .. });
+                        if widgets::primary_button(ui, if loading { "Sending…" } else { "Send" })
+                            .on_hover_text("Ctrl+Enter")
+                            .clicked()
+                        {
+                            send = true;
+                        }
                     }
                 });
             });
@@ -223,15 +314,38 @@ impl PakPosApp {
             Body::None => "Body".to_string(),
             b => format!("Body ({})", b.kind().label()),
         };
-        let items = [
+        let mut items = vec![
             (ReqSection::Params, widgets::counted("Params", r.params.iter().filter(|k| !k.is_blank()).count())),
             (ReqSection::Auth, "Auth".to_string()),
             (ReqSection::Headers, widgets::counted("Headers", r.headers.iter().filter(|k| !k.is_blank()).count())),
             (ReqSection::Body, body_label),
             (ReqSection::Tests, widgets::counted("Tests", r.assertions.len())),
             (ReqSection::Extract, widgets::counted("Extract", r.extractions.len())),
+            (ReqSection::Scripts, if r.scripts.is_empty() { "Scripts".to_string() } else { "Scripts ●".to_string() }),
+            (ReqSection::Examples, widgets::counted("Examples", r.examples.len())),
             (ReqSection::Docs, "Docs".to_string()),
         ];
+        if r.kind == RequestKind::Grpc {
+            items.retain(|(s, _)| !matches!(s, ReqSection::Params | ReqSection::Scripts | ReqSection::Examples));
+            for (s, label) in items.iter_mut() {
+                match s {
+                    ReqSection::Headers => {
+                        *label = widgets::counted("Metadata", r.headers.iter().filter(|k| !k.is_blank()).count())
+                    }
+                    ReqSection::Body => *label = "Message".into(),
+                    _ => {}
+                }
+            }
+            if tab.section == ReqSection::Params {
+                tab.section = ReqSection::Body;
+            }
+        }
+        if r.kind == RequestKind::WebSocket {
+            items.retain(|(s, _)| {
+                !matches!(s, ReqSection::Tests | ReqSection::Extract | ReqSection::Scripts | ReqSection::Examples)
+            });
+            items[3].1 = "Message".to_string();
+        }
         widgets::tab_bar(ui, &mut tab.section, &items);
 
         egui::ScrollArea::vertical().id_salt(("req_scroll", tab.uid)).auto_shrink([false, false]).show(ui, |ui| {
@@ -262,10 +376,62 @@ impl PakPosApp {
                         }
                     });
                 }
-                ReqSection::Auth => changed |= auth_editor(ui, &mut tab.request.auth, inherited.as_ref(), &scope, &p),
-                ReqSection::Body => changed |= body_editor(ui, &mut tab.request.body, &scope, tab.uid),
+                ReqSection::Auth => {
+                    changed |= auth_editor(
+                        ui,
+                        &mut tab.request.auth,
+                        inherited.as_ref(),
+                        &scope,
+                        &p,
+                        &tokens,
+                        oauth_job,
+                        &mut oauth_action,
+                    )
+                }
+                ReqSection::Body if tab.request.kind == RequestKind::Grpc => {
+                    let cfg = tab.request.grpc.get_or_insert_with(Default::default);
+                    changed |= crate::grpc_view::editor(
+                        ui,
+                        cfg,
+                        &mut tab.request.body,
+                        &tab.grpc,
+                        tab.uid,
+                        &p,
+                        &mut grpc_action,
+                    );
+                }
+                ReqSection::Body if tab.request.kind == RequestKind::WebSocket => {
+                    changed |=
+                        crate::ws_view::composer(ui, &mut tab.request.body, &tab.ws, tab.uid, &p, &mut ws_action);
+                }
+                ReqSection::Body => {
+                    changed |= body_editor(
+                        ui,
+                        &mut tab.request.body,
+                        &scope,
+                        tab.uid,
+                        gql_schema,
+                        gql_loading,
+                        &p,
+                        &mut gql_action,
+                    )
+                }
                 ReqSection::Tests => changed |= tests_editor(ui, &mut tab.request.assertions, &p),
                 ReqSection::Extract => changed |= extract_editor(ui, &mut tab.request.extractions, &p),
+                ReqSection::Scripts => {
+                    changed |= crate::scripts_view::scripts_editor(
+                        ui,
+                        &mut tab.request.scripts,
+                        tab.uid,
+                        script_trust,
+                        inherited_scripts,
+                        &p,
+                        &mut script_action,
+                    );
+                }
+                ReqSection::Examples => {
+                    changed |= crate::mock_view::examples_editor(ui, &mut tab.request.examples, tab.uid, &p);
+                }
                 ReqSection::Docs => {
                     widgets::section_title(ui, "Description (Markdown)");
                     changed |= ui
@@ -282,6 +448,34 @@ impl PakPosApp {
 
         if changed {
             tab.dirty = true;
+        }
+        if let (Some(crate::scripts_view::ScriptAction::Trust), Some(cid)) = (script_action, source_collection) {
+            self.trust_collection(&cid);
+        }
+        if let Some(a) = grpc_action {
+            let ctx = ui.ctx().clone();
+            self.handle_grpc_action(idx, a, &ctx);
+        }
+        if let Some(a) = ws_action {
+            let ctx = ui.ctx().clone();
+            self.handle_ws_action(idx, a, &ctx);
+        }
+        match gql_action {
+            Some(crate::graphql_view::GqlAction::FetchSchema) => {
+                let ctx = ui.ctx().clone();
+                self.fetch_graphql_schema(idx, &ctx);
+            }
+            Some(crate::graphql_view::GqlAction::Replace(q)) => {
+                if let Body::GraphQl { query, .. } = &mut self.tabs[idx].request.body {
+                    *query = q;
+                    self.tabs[idx].dirty = true;
+                }
+            }
+            None => {}
+        }
+        if let Some(a) = oauth_action {
+            let ctx = ui.ctx().clone();
+            self.handle_oauth_action(a, &ctx);
         }
         if send {
             let ctx = ui.ctx().clone();
@@ -324,14 +518,56 @@ fn apply_url_edit(req: &mut pakpos_core::Request, text: &str) {
     req.url = base.to_string();
 }
 
+/// The "Type" combo box shared by every auth kind.
+fn auth_type_picker(ui: &mut Ui, changed: &mut bool, auth: &mut Auth) {
+    ui.horizontal(|ui| {
+        ui.label("Type");
+        egui::ComboBox::from_id_salt("auth_type").width(190.0).selected_text(auth.label()).show_ui(ui, |ui| {
+            for t in Auth::templates() {
+                let selected = auth.same_variant(&t);
+                if ui.selectable_label(selected, t.label()).clicked() && !selected {
+                    *auth = t;
+                    *changed = true;
+                }
+            }
+        });
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
 fn auth_editor(
     ui: &mut Ui,
     auth: &mut Auth,
     inherited: Option<&Auth>,
     scope: &VarScope,
     p: &crate::theme::Palette,
+    tokens: &pakpos_core::oauth2::TokenStore,
+    job: Option<&crate::oauth_view::OAuthJob>,
+    oauth_action: &mut Option<crate::oauth_view::OAuthUiAction>,
 ) -> bool {
     let mut changed = false;
+    if matches!(auth, Auth::OAuth2(_)) {
+        auth_type_picker(ui, &mut changed, auth);
+        if let Auth::OAuth2(cfg) = auth {
+            ui.add_space(8.0);
+            changed |= crate::oauth_view::oauth_form(ui, cfg, scope, p);
+            *oauth_action = crate::oauth_view::token_panel(ui, cfg, scope, tokens, job, p);
+        }
+        return changed;
+    }
+    let parent_oauth = match (&*auth, inherited) {
+        (Auth::Inherit, Some(Auth::OAuth2(parent))) => Some(parent.clone()),
+        _ => None,
+    };
+    if let Some(parent) = parent_oauth {
+        auth_type_picker(ui, &mut changed, auth);
+        if matches!(auth, Auth::Inherit) {
+            ui.add_space(8.0);
+            ui.label(RichText::new("Uses OAuth 2.0 from the parent folder / collection.").color(p.text_weak));
+            *oauth_action = crate::oauth_view::token_panel(ui, &parent, scope, tokens, job, p);
+        }
+        return changed;
+    }
     ui.horizontal(|ui| {
         ui.label("Type");
         egui::ComboBox::from_id_salt("auth_type").width(190.0).selected_text(auth.label()).show_ui(ui, |ui| {
@@ -362,12 +598,21 @@ fn auth_editor(
             ui.label(RichText::new("This request does not use any authorization.").color(p.text_weak));
             ui.end_row();
         }
+        Auth::OAuth2(_) => {} // handled above
         Auth::Basic { username, password } => {
             ui.label("Username");
             changed |= widgets::var_text_edit(ui, username, scope, "", w).changed();
             ui.end_row();
             ui.label("Password");
-            changed |= ui.add(egui::TextEdit::singleline(password).password(true).desired_width(w)).changed();
+            changed |= ui
+                .add(
+                    egui::TextEdit::singleline(password)
+                        .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                        .vertical_align(egui::Align::Center)
+                        .password(true)
+                        .desired_width(w),
+                )
+                .changed();
             ui.end_row();
         }
         Auth::Bearer { token } => {
@@ -393,7 +638,17 @@ fn auth_editor(
     changed
 }
 
-fn body_editor(ui: &mut Ui, body: &mut Body, scope: &VarScope, uid: u64) -> bool {
+#[allow(clippy::too_many_arguments)]
+fn body_editor(
+    ui: &mut Ui,
+    body: &mut Body,
+    scope: &VarScope,
+    uid: u64,
+    gql_schema: Option<&Result<pakpos_core::graphql::Schema, String>>,
+    gql_loading: bool,
+    p: &crate::theme::Palette,
+    gql_action: &mut Option<crate::graphql_view::GqlAction>,
+) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
         let current = body.kind();
@@ -459,10 +714,30 @@ fn body_editor(ui: &mut Ui, body: &mut Body, scope: &VarScope, uid: u64) -> bool
         }
         Body::FormUrlEncoded { fields } => changed |= widgets::kv_table(ui, "urlencoded", fields, scope, "Field"),
         Body::Multipart { fields } => changed |= widgets::form_table(ui, fields, scope),
+        Body::GraphQl { query, variables, operation_name } => {
+            changed |= crate::graphql_view::editor(
+                ui,
+                query,
+                variables,
+                operation_name,
+                uid,
+                gql_schema,
+                gql_loading,
+                p,
+                gql_action,
+            );
+        }
         Body::Binary { path } => {
             ui.horizontal(|ui| {
-                changed |=
-                    ui.add(egui::TextEdit::singleline(path).hint_text("path/to/file").desired_width(420.0)).changed();
+                changed |= ui
+                    .add(
+                        egui::TextEdit::singleline(path)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .hint_text("path/to/file")
+                            .desired_width(420.0),
+                    )
+                    .changed();
                 if ui.button("Browse…").clicked() {
                     if let Some(p) = rfd::FileDialog::new().pick_file() {
                         *path = p.display().to_string();
@@ -491,7 +766,13 @@ fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palet
             ui.horizontal(|ui| {
                 changed |= ui.checkbox(&mut t.enabled, "").changed();
                 changed |= ui
-                    .add(egui::TextEdit::singleline(&mut t.target).desired_width(220.0).hint_text("json.data.id"))
+                    .add(
+                        egui::TextEdit::singleline(&mut t.target)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(220.0)
+                            .hint_text("json.data.id"),
+                    )
                     .changed();
                 egui::ComboBox::from_id_salt("op").width(120.0).selected_text(t.op.label()).show_ui(ui, |ui| {
                     for op in Operator::ALL {
@@ -500,7 +781,13 @@ fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palet
                 });
                 if t.op.needs_expected() {
                     changed |= ui
-                        .add(egui::TextEdit::singleline(&mut t.expected).desired_width(200.0).hint_text("expected"))
+                        .add(
+                            egui::TextEdit::singleline(&mut t.expected)
+                                .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                .vertical_align(egui::Align::Center)
+                                .desired_width(200.0)
+                                .hint_text("expected"),
+                        )
                         .changed();
                 }
                 if widgets::ghost_button(ui, "×", "Remove").clicked() {
@@ -550,11 +837,23 @@ fn extract_editor(ui: &mut Ui, ex: &mut Vec<Extraction>, p: &crate::theme::Palet
             ui.horizontal(|ui| {
                 changed |= ui.checkbox(&mut e.enabled, "").changed();
                 changed |= ui
-                    .add(egui::TextEdit::singleline(&mut e.source).desired_width(240.0).hint_text("json.data.token"))
+                    .add(
+                        egui::TextEdit::singleline(&mut e.source)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(240.0)
+                            .hint_text("json.data.token"),
+                    )
                     .changed();
                 ui.label("→");
                 changed |= ui
-                    .add(egui::TextEdit::singleline(&mut e.variable).desired_width(160.0).hint_text("variable"))
+                    .add(
+                        egui::TextEdit::singleline(&mut e.variable)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(160.0)
+                            .hint_text("variable"),
+                    )
                     .changed();
                 if widgets::ghost_button(ui, "×", "Remove").clicked() {
                     remove = Some(i);

@@ -53,7 +53,33 @@
                 }
               }
             }
-          }
+          },
+          "response": [
+            {
+              "name": "Created",
+              "code": 201,
+              "status": "Created",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"usr_1001\",\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\"\n}"
+            },
+            {
+              "name": "Validation error",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"name is required\"\n}"
+            }
+          ]
         },
         {
           "name": "Submit form",
@@ -181,6 +207,169 @@
               ]
             }
           }
+        },
+        {
+          "name": "Profile (OAuth 2.0)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/oauth/me",
+              "query": []
+            },
+            "auth": {
+              "type": "oauth2",
+              "oauth2": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "string"
+                },
+                {
+                  "key": "accessTokenUrl",
+                  "value": "{{base_url}}/oauth/token",
+                  "type": "string"
+                },
+                {
+                  "key": "authUrl",
+                  "value": "{{base_url}}/oauth/authorize",
+                  "type": "string"
+                },
+                {
+                  "key": "clientId",
+                  "value": "pakpos-demo",
+                  "type": "string"
+                },
+                {
+                  "key": "clientSecret",
+                  "value": "demo-secret",
+                  "type": "string"
+                },
+                {
+                  "key": "scope",
+                  "value": "read",
+                  "type": "string"
+                },
+                {
+                  "key": "username",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "http://127.0.0.1:7777/callback",
+                  "type": "string"
+                },
+                {
+                  "key": "headerPrefix",
+                  "value": "Bearer",
+                  "type": "string"
+                },
+                {
+                  "key": "challengeAlgorithm",
+                  "value": "S256",
+                  "type": "string"
+                },
+                {
+                  "key": "client_authentication",
+                  "value": "header",
+                  "type": "string"
+                },
+                {
+                  "key": "addTokenTo",
+                  "value": "header",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "The token is fetched automatically (client credentials). Switch the grant to Authorization code to try the browser login against the mock API."
+          }
+        }
+      ]
+    },
+    {
+      "name": "GraphQL",
+      "item": [
+        {
+          "name": "Users by city (GraphQL)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/graphql",
+              "query": []
+            },
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Users($city: String) {\n  users(city: $city) {\n    id\n    name\n    city\n  }\n}\n",
+                "variables": "{ \"city\": \"Jakarta\" }"
+              }
+            },
+            "description": "Click “Fetch schema” in the Body tab to browse the API."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Realtime",
+      "item": [
+        {
+          "name": "Live prices (WebSocket)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ws_url}}/ws",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"subscribe\",\n  \"symbol\": \"IDR\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds."
+          }
+        },
+        {
+          "name": "Health check (gRPC)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{grpc_url}}",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service\": \"pakpos.demo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send."
+          }
         }
       ]
     },
@@ -196,7 +385,21 @@
               "raw": "{{base_url}}/uuid",
               "query": []
             }
-          }
+          },
+          "response": [
+            {
+              "name": "Random UUID",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{ \"uuid\": \"0f8e6a7c-2b1d-4c3e-9f5a-8d7b6c5e4f3a\" }"
+            }
+          ]
         },
         {
           "name": "JSON document",
@@ -219,6 +422,50 @@
               "query": []
             }
           }
+        },
+        {
+          "name": "Scripted checks (JavaScript)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/json",
+              "query": []
+            },
+            "description": "Postman-style pm.* scripts, run in a sandbox. Collections you import must be trusted before their scripts run."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Runs before sending: add a trace header.",
+                  "pm.request.headers.upsert({ key: \"X-Trace-Id\", value: pm.variables.replaceIn(\"{{$guid}}\") });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Slideshow has slides\", () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.slideshow.slides).to.be.an(\"array\").that.is.not.empty;",
+                  "  pm.expect(json.slideshow.author).to.eql(\"PakPos\");",
+                  "});",
+                  "",
+                  "pm.environment.set(\"slide_count\", pm.response.json().slideshow.slides.length);",
+                  "console.log(\"slides:\", pm.environment.get(\"slide_count\"));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

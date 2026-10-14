@@ -5,11 +5,10 @@ use crate::theme::{self, Palette};
 use crate::widgets;
 use egui::{Align2, FontId, Margin, RichText, Sense, Stroke, Ui};
 use pakpos_core::model::Item;
-use pakpos_core::HttpMethod;
 
 struct RowStyle<'a> {
     depth: usize,
-    method: Option<HttpMethod>,
+    badge: Option<(&'static str, egui::Color32)>,
     icon: Option<&'a str>,
     label: &'a str,
     selected: bool,
@@ -33,14 +32,8 @@ fn tree_row(ui: &mut Ui, p: &Palette, s: RowStyle<'_>) -> egui::Response {
         painter.text(egui::pos2(x, cy), Align2::LEFT_CENTER, icon, FontId::proportional(12.0), p.text_weak);
         x += 16.0;
     }
-    if let Some(m) = s.method {
-        painter.text(
-            egui::pos2(x, cy),
-            Align2::LEFT_CENTER,
-            theme::method_short(m),
-            FontId::monospace(10.5),
-            theme::method_color(m),
-        );
+    if let Some((label, color)) = s.badge {
+        painter.text(egui::pos2(x, cy), Align2::LEFT_CENTER, label, FontId::monospace(10.5), color);
         x += 42.0;
     }
     let mut right = rect.right() - 8.0;
@@ -85,6 +78,7 @@ impl PakPosApp {
             .resizable(true)
             .default_size(290.0)
             .min_size(220.0)
+            .max_size(560.0)
             .frame(
                 egui::Frame::new()
                     .fill(p.sidebar)
@@ -114,20 +108,25 @@ impl PakPosApp {
 
     fn collections_view(&mut self, ui: &mut Ui) {
         let p = self.palette;
-        ui.horizontal(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut self.search)
-                    .hint_text("🔍 Search requests")
-                    .desired_width(ui.available_width() - 34.0),
-            );
+        // Right-to-left so the search box takes exactly the space left by the
+        // button (sizing it as "available - N" makes the panel grow every frame).
+        let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button("+").on_hover_text("New collection").clicked() {
                 self.actions.push(Action::Dialog(Dialog::NewCollection { name: String::new() }));
             }
+            ui.add(
+                egui::TextEdit::singleline(&mut self.search)
+                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                    .vertical_align(egui::Align::Center)
+                    .hint_text("🔍 Search requests")
+                    .desired_width(ui.available_width()),
+            );
         });
         ui.add_space(6.0);
 
         if self.ws.collections.is_empty() {
-            widgets::empty_state(ui, &p, "No collections yet", "Create one with + or import a Postman file.");
+            widgets::empty_state(ui, &p, "No collections yet", "Create one with + or import a collection file.");
             return;
         }
 
@@ -150,7 +149,7 @@ impl PakPosApp {
                     &p,
                     RowStyle {
                         depth: 0,
-                        method: None,
+                        badge: None,
                         icon: Some(if open { "▾" } else { "▸" }),
                         label: &c.name,
                         selected: false,
@@ -167,6 +166,19 @@ impl PakPosApp {
                     if ui.button("📁 Add folder").clicked() {
                         pending.push(Action::NewFolderIn { collection: c.id.clone(), folder: None });
                     }
+                    if ui.button("⚙ Edit collection…").clicked() {
+                        pending.push(Action::Dialog(Dialog::CollectionSettings {
+                            id: c.id.clone(),
+                            tab: crate::app::CollectionTab::General,
+                        }));
+                    }
+                    if self.mock.as_ref().is_some_and(|m| m.collection == c.id) {
+                        if ui.button("■ Stop mock server").clicked() {
+                            pending.push(Action::StopMock);
+                        }
+                    } else if ui.button("◉ Start mock server").clicked() {
+                        pending.push(Action::StartMock(c.id.clone()));
+                    }
                     if ui.button("▶ Run collection").clicked() {
                         pending.push(Action::RunCollection(c.id.clone()));
                     }
@@ -174,7 +186,7 @@ impl PakPosApp {
                     if ui.button("✏ Rename").clicked() {
                         pending.push(Action::Rename(RenameTarget::Collection(c.id.clone()), c.name.clone()));
                     }
-                    if ui.button("⬆ Export (Postman v2.1)…").clicked() {
+                    if ui.button("⬆ Export (Collection v2.1)…").clicked() {
                         pending.push(Action::ExportCollection(c.id.clone()));
                     }
                     ui.separator();
@@ -224,7 +236,7 @@ impl PakPosApp {
                         p,
                         RowStyle {
                             depth,
-                            method: None,
+                            badge: None,
                             icon: Some(if open { "▾" } else { "▸" }),
                             label: &format!("{} {}", if open { "🗁" } else { "🗀" }, f.name),
                             selected: false,
@@ -248,7 +260,7 @@ impl PakPosApp {
                         p,
                         RowStyle {
                             depth,
-                            method: Some(r.method),
+                            badge: Some(theme::badge(r)),
                             icon: None,
                             label: &r.name,
                             selected,
@@ -309,7 +321,7 @@ impl PakPosApp {
                     &p,
                     RowStyle {
                         depth: 0,
-                        method: None,
+                        badge: None,
                         icon: Some(if is_active { "●" } else { "○" }),
                         label: &e.name,
                         selected: is_active,
@@ -329,7 +341,7 @@ impl PakPosApp {
                     if ui.button("Rename").clicked() {
                         pending.push(Action::Rename(RenameTarget::Environment(e.id.clone()), e.name.clone()));
                     }
-                    if ui.button("⬆ Export (Postman)…").clicked() {
+                    if ui.button("⬆ Export…").clicked() {
                         pending.push(Action::ExportEnvironment(e.id.clone()));
                     }
                     ui.separator();
@@ -390,7 +402,7 @@ impl PakPosApp {
                     &p,
                     RowStyle {
                         depth: 0,
-                        method: Some(entry.request.method),
+                        badge: Some(theme::badge(&entry.request)),
                         icon: None,
                         label: &entry.request.url,
                         selected: false,

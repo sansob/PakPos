@@ -6,6 +6,7 @@
 ├── environments/<id>.json    one file per environment
 ├── globals.json              global variables
 ├── history.json              last 200 sent requests
+├── tokens.json               OAuth 2.0 tokens (keep out of git)
 └── settings.json             theme, HTTP settings, active environment
 ```
 
@@ -49,10 +50,21 @@ stopping the app.
 ```
 
 - `url` never contains the query string; query parameters live in `params`.
+- `protocol` is omitted for HTTP; `"websocket"` marks a WebSocket request (its raw
+  `body` is the message draft) and `"grpc"` a gRPC call, with
+  `grpc: { method, proto_files, import_paths }` and the JSON message in the raw `body`.
+- `examples` is a list of saved responses (`name`, `status`, `headers`, `body`)
+  served by the mock server.
+- `scripts` (`pre_request`, `test`) holds JavaScript; it may also appear on
+  folders and the collection.
 - `body.mode`: `none`, `raw` (`language`: `json`, `text`, `xml`, `html`, `javascript`),
-  `form_url_encoded` (`fields`), `multipart` (`fields` with `is_file`), `binary` (`path`).
+  `form_url_encoded` (`fields`), `multipart` (`fields` with `is_file`), `binary` (`path`),
+  `graphql` (`query`, `variables` as JSON text, `operation_name`).
 - `auth.type`: `inherit`, `none`, `basic` (`username`, `password`), `bearer` (`token`),
-  `api_key` (`key`, `value`, `location`: `header` | `query`).
+  `api_key` (`key`, `value`, `location`: `header` | `query`),
+  `oauth2` (`grant`: `client_credentials` | `password` | `authorization_code`, `token_url`,
+  `auth_url`, `client_id`, `client_secret`, `scope`, `audience`, `username`, `password`,
+  `redirect_uri`, `use_pkce`, `client_auth`: `header` | `body`, `header_prefix`).
 
 ## Environment
 
@@ -63,9 +75,11 @@ stopping the app.
 
 ## Sharing a workspace with a team
 
+The easiest way is the built-in [Git sync](git.md). Manually:
+
 ```sh
 export PAKPOS_HOME=~/code/my-api/.pakpos   # point the app and CLI at a repo folder
 ```
 
 Commit `collections/` and the environments without secrets; add `history.json`,
-`settings.json` and secret environments to `.gitignore`.
+`settings.json`, `tokens.json` and secret environments to `.gitignore`.

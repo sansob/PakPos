@@ -1,15 +1,15 @@
 # FAQ
 
-**Is PakPos a drop-in replacement for Postman?**
-For sending requests, collections, environments, basic auth types, tests and CI
-runs: mostly yes. For JavaScript scripts, OAuth 2, GraphQL/WebSocket/gRPC, mock
-servers and team cloud features: not yet (see the [roadmap](roadmap.md)).
+**Can PakPos replace my current API client?**
+For most day-to-day work, yes: HTTP, GraphQL, WebSocket and gRPC requests,
+collections, environments, OAuth 2.0, tests and scripts, mock servers, CI runs and
+team sharing (through git). The gaps are listed in the [roadmap](roadmap.md):
+`pm.sendRequest` and npm libraries in scripts, data-driven runs, some auth types.
 
-**Why not JavaScript tests like Postman?**
-Embedding a JS engine adds size and complexity, and running someone else's
-collection would mean running their code. Declarative tests cover most checks,
-are easy to review in a diff, and run the same way in the app, the CLI and the
-MCP server.
+**Can I run existing JavaScript tests?**
+Yes, in a sandbox (no file, process or network access) and only for collections
+you trust; see [JavaScript scripts](reference/scripts.md). For new work, the
+declarative tests are easier to review in a diff and need no trust at all.
 
 **Where is my data? Is anything uploaded?**
 Nothing is uploaded; there is no telemetry. Data is in the workspace folder shown
@@ -31,5 +31,5 @@ Settings → disable *Verify TLS certificates* (local development only), or
 `pakpos-cli … -k`.
 
 **Why the name?**
-*Pak Pos* is Indonesian for "Mr. Postman": the friendly person who delivers your
+*Pak Pos* is Indonesian for "Mr. Post": the friendly mail carrier who delivers your
 requests and brings the responses back.

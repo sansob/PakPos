@@ -19,6 +19,9 @@ pub struct RequestReport {
     pub error: Option<String>,
     pub assertions: Vec<AssertionResult>,
     pub extracted: Vec<(String, String)>,
+    /// `console.log` output and script notices.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub logs: Vec<String>,
 }
 
 impl RequestReport {
@@ -34,6 +37,12 @@ pub struct RunReport {
     pub environment: Option<String>,
     pub requests: Vec<RequestReport>,
     pub total_ms: u128,
+    /// Token store after the run (new / refreshed OAuth 2.0 tokens), for the caller to persist.
+    #[serde(skip)]
+    pub tokens: crate::oauth2::TokenStore,
+    /// Variable changes made by scripts (collection / global ones are for the caller to persist).
+    #[serde(skip)]
+    pub script_changes: crate::scripts::VarChanges,
 }
 
 impl RunReport {
@@ -122,6 +131,10 @@ pub struct RunOptions {
     pub overrides: Vec<(String, String)>,
     /// If non-empty, only these hosts may be contacted (see [`http::host_allowed`]).
     pub allowed_hosts: Vec<String>,
+    /// Known OAuth 2.0 tokens (e.g. the workspace's `tokens.json`).
+    pub tokens: crate::oauth2::TokenStore,
+    /// Run JavaScript scripts (only for trusted collections).
+    pub allow_scripts: bool,
 }
 
 /// Runs every request in `collection` sequentially.
@@ -148,11 +161,16 @@ pub fn run_collection(
     let mut report = RunReport {
         collection: collection.name.clone(),
         environment: environment.as_ref().map(|e| e.name.clone()),
+        tokens: options.tokens.clone(),
         ..Default::default()
     };
 
     let filter = options.filter.as_ref().map(|f| f.to_lowercase());
-    for (folder, req) in collection.flatten() {
+    for (folder, mut req) in collection.flatten() {
+        // Only HTTP requests are runnable in a sequential test run.
+        if !req.kind.is_http() {
+            continue;
+        }
         if let Some(f) = &filter {
             let hay = format!("{} {}", folder.join("/"), req.name).to_lowercase();
             if !hay.contains(f) {
@@ -173,15 +191,40 @@ pub fn run_collection(
             error: None,
             assertions: Vec::new(),
             extracted: Vec::new(),
+            logs: Vec::new(),
         };
-        let outcome = match &client {
-            Ok(client) => http::prepare(&req, &scope, None).and_then(|p| {
+        let chain = crate::scripts::chain_for(Some(collection), &req);
+        let run_scripts = !chain.is_empty() && options.allow_scripts;
+        if !chain.is_empty() && !options.allow_scripts {
+            entry.logs.push("scripts skipped: the collection is not trusted (pakpos-cli run --allow-scripts)".into());
+        }
+        let mut script_failures = Vec::new();
+        if run_scripts {
+            let pre = crate::scripts::run_pre_request(&chain, &mut req, &mut scope, crate::scripts::Limits::default());
+            persist_env(environment.as_deref_mut(), &pre.changes);
+            script_failures.extend(pre.error_results());
+            entry.logs.extend(pre.logs.iter().cloned());
+            report.script_changes.merge(pre.changes);
+        }
+        // The token endpoint is a host too: keep it inside the allow-list.
+        let token = match &req.auth {
+            crate::model::Auth::OAuth2(c)
+                if !http::host_allowed(&c.resolved(&scope).token_url, &options.allowed_hosts) =>
+            {
+                Err(format!("OAuth 2.0 token URL `{}` is not in the allow-list", c.resolved(&scope).token_url))
+            }
+            _ => crate::oauth2::ensure_token(&req.auth, &mut scope, &mut report.tokens, &options.settings)
+                .map_err(|e| e.to_string()),
+        };
+        let outcome = match (&client, token) {
+            (_, Err(e)) => Err(http::HttpError::Transport(e)),
+            (Ok(client), Ok(_)) => http::prepare(&req, &scope, None).and_then(|p| {
                 if !http::host_allowed(&p.url, &options.allowed_hosts) {
                     return Err(http::HttpError::Transport(format!("host of `{}` is not in the allow-list", p.url)));
                 }
                 http::send(client, &p).map(|r| (p, r))
             }),
-            Err(e) => Err(http::HttpError::Transport(e.to_string())),
+            (Err(e), _) => Err(http::HttpError::Transport(e.to_string())),
         };
         match outcome {
             Ok((prepared, resp)) => {
@@ -197,6 +240,16 @@ pub fn run_collection(
                         env.set(k, v.clone());
                     }
                 }
+                if run_scripts {
+                    let t =
+                        crate::scripts::run_tests(&chain, &req, &resp, &mut scope, crate::scripts::Limits::default());
+                    persist_env(environment.as_deref_mut(), &t.changes);
+                    entry.assertions.extend(t.tests.iter().cloned());
+                    script_failures.extend(t.error_results());
+                    entry.logs.extend(t.logs.iter().cloned());
+                    report.script_changes.merge(t.changes);
+                }
+                entry.assertions.extend(script_failures);
             }
             Err(e) => entry.error = Some(e.to_string()),
         }
@@ -209,6 +262,13 @@ pub fn run_collection(
     }
     report.total_ms = started.elapsed().as_millis();
     report
+}
+
+/// Writes script environment changes into the environment being run.
+fn persist_env(env: Option<&mut Environment>, changes: &crate::scripts::VarChanges) {
+    if let Some(env) = env {
+        crate::scripts::VarChanges::apply_to_list(&mut env.variables, &changes.environment);
+    }
 }
 
 #[cfg(test)]
@@ -235,6 +295,7 @@ mod tests {
                         AssertionResult { name: "t".into(), passed: false, message: "\"bad\"".into() },
                     ],
                     extracted: vec![],
+                    logs: vec![],
                 },
                 RequestReport {
                     name: "b".into(),
@@ -247,9 +308,12 @@ mod tests {
                     error: Some("boom".into()),
                     assertions: vec![],
                     extracted: vec![],
+                    logs: vec![],
                 },
             ],
             total_ms: 20,
+            tokens: Default::default(),
+            script_changes: Default::default(),
         };
         let xml = report.to_junit();
         assert!(xml.contains("tests=\"3\" failures=\"2\""));

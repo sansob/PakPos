@@ -23,6 +23,8 @@ const MAX_BODY_CHARS: usize = 100_000;
 pub struct McpConfig {
     pub allowed_hosts: Vec<String>,
     pub allow_write: bool,
+    /// Run scripts of collections trusted in the app.
+    pub allow_scripts: bool,
     pub workspace_root: PathBuf,
 }
 
@@ -308,9 +310,16 @@ impl Server {
                     filter: str_arg(args, "filter").map(str::to_string),
                     globals: ws.globals.clone(),
                     allowed_hosts: self.config.allowed_hosts.clone(),
+                    tokens: ws.tokens.clone(),
+                    allow_scripts: self.config.allow_scripts && ws.is_trusted(&c.id),
                     ..Default::default()
                 };
                 let report = run_collection(&c, env.as_mut(), &options, |_| {});
+                if report.tokens != ws.tokens {
+                    let mut ws = ws.clone();
+                    ws.tokens = report.tokens.clone();
+                    let _ = ws.save_tokens();
+                }
                 let (passed, total) = report.assertion_counts();
                 let mut text = format!(
                     "{} — {} requests, assertions {passed}/{total}, {} ms\n",
@@ -354,8 +363,20 @@ impl Server {
         env: Option<&Environment>,
         collection_vars: &[KeyValue],
     ) -> Result<String> {
-        let scope =
+        let mut scope =
             VarScope::new().with_environment(env).with_collection_vars(collection_vars).with_globals(&ws.globals);
+        if let pakpos_core::Auth::OAuth2(cfg) = &req.auth {
+            let token_url = cfg.resolved(&scope).token_url;
+            if !http::host_allowed(&token_url, &self.config.allowed_hosts) {
+                anyhow::bail!("OAuth 2.0 token URL `{token_url}` is not allowed");
+            }
+            let mut tokens = ws.tokens.clone();
+            if pakpos_core::oauth2::ensure_token(&req.auth, &mut scope, &mut tokens, &self.settings())?.is_some() {
+                let mut ws = ws.clone();
+                ws.tokens = tokens;
+                let _ = ws.save_tokens();
+            }
+        }
         let missing = scope.unresolved(&format!(
             "{} {}",
             req.url,
@@ -409,7 +430,12 @@ mod tests {
     use super::*;
 
     fn server(dir: &std::path::Path, hosts: Vec<String>) -> Server {
-        Server::new(McpConfig { allowed_hosts: hosts, allow_write: true, workspace_root: dir.to_path_buf() })
+        Server::new(McpConfig {
+            allowed_hosts: hosts,
+            allow_write: true,
+            allow_scripts: false,
+            workspace_root: dir.to_path_buf(),
+        })
     }
 
     #[test]

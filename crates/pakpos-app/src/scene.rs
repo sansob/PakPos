@@ -16,6 +16,7 @@ struct SceneState {
     setup_done: bool,
     ready_at: Option<Instant>,
     requested: bool,
+    sent: bool,
 }
 
 static SCENE: Mutex<Option<SceneState>> = Mutex::new(None);
@@ -29,6 +30,7 @@ pub fn init_from_env() {
             setup_done: false,
             ready_at: None,
             requested: false,
+            sent: false,
         });
     }
 }
@@ -100,6 +102,76 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].section = ReqSection::Auth;
             app.send(app.active, ctx);
         }
+        "git" => {
+            // A workspace with history, a remote and one pending change.
+            let root = app.ws.root.clone();
+            let remote = root.parent().unwrap_or(&root).join("team-remote.git");
+            let sh = |dir: &std::path::Path, args: &[&str]| {
+                let _ = std::process::Command::new("git").args(args).current_dir(dir).output();
+            };
+            let _ = std::fs::create_dir_all(&remote);
+            sh(&remote, &["init", "-q", "--bare"]);
+            let _ = pakpos_core::git::init(&root);
+            sh(&root, &["config", "user.name", "Budi"]);
+            sh(&root, &["config", "user.email", "budi@example.com"]);
+            sh(&root, &["config", "commit.gpgsign", "false"]);
+            let _ = pakpos_core::git::commit_all(&root, "Add PakPos demo collection");
+            let _ = pakpos_core::git::set_remote(&root, &format!("file://{}", remote.display()));
+            let _ = pakpos_core::git::push(&root);
+            if let Some(c) = app.ws.collections.first_mut() {
+                c.description.push_str("\n\nOwned by the payments team.");
+            }
+            let id = app.ws.collections[0].id.clone();
+            app.persist_collection(&id);
+            open_by_name(app, "Get with query params");
+            app.git.open = true;
+            app.git.message = "Document collection owner".into();
+        }
+        "grpc" => {
+            open_by_name(app, "Health check (gRPC)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.grpc_load(app.active, ctx);
+            app.send(app.active, ctx);
+        }
+        "mock" => {
+            open_by_name(app, "Create user (JSON)");
+            app.tabs[app.active].section = ReqSection::Examples;
+            let id = app.ws.collections[0].id.clone();
+            app.start_mock(&id);
+            if let Some(m) = &app.mock {
+                let base = format!("http://{}", m.server.addr);
+                std::thread::spawn(move || {
+                    let c = reqwest::blocking::Client::new();
+                    std::thread::sleep(Duration::from_millis(300));
+                    let _ = c.post(format!("{base}/post")).body("{}").send();
+                    let _ = c.post(format!("{base}/post")).header("x-mock-response-code", "422").send();
+                    let _ = c.get(format!("{base}/uuid")).send();
+                    let _ = c.get(format!("{base}/orders/42")).send();
+                });
+            }
+        }
+        "scripts" => {
+            open_by_name(app, "Scripted checks (JavaScript)");
+            app.tabs[app.active].section = ReqSection::Scripts;
+            app.tabs[app.active].resp_section = RespSection::Tests;
+            app.send(app.active, ctx);
+        }
+        "websocket" => {
+            open_by_name(app, "Live prices (WebSocket)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.ws_connect(app.active, ctx);
+        }
+        "graphql" => {
+            open_by_name(app, "Users by city (GraphQL)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.fetch_graphql_schema(app.active, ctx);
+            app.send(app.active, ctx);
+        }
+        "oauth" => {
+            open_by_name(app, "Profile (OAuth 2.0)");
+            app.tabs[app.active].section = ReqSection::Auth;
+            app.send(app.active, ctx);
+        }
         "settings" => {
             open_by_name(app, "Get with query params");
             app.dialog = Some(Dialog::Settings);
@@ -117,6 +189,19 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
     match name {
         "runner" => app.runner.as_ref().is_some_and(|r| r.report.is_some()),
         "environments" | "curl" | "snippet" | "settings" => true,
+        "git" => app.git.job.is_none() && app.git.status.as_ref().is_some_and(|s| s.as_ref().is_ok_and(|s| s.is_repo)),
+        "grpc" => app.tabs.get(app.active).is_some_and(|t| {
+            t.grpc.job.is_none() && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))
+        }),
+        "mock" => app.mock.as_ref().is_some_and(|m| m.hits.len() >= 4),
+        "websocket" => app.tabs.get(app.active).is_some_and(|t| t.ws.log.iter().any(|e| e.text.contains("\"tick\""))),
+        "graphql" => {
+            app.graphql.job.is_none()
+                && app
+                    .tabs
+                    .get(app.active)
+                    .is_some_and(|t| matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_)))
+        }
         _ => app
             .tabs
             .get(app.active)
@@ -134,6 +219,16 @@ pub fn tick(app: &mut PakPosApp, ctx: &egui::Context) {
         setup(app, &name, ctx);
         ctx.request_repaint();
         return;
+    }
+    if state.name == "websocket" {
+        let idx = app.active;
+        let needs_send = !state.sent && app.tabs.get(idx).is_some_and(|t| t.ws.connected);
+        if needs_send {
+            state.sent = true;
+            if let pakpos_core::Body::Raw { content, .. } = app.tabs[idx].request.body.clone() {
+                app.handle_ws_action(idx, crate::ws_view::WsAction::Send(content), ctx);
+            }
+        }
     }
     if state.ready_at.is_none() && (is_ready(app, &state.name) || state.started.elapsed() > Duration::from_secs(20)) {
         state.ready_at = Some(Instant::now());

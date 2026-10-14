@@ -22,6 +22,22 @@ directories.workspace = true
 rand.workspace = true
 base64.workspace = true
 url.workspace = true
+sha2.workspace = true
+rquickjs.workspace = true
+tonic.workspace = true
+prost-types.workspace = true
+tonic-reflection.workspace = true
+prost.workspace = true
+prost-reflect.workspace = true
+protox.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tungstenite.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+tungstenite.workspace = true
+tonic = { workspace = true, features = ["server", "router"] }
+tonic-health = "0.14"
+tonic-reflection = { workspace = true, features = ["server"] }
+tokio = { workspace = true, features = ["net"] }

@@ -167,6 +167,16 @@ pub enum Body {
     Binary {
         path: String,
     },
+    /// GraphQL over HTTP: sent as `{"query", "variables", "operationName"}` JSON.
+    #[serde(rename = "graphql")]
+    GraphQl {
+        query: String,
+        /// JSON object text; may contain `{{variables}}`.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        variables: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        operation_name: String,
+    },
 }
 
 impl Body {
@@ -177,6 +187,7 @@ impl Body {
             Body::FormUrlEncoded { .. } => BodyKind::FormUrlEncoded,
             Body::Multipart { .. } => BodyKind::Multipart,
             Body::Binary { .. } => BodyKind::Binary,
+            Body::GraphQl { .. } => BodyKind::GraphQl,
         }
     }
 
@@ -218,6 +229,14 @@ impl Body {
                 },
             },
             BodyKind::Binary => Body::Binary { path: String::new() },
+            BodyKind::GraphQl => Body::GraphQl {
+                query: match self {
+                    Body::Raw { content, .. } => content.clone(),
+                    _ => "query {\n  \n}".into(),
+                },
+                variables: String::new(),
+                operation_name: String::new(),
+            },
         }
     }
 }
@@ -229,11 +248,18 @@ pub enum BodyKind {
     FormUrlEncoded,
     Multipart,
     Binary,
+    GraphQl,
 }
 
 impl BodyKind {
-    pub const ALL: [BodyKind; 5] =
-        [BodyKind::None, BodyKind::Raw, BodyKind::FormUrlEncoded, BodyKind::Multipart, BodyKind::Binary];
+    pub const ALL: [BodyKind; 6] = [
+        BodyKind::None,
+        BodyKind::Raw,
+        BodyKind::FormUrlEncoded,
+        BodyKind::Multipart,
+        BodyKind::Binary,
+        BodyKind::GraphQl,
+    ];
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -242,6 +268,7 @@ impl BodyKind {
             BodyKind::FormUrlEncoded => "x-www-form-urlencoded",
             BodyKind::Multipart => "form-data",
             BodyKind::Binary => "binary",
+            BodyKind::GraphQl => "GraphQL",
         }
     }
 }
@@ -276,6 +303,147 @@ pub enum Auth {
         #[serde(default)]
         location: ApiKeyLocation,
     },
+    /// OAuth 2.0; tokens are kept in the workspace token store, not here.
+    #[serde(rename = "oauth2")]
+    OAuth2(OAuth2Config),
+}
+
+/// OAuth 2.0 grant types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuth2Grant {
+    #[default]
+    ClientCredentials,
+    Password,
+    AuthorizationCode,
+}
+
+impl OAuth2Grant {
+    pub const ALL: [OAuth2Grant; 3] =
+        [OAuth2Grant::ClientCredentials, OAuth2Grant::Password, OAuth2Grant::AuthorizationCode];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            OAuth2Grant::ClientCredentials => "Client credentials",
+            OAuth2Grant::Password => "Password",
+            OAuth2Grant::AuthorizationCode => "Authorization code",
+        }
+    }
+
+    /// Grants that can run without a browser (CLI, runner, MCP).
+    pub fn is_interactive(&self) -> bool {
+        matches!(self, OAuth2Grant::AuthorizationCode)
+    }
+}
+
+/// How the client authenticates at the token endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ClientAuthMethod {
+    /// HTTP Basic header (`client_secret_basic`).
+    #[default]
+    Header,
+    /// `client_id` / `client_secret` in the form body (`client_secret_post`).
+    Body,
+}
+
+fn default_prefix() -> String {
+    "Bearer".into()
+}
+
+fn default_redirect() -> String {
+    "http://127.0.0.1:7777/callback".into()
+}
+
+/// OAuth 2.0 settings. Every field may contain `{{variables}}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OAuth2Config {
+    #[serde(default)]
+    pub grant: OAuth2Grant,
+    #[serde(default)]
+    pub token_url: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auth_url: String,
+    #[serde(default)]
+    pub client_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub client_secret: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub scope: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub audience: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub username: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub password: String,
+    #[serde(default = "default_redirect")]
+    pub redirect_uri: String,
+    #[serde(default = "default_true")]
+    pub use_pkce: bool,
+    #[serde(default)]
+    pub client_auth: ClientAuthMethod,
+    #[serde(default = "default_prefix")]
+    pub header_prefix: String,
+}
+
+impl Default for OAuth2Config {
+    fn default() -> Self {
+        Self {
+            grant: OAuth2Grant::ClientCredentials,
+            token_url: String::new(),
+            auth_url: String::new(),
+            client_id: String::new(),
+            client_secret: String::new(),
+            scope: String::new(),
+            audience: String::new(),
+            username: String::new(),
+            password: String::new(),
+            redirect_uri: default_redirect(),
+            use_pkce: true,
+            client_auth: ClientAuthMethod::Header,
+            header_prefix: default_prefix(),
+        }
+    }
+}
+
+impl OAuth2Config {
+    /// Identifies a token in the store: same server, client, user and scope
+    /// means the same token, wherever the config is used.
+    pub fn cache_key(&self) -> String {
+        format!(
+            "{}|{}|{}|{}|{}|{}",
+            self.token_url.trim(),
+            self.client_id.trim(),
+            self.scope.trim(),
+            self.audience.trim(),
+            self.username.trim(),
+            match self.grant {
+                OAuth2Grant::ClientCredentials => "cc",
+                OAuth2Grant::Password => "pw",
+                OAuth2Grant::AuthorizationCode => "code",
+            }
+        )
+    }
+
+    /// Copy with every `{{variable}}` resolved.
+    pub fn resolved(&self, scope: &crate::vars::VarScope) -> OAuth2Config {
+        let r = |s: &str| scope.resolve(s);
+        OAuth2Config {
+            grant: self.grant,
+            token_url: r(&self.token_url),
+            auth_url: r(&self.auth_url),
+            client_id: r(&self.client_id),
+            client_secret: r(&self.client_secret),
+            scope: r(&self.scope),
+            audience: r(&self.audience),
+            username: r(&self.username),
+            password: r(&self.password),
+            redirect_uri: r(&self.redirect_uri),
+            use_pkce: self.use_pkce,
+            client_auth: self.client_auth,
+            header_prefix: r(&self.header_prefix),
+        }
+    }
 }
 
 impl Auth {
@@ -286,6 +454,7 @@ impl Auth {
             Auth::Basic { .. } => "Basic Auth",
             Auth::Bearer { .. } => "Bearer Token",
             Auth::ApiKey { .. } => "API Key",
+            Auth::OAuth2(_) => "OAuth 2.0",
         }
     }
 
@@ -297,6 +466,7 @@ impl Auth {
             Auth::Basic { username: String::new(), password: String::new() },
             Auth::Bearer { token: String::new() },
             Auth::ApiKey { key: "X-API-Key".into(), value: String::new(), location: ApiKeyLocation::Header },
+            Auth::OAuth2(OAuth2Config::default()),
         ]
     }
 
@@ -335,12 +505,96 @@ pub struct Extraction {
     pub source: String,
 }
 
-/// A single HTTP request definition.
+/// A saved response, served by the mock server and shown as documentation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Example {
+    #[serde(default = "new_id")]
+    pub id: String,
+    pub name: String,
+    pub status: u16,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub headers: Vec<KeyValue>,
+    #[serde(default)]
+    pub body: String,
+}
+
+impl Example {
+    pub fn from_response(name: impl Into<String>, r: &crate::http::Response) -> Self {
+        // Hop-by-hop / length headers would be wrong when re-served.
+        let skip = ["content-length", "transfer-encoding", "connection", "date", "content-encoding", "keep-alive"];
+        Example {
+            id: new_id(),
+            name: name.into(),
+            status: r.status,
+            headers: r
+                .headers
+                .iter()
+                .filter(|(k, _)| !skip.contains(&k.to_ascii_lowercase().as_str()))
+                .map(|(k, v)| KeyValue::new(k, v))
+                .collect(),
+            body: r.text(),
+        }
+    }
+}
+
+/// JavaScript run before the request is sent and after the response arrives.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Scripts {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pre_request: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub test: String,
+}
+
+impl Scripts {
+    pub fn is_empty(&self) -> bool {
+        self.pre_request.trim().is_empty() && self.test.trim().is_empty()
+    }
+}
+
+/// Protocol of a request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RequestKind {
+    #[default]
+    Http,
+    /// URL, params, headers and auth are used for the upgrade; the raw body is
+    /// the message composer draft.
+    WebSocket,
+    /// gRPC call: `grpc` holds the method, the raw body is the JSON message and
+    /// headers are sent as metadata.
+    Grpc,
+}
+
+/// Settings of a gRPC request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct GrpcConfig {
+    /// Fully qualified method, e.g. `helloworld.Greeter/SayHello`.
+    #[serde(default)]
+    pub method: String,
+    /// `.proto` files describing the service. Empty means: use server reflection.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub proto_files: Vec<String>,
+    /// Import paths for the `.proto` files (their own folders are always included).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub import_paths: Vec<String>,
+}
+
+impl RequestKind {
+    pub fn is_http(&self) -> bool {
+        *self == RequestKind::Http
+    }
+}
+
+/// A single request definition (HTTP, or another protocol per [`RequestKind`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Request {
     #[serde(default = "new_id")]
     pub id: String,
     pub name: String,
+    /// Serialized as `protocol` because `kind` is the tree item tag.
+    #[serde(default, rename = "protocol", skip_serializing_if = "RequestKind::is_http")]
+    pub kind: RequestKind,
     #[serde(default)]
     pub method: HttpMethod,
     pub url: String,
@@ -356,6 +610,13 @@ pub struct Request {
     pub assertions: Vec<Assertion>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extractions: Vec<Extraction>,
+    #[serde(default, skip_serializing_if = "Scripts::is_empty")]
+    pub scripts: Scripts,
+    /// Saved responses (served by the mock server).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub examples: Vec<Example>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grpc: Option<GrpcConfig>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
@@ -365,6 +626,7 @@ impl Default for Request {
         Self {
             id: new_id(),
             name: "New Request".into(),
+            kind: RequestKind::Http,
             method: HttpMethod::Get,
             url: String::new(),
             params: Vec::new(),
@@ -373,6 +635,9 @@ impl Default for Request {
             auth: Auth::Inherit,
             assertions: Vec::new(),
             extractions: Vec::new(),
+            scripts: Scripts::default(),
+            examples: Vec::new(),
+            grpc: None,
             description: String::new(),
         }
     }
@@ -405,19 +670,31 @@ pub struct Folder {
     pub items: Vec<Item>,
     #[serde(default)]
     pub auth: Auth,
+    #[serde(default, skip_serializing_if = "Scripts::is_empty")]
+    pub scripts: Scripts,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
 
 impl Folder {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { id: new_id(), name: name.into(), items: Vec::new(), auth: Auth::Inherit, description: String::new() }
+        Self {
+            id: new_id(),
+            name: name.into(),
+            items: Vec::new(),
+            auth: Auth::Inherit,
+            scripts: Scripts::default(),
+            description: String::new(),
+        }
     }
 }
 
 /// An entry in a collection tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
+// Both variants are large and trees hold at most a few thousand items, so
+// boxing would add indirection everywhere for no measurable gain.
+#[allow(clippy::large_enum_variant)]
 pub enum Item {
     Folder(Folder),
     Request(Request),
@@ -455,6 +732,9 @@ pub struct Collection {
     /// Collection-level auth applied to requests that inherit.
     #[serde(default = "auth_none")]
     pub auth: Auth,
+    /// Scripts that run around every request of the collection.
+    #[serde(default, skip_serializing_if = "Scripts::is_empty")]
+    pub scripts: Scripts,
 }
 
 fn auth_none() -> Auth {
@@ -470,6 +750,7 @@ impl Collection {
             items: Vec::new(),
             variables: Vec::new(),
             auth: Auth::None,
+            scripts: Scripts::default(),
         }
     }
 
@@ -497,6 +778,44 @@ impl Collection {
         let mut out = Vec::new();
         walk(&self.items, &mut Vec::new(), &self.auth, &mut out);
         out
+    }
+
+    /// Collection and folder scripts that wrap a request, outermost first
+    /// (the request's own scripts are not included).
+    pub fn script_chain(&self, request_id: &str) -> Vec<Scripts> {
+        fn walk(items: &[Item], id: &str, chain: &mut Vec<Scripts>) -> bool {
+            for item in items {
+                match item {
+                    Item::Request(r) if r.id == id => return true,
+                    Item::Folder(f) => {
+                        chain.push(f.scripts.clone());
+                        if walk(&f.items, id, chain) {
+                            return true;
+                        }
+                        chain.pop();
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        let mut chain = vec![self.scripts.clone()];
+        if !walk(&self.items, request_id, &mut chain) {
+            chain.truncate(1);
+        }
+        chain.retain(|s| !s.is_empty());
+        chain
+    }
+
+    /// Whether any script exists anywhere in the collection.
+    pub fn has_scripts(&self) -> bool {
+        fn walk(items: &[Item]) -> bool {
+            items.iter().any(|i| match i {
+                Item::Request(r) => !r.scripts.is_empty(),
+                Item::Folder(f) => !f.scripts.is_empty() || walk(&f.items),
+            })
+        }
+        !self.scripts.is_empty() || walk(&self.items)
     }
 
     pub fn find_request(&self, id: &str) -> Option<&Request> {
@@ -647,6 +966,16 @@ mod tests {
         c.items.push(Item::Folder(f));
         assert!(c.remove_item(&id).is_some());
         assert_eq!(c.request_count(), 0);
+    }
+
+    #[test]
+    fn every_request_kind_and_body_roundtrips_in_a_tree() {
+        // The demo uses every protocol, body type and auth kind.
+        let c = crate::samples::demo_collection();
+        let json = serde_json::to_string_pretty(&c).unwrap();
+        let back: Collection = serde_json::from_str(&json).unwrap();
+        assert_eq!(c, back);
+        assert!(json.contains("\"protocol\": \"websocket\""));
     }
 
     #[test]
