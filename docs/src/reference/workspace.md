@@ -6,6 +6,7 @@
 ├── environments/<id>.json    one file per environment
 ├── globals.json              global variables
 ├── history.json              last 200 sent requests
+├── tokens.json               OAuth 2.0 tokens (keep out of git)
 └── settings.json             theme, HTTP settings, active environment
 ```
 
@@ -52,7 +53,10 @@ stopping the app.
 - `body.mode`: `none`, `raw` (`language`: `json`, `text`, `xml`, `html`, `javascript`),
   `form_url_encoded` (`fields`), `multipart` (`fields` with `is_file`), `binary` (`path`).
 - `auth.type`: `inherit`, `none`, `basic` (`username`, `password`), `bearer` (`token`),
-  `api_key` (`key`, `value`, `location`: `header` | `query`).
+  `api_key` (`key`, `value`, `location`: `header` | `query`),
+  `oauth2` (`grant`: `client_credentials` | `password` | `authorization_code`, `token_url`,
+  `auth_url`, `client_id`, `client_secret`, `scope`, `audience`, `username`, `password`,
+  `redirect_uri`, `use_pkce`, `client_auth`: `header` | `body`, `header_prefix`).
 
 ## Environment
 
@@ -68,4 +72,4 @@ export PAKPOS_HOME=~/code/my-api/.pakpos   # point the app and CLI at a repo fol
 ```
 
 Commit `collections/` and the environments without secrets; add `history.json`,
-`settings.json` and secret environments to `.gitignore`.
+`settings.json`, `tokens.json` and secret environments to `.gitignore`.

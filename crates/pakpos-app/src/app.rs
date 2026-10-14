@@ -48,6 +48,8 @@ pub struct Outcome {
     pub pretty: String,
     pub tests: Vec<AssertionResult>,
     pub extracted: Vec<(String, String)>,
+    /// OAuth 2.0 token obtained or refreshed for this send, to store.
+    pub new_token: Option<(String, pakpos_core::oauth2::OAuthToken)>,
 }
 
 pub enum ResponseState {
@@ -166,6 +168,7 @@ pub struct PakPosApp {
     pub toasts: Vec<Toast>,
     pub env_dirty: Option<Instant>,
     pub runner: Option<RunnerState>,
+    pub oauth_job: Option<crate::oauth_view::OAuthJob>,
     applied_theme: Option<(Theme, u32)>,
     next_uid: u64,
     pub actions: Vec<Action>,
@@ -186,6 +189,7 @@ impl PakPosApp {
             toasts: Vec::new(),
             env_dirty: None,
             runner: None,
+            oauth_job: None,
             applied_theme: None,
             next_uid: 1,
             actions: Vec::new(),
@@ -298,10 +302,12 @@ impl PakPosApp {
     pub fn scope_for(&self, tab: &Tab) -> VarScope {
         let collection_vars =
             tab.source.as_ref().and_then(|(c, _)| self.collection(c)).map(|c| c.variables.clone()).unwrap_or_default();
-        VarScope::new()
+        let mut scope = VarScope::new()
             .with_environment(self.ws.active_environment())
             .with_collection_vars(&collection_vars)
-            .with_globals(&self.ws.globals)
+            .with_globals(&self.ws.globals);
+        pakpos_core::oauth2::load_into_scope(&self.ws.tokens, &mut scope);
+        scope
     }
 
     /// Auth a request would inherit from its folder / collection.
@@ -319,12 +325,32 @@ impl PakPosApp {
         let mut req = tab.request.clone();
         widgets::trim_blank_rows(&mut req.params);
         widgets::trim_blank_rows(&mut req.headers);
-        let scope = self.scope_for(tab);
+        let mut scope = self.scope_for(tab);
         let fallback = self.inherited_auth(tab);
         let settings = self.ws.settings.http.clone();
+        let mut tokens = self.ws.tokens.clone();
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
+            let effective = match &req.auth {
+                Auth::Inherit => fallback.clone().unwrap_or(Auth::None),
+                a => a.clone(),
+            };
+            let new_token = match pakpos_core::oauth2::ensure_token(&effective, &mut scope, &mut tokens, &settings) {
+                Ok(t) => t,
+                Err(pakpos_core::oauth2::OAuthError::NeedsInteractive) => {
+                    let _ = tx.send(Err(
+                        "No OAuth 2.0 token yet: open the Auth tab and click “Get new access token”.".into()
+                    ));
+                    ctx.request_repaint();
+                    return;
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(e.to_string()));
+                    ctx.request_repaint();
+                    return;
+                }
+            };
             let result = http::prepare(&req, &scope, fallback.as_ref())
                 .and_then(|p| {
                     let client = http::build_client(&settings)?;
@@ -334,7 +360,7 @@ impl PakPosApp {
                     let pretty = if response.body.len() > 2_000_000 { response.text() } else { response.pretty_body() };
                     let tests = assertions::run_all(&response, &req.assertions, |s| scope.resolve(s));
                     let extracted = assertions::extract_all(&response, &req.extractions);
-                    Outcome { prepared, response, pretty, tests, extracted }
+                    Outcome { prepared, response, pretty, tests, extracted, new_token }
                 })
                 .map_err(|e| e.to_string());
             let _ = tx.send(result);
@@ -361,6 +387,10 @@ impl PakPosApp {
             match result {
                 Ok(outcome) => {
                     self.ws.push_history(req, Some(outcome.response.status), Some(outcome.response.elapsed_ms));
+                    if let Some((key, token)) = outcome.new_token.clone() {
+                        self.ws.tokens.insert(key, token);
+                        let _ = self.ws.save_tokens();
+                    }
                     if !outcome.extracted.is_empty() {
                         let names: Vec<String> =
                             outcome.extracted.iter().map(|(k, _)| format!("{{{{{k}}}}}")).collect();
@@ -734,6 +764,7 @@ impl eframe::App for PakPosApp {
     fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_responses();
         self.poll_runner();
+        self.poll_oauth();
         if let Some(t) = self.env_dirty {
             if t.elapsed() > Duration::from_millis(600) {
                 self.persist_environments();
@@ -763,7 +794,7 @@ impl eframe::App for PakPosApp {
         self.show_toasts(&ctx);
         self.apply_actions(&ctx);
 
-        if self.tabs.iter().any(|t| matches!(t.response, ResponseState::Loading { .. })) {
+        if self.oauth_job.is_some() || self.tabs.iter().any(|t| matches!(t.response, ResponseState::Loading { .. })) {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         if self.env_dirty.is_some() {

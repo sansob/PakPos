@@ -4,8 +4,8 @@
 //! test *scripts* (JavaScript) are skipped and reported as warnings.
 
 use crate::model::{
-    ApiKeyLocation, Auth, Body, Collection, Environment, Folder, FormField, HttpMethod, Item, KeyValue, RawLanguage,
-    Request,
+    ApiKeyLocation, Auth, Body, ClientAuthMethod, Collection, Environment, Folder, FormField, HttpMethod, Item,
+    KeyValue, OAuth2Config, OAuth2Grant, RawLanguage, Request,
 };
 use serde_json::{json, Map, Value};
 
@@ -129,6 +129,53 @@ fn parse_auth(v: Option<&Value>, warnings: &mut Vec<String>) -> Auth {
                     ApiKeyLocation::Header
                 },
             }
+        }
+        "oauth2" => {
+            let sec = auth.get("oauth2");
+            let p = |k: &str| auth_param(sec, k);
+            let grant = match p("grant_type").as_str() {
+                "password_credentials" => OAuth2Grant::Password,
+                "authorization_code" | "authorization_code_with_pkce" => OAuth2Grant::AuthorizationCode,
+                "implicit" => {
+                    warnings.push("OAuth 2.0 implicit grant is deprecated; imported as authorization code".into());
+                    OAuth2Grant::AuthorizationCode
+                }
+                _ => OAuth2Grant::ClientCredentials,
+            };
+            let mut cfg = OAuth2Config {
+                grant,
+                token_url: p("accessTokenUrl"),
+                auth_url: p("authUrl"),
+                client_id: p("clientId"),
+                client_secret: p("clientSecret"),
+                scope: p("scope"),
+                username: p("username"),
+                password: p("password"),
+                use_pkce: p("grant_type") != "authorization_code" || p("challengeAlgorithm") == "S256",
+                client_auth: if p("client_authentication") == "body" {
+                    ClientAuthMethod::Body
+                } else {
+                    ClientAuthMethod::Header
+                },
+                ..Default::default()
+            };
+            if !p("redirect_uri").is_empty() {
+                cfg.redirect_uri = p("redirect_uri");
+            }
+            if !p("headerPrefix").is_empty() {
+                cfg.header_prefix = p("headerPrefix");
+            }
+            if grant == OAuth2Grant::AuthorizationCode
+                && !cfg.redirect_uri.starts_with("http://127.0.0.1")
+                && !cfg.redirect_uri.starts_with("http://localhost")
+            {
+                warnings.push(format!(
+                    "OAuth 2.0 redirect `{}` replaced by http://127.0.0.1:7777/callback (PakPos listens locally); register it with your provider",
+                    cfg.redirect_uri
+                ));
+                cfg.redirect_uri = "http://127.0.0.1:7777/callback".into();
+            }
+            Auth::OAuth2(cfg)
         }
         "" => Auth::Inherit,
         other => {
@@ -366,6 +413,32 @@ fn auth_to_json(auth: &Auth) -> Option<Value> {
                 kv("in", match location { ApiKeyLocation::Header => "header", ApiKeyLocation::Query => "query" }),
             ]
         })),
+        Auth::OAuth2(c) => {
+            let grant = match c.grant {
+                OAuth2Grant::ClientCredentials => "client_credentials",
+                OAuth2Grant::Password => "password_credentials",
+                OAuth2Grant::AuthorizationCode if c.use_pkce => "authorization_code_with_pkce",
+                OAuth2Grant::AuthorizationCode => "authorization_code",
+            };
+            Some(json!({
+                "type": "oauth2",
+                "oauth2": [
+                    kv("grant_type", grant),
+                    kv("accessTokenUrl", &c.token_url),
+                    kv("authUrl", &c.auth_url),
+                    kv("clientId", &c.client_id),
+                    kv("clientSecret", &c.client_secret),
+                    kv("scope", &c.scope),
+                    kv("username", &c.username),
+                    kv("password", &c.password),
+                    kv("redirect_uri", &c.redirect_uri),
+                    kv("headerPrefix", &c.header_prefix),
+                    kv("challengeAlgorithm", "S256"),
+                    kv("client_authentication", match c.client_auth { ClientAuthMethod::Header => "header", ClientAuthMethod::Body => "body" }),
+                    kv("addTokenTo", "header"),
+                ]
+            }))
+        }
     }
 }
 

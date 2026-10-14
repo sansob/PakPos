@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-BIN=target/release/pakpos
+BIN=${BIN:-target/release/pakpos}
 [ -x "$BIN" ] || BIN=target/debug/pakpos
 OUT=docs/screenshots
 PORT=${PORT:-8787}
@@ -21,7 +21,7 @@ trap 'kill $MOCK 2>/dev/null || true' EXIT
 sleep 1
 
 SCENES=("$@")
-[ ${#SCENES[@]} -eq 0 ] && SCENES=(overview tests runner history environments curl snippet settings light)
+[ ${#SCENES[@]} -eq 0 ] && SCENES=(overview tests runner history oauth environments curl snippet settings light)
 
 for scene in "${SCENES[@]}"; do
   HOME_DIR=$(mktemp -d)

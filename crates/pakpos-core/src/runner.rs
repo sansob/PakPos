@@ -34,6 +34,9 @@ pub struct RunReport {
     pub environment: Option<String>,
     pub requests: Vec<RequestReport>,
     pub total_ms: u128,
+    /// Token store after the run (new / refreshed OAuth 2.0 tokens), for the caller to persist.
+    #[serde(skip)]
+    pub tokens: crate::oauth2::TokenStore,
 }
 
 impl RunReport {
@@ -122,6 +125,8 @@ pub struct RunOptions {
     pub overrides: Vec<(String, String)>,
     /// If non-empty, only these hosts may be contacted (see [`http::host_allowed`]).
     pub allowed_hosts: Vec<String>,
+    /// Known OAuth 2.0 tokens (e.g. the workspace's `tokens.json`).
+    pub tokens: crate::oauth2::TokenStore,
 }
 
 /// Runs every request in `collection` sequentially.
@@ -148,6 +153,7 @@ pub fn run_collection(
     let mut report = RunReport {
         collection: collection.name.clone(),
         environment: environment.as_ref().map(|e| e.name.clone()),
+        tokens: options.tokens.clone(),
         ..Default::default()
     };
 
@@ -174,14 +180,25 @@ pub fn run_collection(
             assertions: Vec::new(),
             extracted: Vec::new(),
         };
-        let outcome = match &client {
-            Ok(client) => http::prepare(&req, &scope, None).and_then(|p| {
+        // The token endpoint is a host too: keep it inside the allow-list.
+        let token = match &req.auth {
+            crate::model::Auth::OAuth2(c)
+                if !http::host_allowed(&c.resolved(&scope).token_url, &options.allowed_hosts) =>
+            {
+                Err(format!("OAuth 2.0 token URL `{}` is not in the allow-list", c.resolved(&scope).token_url))
+            }
+            _ => crate::oauth2::ensure_token(&req.auth, &mut scope, &mut report.tokens, &options.settings)
+                .map_err(|e| e.to_string()),
+        };
+        let outcome = match (&client, token) {
+            (_, Err(e)) => Err(http::HttpError::Transport(e)),
+            (Ok(client), Ok(_)) => http::prepare(&req, &scope, None).and_then(|p| {
                 if !http::host_allowed(&p.url, &options.allowed_hosts) {
                     return Err(http::HttpError::Transport(format!("host of `{}` is not in the allow-list", p.url)));
                 }
                 http::send(client, &p).map(|r| (p, r))
             }),
-            Err(e) => Err(http::HttpError::Transport(e.to_string())),
+            (Err(e), _) => Err(http::HttpError::Transport(e.to_string())),
         };
         match outcome {
             Ok((prepared, resp)) => {
@@ -250,6 +267,7 @@ mod tests {
                 },
             ],
             total_ms: 20,
+            tokens: Default::default(),
         };
         let xml = report.to_junit();
         assert!(xml.contains("tests=\"3\" failures=\"2\""));

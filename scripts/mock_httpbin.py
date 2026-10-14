@@ -64,6 +64,33 @@ class Handler(BaseHTTPRequestHandler):
             expected = "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
             ok = self.headers.get("Authorization") == expected
             return self._send(200 if ok else 401, {"authenticated": ok, "user": user})
+        # --- OAuth 2.0 demo (auto-approves everything) -------------------
+        if path == "/oauth/authorize":
+            q = dict(parse_qsl(urlsplit(self.path).query))
+            sep = "&" if "?" in q.get("redirect_uri", "") else "?"
+            location = f"{q.get('redirect_uri', '')}{sep}code=demo-code&state={q.get('state', '')}"
+            self.send_response(302)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
+        if path == "/oauth/token" and self.command == "POST":
+            form = data.get("form") or dict(parse_qsl(data.get("data") or ""))
+            grant = form.get("grant_type", "")
+            if grant not in ("client_credentials", "password", "authorization_code", "refresh_token"):
+                return self._send(400, {"error": "unsupported_grant_type"})
+            return self._send(200, {
+                "access_token": f"demo-{grant}-{uuid.uuid4().hex[:12]}",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "refresh_token": "demo-refresh",
+                "scope": form.get("scope", ""),
+            })
+        if path == "/oauth/me":
+            auth = self.headers.get("Authorization", "")
+            if auth.startswith("Bearer demo-"):
+                return self._send(200, {"user": "budi", "token": auth[7:], "scopes": ["read"]})
+            return self._send(401, {"error": "invalid_token"})
         if path == "/uuid":
             return self._send(200, {"uuid": str(uuid.uuid4())})
         if path == "/json":

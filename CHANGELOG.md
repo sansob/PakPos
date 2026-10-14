@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- OAuth 2.0 auth: client credentials, password and authorization code with
+  PKCE (local browser redirect). Tokens are cached in `tokens.json`, refreshed
+  automatically, and used by the app, `pakpos-cli run` and the MCP server.
+  Postman `oauth2` auth is imported and exported.
+
 ## [0.1.0-rc.1] - 2026-10-14
 
 Release candidate for the first public release.

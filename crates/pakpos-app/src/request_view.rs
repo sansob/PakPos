@@ -118,6 +118,9 @@ impl PakPosApp {
         let mut send = false;
         let mut save = false;
         let mut snippet = false;
+        let tokens = self.ws.tokens.clone();
+        let mut oauth_action = None;
+        let oauth_job = self.oauth_job.as_ref();
         let tab = &mut self.tabs[idx];
         let mut changed = false;
 
@@ -262,7 +265,18 @@ impl PakPosApp {
                         }
                     });
                 }
-                ReqSection::Auth => changed |= auth_editor(ui, &mut tab.request.auth, inherited.as_ref(), &scope, &p),
+                ReqSection::Auth => {
+                    changed |= auth_editor(
+                        ui,
+                        &mut tab.request.auth,
+                        inherited.as_ref(),
+                        &scope,
+                        &p,
+                        &tokens,
+                        oauth_job,
+                        &mut oauth_action,
+                    )
+                }
                 ReqSection::Body => changed |= body_editor(ui, &mut tab.request.body, &scope, tab.uid),
                 ReqSection::Tests => changed |= tests_editor(ui, &mut tab.request.assertions, &p),
                 ReqSection::Extract => changed |= extract_editor(ui, &mut tab.request.extractions, &p),
@@ -282,6 +296,10 @@ impl PakPosApp {
 
         if changed {
             tab.dirty = true;
+        }
+        if let Some(a) = oauth_action {
+            let ctx = ui.ctx().clone();
+            self.handle_oauth_action(a, &ctx);
         }
         if send {
             let ctx = ui.ctx().clone();
@@ -324,14 +342,56 @@ fn apply_url_edit(req: &mut pakpos_core::Request, text: &str) {
     req.url = base.to_string();
 }
 
+/// The "Type" combo box shared by every auth kind.
+fn auth_type_picker(ui: &mut Ui, changed: &mut bool, auth: &mut Auth) {
+    ui.horizontal(|ui| {
+        ui.label("Type");
+        egui::ComboBox::from_id_salt("auth_type").width(190.0).selected_text(auth.label()).show_ui(ui, |ui| {
+            for t in Auth::templates() {
+                let selected = auth.same_variant(&t);
+                if ui.selectable_label(selected, t.label()).clicked() && !selected {
+                    *auth = t;
+                    *changed = true;
+                }
+            }
+        });
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
 fn auth_editor(
     ui: &mut Ui,
     auth: &mut Auth,
     inherited: Option<&Auth>,
     scope: &VarScope,
     p: &crate::theme::Palette,
+    tokens: &pakpos_core::oauth2::TokenStore,
+    job: Option<&crate::oauth_view::OAuthJob>,
+    oauth_action: &mut Option<crate::oauth_view::OAuthUiAction>,
 ) -> bool {
     let mut changed = false;
+    if matches!(auth, Auth::OAuth2(_)) {
+        auth_type_picker(ui, &mut changed, auth);
+        if let Auth::OAuth2(cfg) = auth {
+            ui.add_space(8.0);
+            changed |= crate::oauth_view::oauth_form(ui, cfg, scope, p);
+            *oauth_action = crate::oauth_view::token_panel(ui, cfg, scope, tokens, job, p);
+        }
+        return changed;
+    }
+    let parent_oauth = match (&*auth, inherited) {
+        (Auth::Inherit, Some(Auth::OAuth2(parent))) => Some(parent.clone()),
+        _ => None,
+    };
+    if let Some(parent) = parent_oauth {
+        auth_type_picker(ui, &mut changed, auth);
+        if matches!(auth, Auth::Inherit) {
+            ui.add_space(8.0);
+            ui.label(RichText::new("Uses OAuth 2.0 from the parent folder / collection.").color(p.text_weak));
+            *oauth_action = crate::oauth_view::token_panel(ui, &parent, scope, tokens, job, p);
+        }
+        return changed;
+    }
     ui.horizontal(|ui| {
         ui.label("Type");
         egui::ComboBox::from_id_salt("auth_type").width(190.0).selected_text(auth.label()).show_ui(ui, |ui| {
@@ -362,6 +422,7 @@ fn auth_editor(
             ui.label(RichText::new("This request does not use any authorization.").color(p.text_weak));
             ui.end_row();
         }
+        Auth::OAuth2(_) => {} // handled above
         Auth::Basic { username, password } => {
             ui.label("Username");
             changed |= widgets::var_text_edit(ui, username, scope, "", w).changed();

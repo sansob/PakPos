@@ -82,6 +82,8 @@ pub struct Workspace {
     pub globals: Vec<KeyValue>,
     pub history: Vec<HistoryEntry>,
     pub settings: Settings,
+    /// OAuth 2.0 tokens (`tokens.json`, keep it out of git).
+    pub tokens: crate::oauth2::TokenStore,
 }
 
 /// Default workspace location (overridable with `PAKPOS_HOME`).
@@ -157,7 +159,8 @@ impl Workspace {
         let globals = take(read_json(&root.join("globals.json")), &mut errors).unwrap_or_default();
         let history = take(read_json(&root.join("history.json")), &mut errors).unwrap_or_default();
         let settings = take(read_json(&root.join("settings.json")), &mut errors).unwrap_or_default();
-        (Workspace { root, collections, environments, globals, history, settings }, errors)
+        let tokens = take(read_json(&root.join("tokens.json")), &mut errors).unwrap_or_default();
+        (Workspace { root, collections, environments, globals, history, settings, tokens }, errors)
     }
 
     pub fn collections_dir(&self) -> PathBuf {
@@ -190,6 +193,10 @@ impl Workspace {
 
     pub fn save_history(&self) -> Result<(), StorageError> {
         write_json(&self.root.join("history.json"), &self.history)
+    }
+
+    pub fn save_tokens(&self) -> Result<(), StorageError> {
+        write_json(&self.root.join("tokens.json"), &self.tokens)
     }
 
     pub fn save_settings(&self) -> Result<(), StorageError> {

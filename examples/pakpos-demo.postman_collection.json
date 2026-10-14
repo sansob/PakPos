@@ -181,6 +181,88 @@
               ]
             }
           }
+        },
+        {
+          "name": "Profile (OAuth 2.0)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/oauth/me",
+              "query": []
+            },
+            "auth": {
+              "type": "oauth2",
+              "oauth2": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "string"
+                },
+                {
+                  "key": "accessTokenUrl",
+                  "value": "{{base_url}}/oauth/token",
+                  "type": "string"
+                },
+                {
+                  "key": "authUrl",
+                  "value": "{{base_url}}/oauth/authorize",
+                  "type": "string"
+                },
+                {
+                  "key": "clientId",
+                  "value": "pakpos-demo",
+                  "type": "string"
+                },
+                {
+                  "key": "clientSecret",
+                  "value": "demo-secret",
+                  "type": "string"
+                },
+                {
+                  "key": "scope",
+                  "value": "read",
+                  "type": "string"
+                },
+                {
+                  "key": "username",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "http://127.0.0.1:7777/callback",
+                  "type": "string"
+                },
+                {
+                  "key": "headerPrefix",
+                  "value": "Bearer",
+                  "type": "string"
+                },
+                {
+                  "key": "challengeAlgorithm",
+                  "value": "S256",
+                  "type": "string"
+                },
+                {
+                  "key": "client_authentication",
+                  "value": "header",
+                  "type": "string"
+                },
+                {
+                  "key": "addTokenTo",
+                  "value": "header",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "The token is fetched automatically (client credentials). Switch the grant to Authorization code to try the browser login against the mock API."
+          }
         }
       ]
     },

@@ -5,12 +5,12 @@
   "items": [
     {
       "kind": "folder",
-      "id": "6de6aa83-9f3e-4f0e-b91a-2ee0ea7ed9f1",
+      "id": "45b0f477-8f5b-4813-b5a2-f654baf854e0",
       "name": "Basics",
       "items": [
         {
           "kind": "request",
-          "id": "c9e717a1-8724-4399-a63c-d1bd3f994622",
+          "id": "3dff918c-baf9-4403-bbac-52adbb097436",
           "name": "Get with query params",
           "method": "GET",
           "url": "{{base_url}}/get",
@@ -63,7 +63,7 @@
         },
         {
           "kind": "request",
-          "id": "30fdb55c-b138-47ac-9f4e-8d7e2f3dcbe2",
+          "id": "6ef2b8c6-c3c5-48f0-be6e-15e66568dece",
           "name": "Create user (JSON)",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -98,7 +98,7 @@
         },
         {
           "kind": "request",
-          "id": "acf4656e-94b6-49e9-b872-86278966bb1a",
+          "id": "7e239b7f-1f35-420b-906d-6da6d6a7b941",
           "name": "Submit form",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -131,7 +131,7 @@
         },
         {
           "kind": "request",
-          "id": "6f7835cf-1c86-4bba-b579-a8c36aab38c8",
+          "id": "8b71c528-452b-4038-92ab-6598c0c15fa8",
           "name": "Update user",
           "method": "PUT",
           "url": "{{base_url}}/put",
@@ -146,7 +146,7 @@
         },
         {
           "kind": "request",
-          "id": "3ad0480e-1498-45e0-a5f2-0908d1bafd99",
+          "id": "00650240-3089-4630-8ecd-8c21d197d4e1",
           "name": "Patch user",
           "method": "PATCH",
           "url": "{{base_url}}/patch",
@@ -161,7 +161,7 @@
         },
         {
           "kind": "request",
-          "id": "0c980c76-08f4-4ad5-80d4-558dd34c0b97",
+          "id": "5e6bace2-698f-40e6-8631-1c0ff5e3cc7c",
           "name": "Delete user",
           "method": "DELETE",
           "url": "{{base_url}}/delete",
@@ -187,12 +187,12 @@
     },
     {
       "kind": "folder",
-      "id": "8c5e0936-6399-4e91-83bf-332bc83e81c1",
+      "id": "b9cc6ac3-d366-47c5-ae95-cde2a91e15d4",
       "name": "Auth",
       "items": [
         {
           "kind": "request",
-          "id": "3911aa60-1831-4e23-b53d-ba4084114622",
+          "id": "84803d07-e873-4474-b816-b783d0da7487",
           "name": "Bearer token",
           "method": "GET",
           "url": "{{base_url}}/bearer",
@@ -214,7 +214,7 @@
         },
         {
           "kind": "request",
-          "id": "e8f52d78-6830-49d2-9f77-e94dd9c1c5cb",
+          "id": "455dc89e-a898-4a5c-b323-2f043f08f74a",
           "name": "Basic auth",
           "method": "GET",
           "url": "{{base_url}}/basic-auth/pakpos/rahasia",
@@ -234,6 +234,44 @@
               "expected": "200"
             }
           ]
+        },
+        {
+          "kind": "request",
+          "id": "ab79eecc-5f8c-4818-8b46-5450a1b7bba5",
+          "name": "Profile (OAuth 2.0)",
+          "method": "GET",
+          "url": "{{base_url}}/oauth/me",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "oauth2",
+            "grant": "client_credentials",
+            "token_url": "{{base_url}}/oauth/token",
+            "auth_url": "{{base_url}}/oauth/authorize",
+            "client_id": "pakpos-demo",
+            "client_secret": "demo-secret",
+            "scope": "read",
+            "redirect_uri": "http://127.0.0.1:7777/callback",
+            "use_pkce": true,
+            "client_auth": "header",
+            "header_prefix": "Bearer"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "200"
+            },
+            {
+              "enabled": true,
+              "target": "json.user",
+              "op": "equals",
+              "expected": "budi"
+            }
+          ],
+          "description": "The token is fetched automatically (client credentials). Switch the grant to Authorization code to try the browser login against the mock API."
         }
       ],
       "auth": {
@@ -242,12 +280,12 @@
     },
     {
       "kind": "folder",
-      "id": "bad1e518-e126-4391-8036-81249478806f",
+      "id": "805ea633-5389-4b71-9e6d-c762f2016b4c",
       "name": "Responses",
       "items": [
         {
           "kind": "request",
-          "id": "b8c6a00b-213b-4a29-b3c9-fb3b3e1a13e5",
+          "id": "a8d92a64-ae30-4972-bfa2-a61339e16eb9",
           "name": "Get UUID (extract)",
           "method": "GET",
           "url": "{{base_url}}/uuid",
@@ -275,7 +313,7 @@
         },
         {
           "kind": "request",
-          "id": "f21cfb4b-fc01-4ac5-8346-69f2b3a5f104",
+          "id": "b7535d87-3848-451f-a01b-19913c4d3b31",
           "name": "JSON document",
           "method": "GET",
           "url": "{{base_url}}/json",
@@ -296,7 +334,7 @@
         },
         {
           "kind": "request",
-          "id": "dab159dc-bd17-4d3a-850d-ab04403f7188",
+          "id": "a9caaad2-2c51-47d1-8463-12f34ad2d32a",
           "name": "Expect 404",
           "method": "GET",
           "url": "{{base_url}}/status/404",

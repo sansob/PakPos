@@ -65,10 +65,23 @@ pub fn demo_collection() -> Collection {
     let mut not_found = req("Expect 404", HttpMethod::Get, "{{base_url}}/status/404");
     not_found.assertions = vec![test("status", Operator::Equals, "404")];
 
+    let mut oauth = req("Profile (OAuth 2.0)", HttpMethod::Get, "{{base_url}}/oauth/me");
+    oauth.auth = Auth::OAuth2(crate::model::OAuth2Config {
+        grant: crate::model::OAuth2Grant::ClientCredentials,
+        token_url: "{{base_url}}/oauth/token".into(),
+        auth_url: "{{base_url}}/oauth/authorize".into(),
+        client_id: "pakpos-demo".into(),
+        client_secret: "demo-secret".into(),
+        scope: "read".into(),
+        ..Default::default()
+    });
+    oauth.assertions = vec![test("status", Operator::Equals, "200"), test("json.user", Operator::Equals, "budi")];
+    oauth.description = "The token is fetched automatically (client credentials). Switch the grant to Authorization code to try the browser login against the mock API.".into();
+
     let mut basics = Folder::new("Basics");
     basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
-    auth.items = vec![Item::Request(bearer), Item::Request(basic)];
+    auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(oauth)];
     let mut responses = Folder::new("Responses");
     responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found)];
 
@@ -93,7 +106,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 11);
+        assert_eq!(c.request_count(), 12);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

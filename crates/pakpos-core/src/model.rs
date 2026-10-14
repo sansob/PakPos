@@ -276,6 +276,147 @@ pub enum Auth {
         #[serde(default)]
         location: ApiKeyLocation,
     },
+    /// OAuth 2.0; tokens are kept in the workspace token store, not here.
+    #[serde(rename = "oauth2")]
+    OAuth2(OAuth2Config),
+}
+
+/// OAuth 2.0 grant types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuth2Grant {
+    #[default]
+    ClientCredentials,
+    Password,
+    AuthorizationCode,
+}
+
+impl OAuth2Grant {
+    pub const ALL: [OAuth2Grant; 3] =
+        [OAuth2Grant::ClientCredentials, OAuth2Grant::Password, OAuth2Grant::AuthorizationCode];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            OAuth2Grant::ClientCredentials => "Client credentials",
+            OAuth2Grant::Password => "Password",
+            OAuth2Grant::AuthorizationCode => "Authorization code",
+        }
+    }
+
+    /// Grants that can run without a browser (CLI, runner, MCP).
+    pub fn is_interactive(&self) -> bool {
+        matches!(self, OAuth2Grant::AuthorizationCode)
+    }
+}
+
+/// How the client authenticates at the token endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ClientAuthMethod {
+    /// HTTP Basic header (`client_secret_basic`).
+    #[default]
+    Header,
+    /// `client_id` / `client_secret` in the form body (`client_secret_post`).
+    Body,
+}
+
+fn default_prefix() -> String {
+    "Bearer".into()
+}
+
+fn default_redirect() -> String {
+    "http://127.0.0.1:7777/callback".into()
+}
+
+/// OAuth 2.0 settings. Every field may contain `{{variables}}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OAuth2Config {
+    #[serde(default)]
+    pub grant: OAuth2Grant,
+    #[serde(default)]
+    pub token_url: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auth_url: String,
+    #[serde(default)]
+    pub client_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub client_secret: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub scope: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub audience: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub username: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub password: String,
+    #[serde(default = "default_redirect")]
+    pub redirect_uri: String,
+    #[serde(default = "default_true")]
+    pub use_pkce: bool,
+    #[serde(default)]
+    pub client_auth: ClientAuthMethod,
+    #[serde(default = "default_prefix")]
+    pub header_prefix: String,
+}
+
+impl Default for OAuth2Config {
+    fn default() -> Self {
+        Self {
+            grant: OAuth2Grant::ClientCredentials,
+            token_url: String::new(),
+            auth_url: String::new(),
+            client_id: String::new(),
+            client_secret: String::new(),
+            scope: String::new(),
+            audience: String::new(),
+            username: String::new(),
+            password: String::new(),
+            redirect_uri: default_redirect(),
+            use_pkce: true,
+            client_auth: ClientAuthMethod::Header,
+            header_prefix: default_prefix(),
+        }
+    }
+}
+
+impl OAuth2Config {
+    /// Identifies a token in the store: same server, client, user and scope
+    /// means the same token, wherever the config is used.
+    pub fn cache_key(&self) -> String {
+        format!(
+            "{}|{}|{}|{}|{}|{}",
+            self.token_url.trim(),
+            self.client_id.trim(),
+            self.scope.trim(),
+            self.audience.trim(),
+            self.username.trim(),
+            match self.grant {
+                OAuth2Grant::ClientCredentials => "cc",
+                OAuth2Grant::Password => "pw",
+                OAuth2Grant::AuthorizationCode => "code",
+            }
+        )
+    }
+
+    /// Copy with every `{{variable}}` resolved.
+    pub fn resolved(&self, scope: &crate::vars::VarScope) -> OAuth2Config {
+        let r = |s: &str| scope.resolve(s);
+        OAuth2Config {
+            grant: self.grant,
+            token_url: r(&self.token_url),
+            auth_url: r(&self.auth_url),
+            client_id: r(&self.client_id),
+            client_secret: r(&self.client_secret),
+            scope: r(&self.scope),
+            audience: r(&self.audience),
+            username: r(&self.username),
+            password: r(&self.password),
+            redirect_uri: r(&self.redirect_uri),
+            use_pkce: self.use_pkce,
+            client_auth: self.client_auth,
+            header_prefix: r(&self.header_prefix),
+        }
+    }
 }
 
 impl Auth {
@@ -286,6 +427,7 @@ impl Auth {
             Auth::Basic { .. } => "Basic Auth",
             Auth::Bearer { .. } => "Bearer Token",
             Auth::ApiKey { .. } => "API Key",
+            Auth::OAuth2(_) => "OAuth 2.0",
         }
     }
 
@@ -297,6 +439,7 @@ impl Auth {
             Auth::Basic { username: String::new(), password: String::new() },
             Auth::Bearer { token: String::new() },
             Auth::ApiKey { key: "X-API-Key".into(), value: String::new(), location: ApiKeyLocation::Header },
+            Auth::OAuth2(OAuth2Config::default()),
         ]
     }
 

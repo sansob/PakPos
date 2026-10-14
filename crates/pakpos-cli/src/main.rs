@@ -330,7 +330,7 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         Some(e) => Some(load_env(e)?),
         None => None,
     };
-    let (ws, _) = Workspace::load(storage::default_root());
+    let (mut ws, _) = Workspace::load(storage::default_root());
     let options = RunOptions {
         settings: HttpSettings { timeout_secs: args.timeout, verify_tls: !args.insecure, ..Default::default() },
         filter: args.filter.clone(),
@@ -339,6 +339,7 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         globals: ws.globals.clone(),
         overrides: args.vars.clone(),
         allowed_hosts: Vec::new(),
+        tokens: ws.tokens.clone(),
     };
 
     let cli_reporter = args.reporter == Reporter::Cli;
@@ -381,6 +382,12 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
     };
 
     let report = run_collection(&collection, env.as_mut().map(|(e, _)| e), &options, print);
+    // Reuse OAuth 2.0 tokens across runs, but only in an existing workspace
+    // (CI runs without one stay stateless).
+    if report.tokens != ws.tokens && ws.root.exists() {
+        ws.tokens = report.tokens.clone();
+        let _ = ws.save_tokens();
+    }
 
     match args.reporter {
         Reporter::Cli => {

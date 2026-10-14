@@ -100,6 +100,11 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].section = ReqSection::Auth;
             app.send(app.active, ctx);
         }
+        "oauth" => {
+            open_by_name(app, "Profile (OAuth 2.0)");
+            app.tabs[app.active].section = ReqSection::Auth;
+            app.send(app.active, ctx);
+        }
         "settings" => {
             open_by_name(app, "Get with query params");
             app.dialog = Some(Dialog::Settings);

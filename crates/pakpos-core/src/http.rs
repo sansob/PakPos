@@ -179,6 +179,14 @@ pub fn prepare(req: &Request, scope: &VarScope, fallback_auth: Option<&Auth>) ->
         Auth::Bearer { token } => {
             headers.push(("Authorization".into(), format!("Bearer {}", scope.resolve(&token))));
         }
+        Auth::OAuth2(cfg) => {
+            let cfg = cfg.resolved(scope);
+            if let Some(token) = scope.oauth_tokens.get(&cfg.cache_key()) {
+                let prefix = cfg.header_prefix.trim();
+                let value = if prefix.is_empty() { token.clone() } else { format!("{prefix} {token}") };
+                headers.push(("Authorization".into(), value));
+            }
+        }
         Auth::ApiKey { key, value, location } => {
             let (k, v) = (scope.resolve(&key), scope.resolve(&value));
             match location {
