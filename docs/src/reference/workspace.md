@@ -100,7 +100,7 @@ workspaces. From there you can:
 - remove an entry with `×` (the folder is left alone).
 
 The list is stored in `workspaces.json` in PakPos's config folder
-(`~/.config/PakPos` on Linux, `~/Library/Application Support/dev.PakPos.PakPos`
+(`~/.config/pakpos` on Linux, `~/Library/Application Support/dev.PakPos.PakPos`
 on macOS, `%APPDATA%\PakPos\PakPos\config` on Windows), or in `$PAKPOS_CONFIG`
 if set. `pakpos-cli` opens the active workspace; `PAKPOS_HOME` overrides both.
 
