@@ -3,10 +3,11 @@
 Pre-built packages are attached to every [GitHub Release](https://github.com/sansob/PakPos/releases).
 Each package contains both the desktop app (`pakpos`) and the CLI (`pakpos-cli`).
 
-## Windows 10 / 11 (x64)
+## Windows 10 / 11 (x64 and ARM64)
 
-- **Installer:** run `PakPos-x.y.z-windows-x64-setup.exe`. You can tick *Add pakpos-cli to PATH*.
-- **Portable:** unzip `pakpos-x.y.z-windows-x64.zip` anywhere and run `pakpos.exe`.
+- **Installer:** run `PakPos-x.y.z-windows-x64-setup.exe` (or `-arm64-setup.exe` on
+  ARM devices such as Snapdragon laptops). You can tick *Add pakpos-cli to PATH*.
+- **Portable:** unzip `pakpos-x.y.z-windows-x64.zip` (or `-arm64.zip`) anywhere and run `pakpos.exe`.
 
 Builds are not code-signed yet, so SmartScreen may warn: click **More info → Run anyway**.
 

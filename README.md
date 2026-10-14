@@ -90,8 +90,8 @@ it with `--allow-host` and name only the APIs it should touch. The
 ## Getting it
 
 Grab a build for your OS from the [releases page](https://github.com/sansob/PakPos/releases):
-an installer or portable zip for Windows, a `.dmg` for macOS (Apple Silicon and
-Intel in one), and a `.deb` or tarball for Linux.
+an installer or portable zip for Windows (x64 and ARM64), a `.dmg` for macOS
+(Apple Silicon and Intel in one), and a `.deb` or tarball for Linux (x86_64 and arm64).
 
 The builds aren't code-signed yet, so your OS will grumble the first time. On
 macOS right-click the app and choose **Open**; on Windows click **More info →
