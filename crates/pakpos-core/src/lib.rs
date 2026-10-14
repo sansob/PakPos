@@ -28,6 +28,7 @@ pub mod mock;
 pub mod model;
 pub mod mqtt;
 pub mod oauth2;
+pub mod openapi;
 pub mod postman;
 pub mod runner;
 pub mod samples;

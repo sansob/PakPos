@@ -216,6 +216,7 @@ pub enum Action {
     Rename(RenameTarget, String),
     Delete(DeleteTarget, String),
     ExportCollection(String),
+    ExportOpenApi(String),
     RunCollection(String),
     ImportPostmanCollection,
     ImportEnvironment,
@@ -901,7 +902,7 @@ impl PakPosApp {
                                 .stroke(egui::Stroke::NONE),
                         );
                         egui::Popup::menu(&import).show(|ui| {
-                            if ui.button("Collection file (PakPos / v2.1)…").clicked() {
+                            if ui.button("Collection or OpenAPI file…").clicked() {
                                 self.actions.push(Action::ImportPostmanCollection);
                             }
                             if ui.button("Environment…").clicked() {

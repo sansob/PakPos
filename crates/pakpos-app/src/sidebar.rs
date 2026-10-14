@@ -282,6 +282,9 @@ impl PakPosApp {
                     if ui.button("⬆ Export (Collection v2.1)…").clicked() {
                         pending.push(Action::ExportCollection(c.id.clone()));
                     }
+                    if ui.button("⬆ Export as OpenAPI 3…").clicked() {
+                        pending.push(Action::ExportOpenApi(c.id.clone()));
+                    }
                     ui.separator();
                     if ui.button(RichText::new("🗑 Delete").color(theme::RED)).clicked() {
                         pending.push(Action::Delete(DeleteTarget::Collection(c.id.clone()), c.name.clone()));

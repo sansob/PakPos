@@ -23,6 +23,10 @@ All notable changes to this project are documented here. The format follows
 - Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
   view (copy a value or its test path), image preview and a simplified HTML
   preview with *Open in browser*; *Save* picks the extension from the content type.
+- OpenAPI 3.0 / 3.1 and Swagger 2.0 import (JSON or YAML): folders by tag,
+  `{{baseUrl}}`, path variables, example bodies, auth from security schemes and
+  response examples ready for the mock server; export to OpenAPI 3.0.3 YAML or
+  JSON (app and `pakpos-cli export -f openapi|openapi-yaml`).
 - MCP client request type: test MCP servers over Streamable HTTP or stdio
   like REST requests (call tools, read resources, get prompts, list tools),
   with tests, the runner and `pakpos-cli mcp-client`; stdio servers need a

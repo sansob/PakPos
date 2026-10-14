@@ -34,6 +34,7 @@ md4 = "0.10"
 cookie = "0.18"
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12", "logging"] }
 rustls-native-certs = "0.8"
+yaml-rust2 = { version = "0.13", default-features = false }
 rquickjs = "0.14"
 tonic = { version = "0.14", default-features = false, features = ["channel", "codegen", "tls-aws-lc", "tls-native-roots"] }
 tonic-reflection = { version = "0.14", default-features = false }

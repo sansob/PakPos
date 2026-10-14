@@ -29,6 +29,7 @@ md4.workspace = true
 cookie.workspace = true
 rustls.workspace = true
 rustls-native-certs.workspace = true
+yaml-rust2.workspace = true
 rquickjs.workspace = true
 tonic.workspace = true
 prost-types.workspace = true

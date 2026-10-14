@@ -6,8 +6,8 @@ pakpos-cli [--no-color] <COMMAND>
 Commands:
   run        Run every request of a collection and its tests
   send       Send a single request, like curl but with PakPos variables
-  import     Convert a Collection v2.1 file into PakPos format
-  export     Export a PakPos collection as Collection v2.1
+  import     Convert a Collection v2.1 or OpenAPI / Swagger file into PakPos format
+  export     Export a PakPos collection as Collection v2.1 or OpenAPI 3 (-f openapi|openapi-yaml)
   curl       Convert a cURL command into a PakPos request (JSON) or a code snippet
   ws         Open a WebSocket: stdin lines are sent, messages are printed
   sse        Listen to Server-Sent Events
@@ -51,7 +51,7 @@ The status line and headers (`-i`) go to stderr and the body to stdout, so
 ## import / export
 
 ```text
-pakpos-cli import <collection-v21.json> [-o out.json] [--workspace]
+pakpos-cli import <collection-v21.json | openapi.yaml> [-o out.json] [--workspace]
 pakpos-cli export <collection.json> [-o out.v21.json]
 ```
 

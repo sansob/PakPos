@@ -88,6 +88,28 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
         }
         Action::Rename(target, name) => app.dialog = Some(Dialog::Rename { target, name }),
         Action::Delete(target, label) => app.dialog = Some(Dialog::ConfirmDelete { target, label }),
+        Action::ExportOpenApi(id) => {
+            let Some(c) = app.collection(&id).cloned() else { return };
+            let file = format!("{}.openapi.yaml", sanitize(&c.name));
+            if let Some(path) = rfd::FileDialog::new()
+                .set_file_name(file)
+                .add_filter("OpenAPI YAML", &["yaml", "yml"])
+                .add_filter("OpenAPI JSON", &["json"])
+                .save_file()
+            {
+                let doc = pakpos_core::openapi::export(&c);
+                let json = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
+                let text = if json {
+                    serde_json::to_string_pretty(&doc).unwrap_or_default()
+                } else {
+                    pakpos_core::openapi::to_yaml(&doc)
+                };
+                match std::fs::write(&path, text) {
+                    Ok(()) => app.toast(format!("Exported to {}", path.display())),
+                    Err(e) => app.toast_error(e.to_string()),
+                }
+            }
+        }
         Action::ExportCollection(id) => {
             let Some(c) = app.collection(&id).cloned() else { return };
             let file = format!("{}.collection.json", sanitize(&c.name));
@@ -104,7 +126,9 @@ pub fn apply(app: &mut PakPosApp, action: Action) {
             }
         }
         Action::ImportPostmanCollection => {
-            if let Some(paths) = rfd::FileDialog::new().add_filter("JSON", &["json"]).pick_files() {
+            if let Some(paths) =
+                rfd::FileDialog::new().add_filter("Collection or OpenAPI", &["json", "yaml", "yml"]).pick_files()
+            {
                 for path in paths {
                     match storage::load_collection_file(&path) {
                         Ok((mut c, warnings)) => {

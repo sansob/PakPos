@@ -290,9 +290,22 @@ pub fn load_collection_file(path: &Path) -> Result<(Collection, Vec<String>), St
     parse_collection(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Parses collection JSON in either PakPos or Postman format.
+/// Parses a collection: PakPos or Collection v2.x JSON, or an OpenAPI /
+/// Swagger document (JSON or YAML).
 pub fn parse_collection(text: &str) -> Result<(Collection, Vec<String>), String> {
-    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    let value: serde_json::Value = match serde_json::from_str(text) {
+        Ok(v) => v,
+        // Not JSON: maybe an OpenAPI document in YAML.
+        Err(e) => match crate::openapi::import(text) {
+            Ok(i) => return Ok((i.collection, i.warnings)),
+            Err(crate::openapi::OpenApiError::NotOpenApi) => return Err(e.to_string()),
+            Err(oe) => return Err(format!("{e} (and not YAML OpenAPI: {oe})")),
+        },
+    };
+    if value.get("openapi").is_some() || value.get("swagger").is_some() {
+        let i = crate::openapi::import(text).map_err(|e| e.to_string())?;
+        return Ok((i.collection, i.warnings));
+    }
     if value.get("info").is_some() {
         let imported = crate::postman::import_collection(text).map_err(|e| e.to_string())?;
         Ok((imported.value, imported.warnings))

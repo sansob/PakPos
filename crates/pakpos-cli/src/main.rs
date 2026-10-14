@@ -39,7 +39,7 @@ enum Command {
     Send(SendArgs),
     /// Convert a Collection v2.1 file into PakPos format.
     Import {
-        /// Collection JSON (v2.0 / v2.1).
+        /// Collection JSON (v2.0 / v2.1) or an OpenAPI 3 / Swagger 2.0 document (JSON or YAML).
         input: PathBuf,
         /// Output file. Defaults to stdout.
         #[arg(short, long)]
@@ -48,11 +48,14 @@ enum Command {
         #[arg(long)]
         workspace: bool,
     },
-    /// Export a PakPos collection as Collection v2.1.
+    /// Export a PakPos collection as Collection v2.1 or OpenAPI 3 (--format).
     Export {
         input: PathBuf,
         #[arg(short, long)]
         out: Option<PathBuf>,
+        /// Output format.
+        #[arg(short, long, value_enum, default_value_t = ExportFormat::Collection)]
+        format: ExportFormat,
     },
     /// Convert a cURL command into a PakPos request (JSON) or a code snippet.
     Curl {
@@ -163,6 +166,16 @@ enum Reporter {
     Cli,
     Json,
     Junit,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum ExportFormat {
+    /// Collection v2.1 JSON
+    Collection,
+    /// OpenAPI 3.0.3 JSON
+    Openapi,
+    /// OpenAPI 3.0.3 YAML
+    OpenapiYaml,
 }
 
 #[derive(clap::Args)]
@@ -355,9 +368,16 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
             write_output(out.as_ref(), &json, !workspace)?;
             Ok(ExitCode::SUCCESS)
         }
-        Command::Export { input, out } => {
+        Command::Export { input, out, format } => {
             let (collection, _) = storage::load_collection_file(&input).map_err(anyhow::Error::msg)?;
-            write_output(out.as_ref(), &postman::export_collection(&collection), true)?;
+            let text = match format {
+                ExportFormat::Collection => postman::export_collection(&collection),
+                ExportFormat::Openapi => {
+                    serde_json::to_string_pretty(&pakpos_core::openapi::export(&collection)).unwrap_or_default()
+                }
+                ExportFormat::OpenapiYaml => pakpos_core::openapi::to_yaml(&pakpos_core::openapi::export(&collection)),
+            };
+            write_output(out.as_ref(), &text, true)?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Curl { command, to } => {
