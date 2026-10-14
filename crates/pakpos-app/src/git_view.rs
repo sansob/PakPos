@@ -257,7 +257,7 @@ impl PakPosApp {
                                 }
                             }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.small_button("⟳").on_hover_text("Refresh").clicked() {
+                                if ui.button("⟳").on_hover_text("Refresh").clicked() {
                                     op = Some(GitOp::Refresh);
                                 }
                             });
@@ -266,7 +266,7 @@ impl PakPosApp {
                         ui.horizontal(|ui| {
                             ui.label("Remote");
                             ui.add(
-                                egui::TextEdit::singleline(&mut g.remote_input)
+                                egui::TextEdit::singleline(&mut g.remote_input).min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT)).vertical_align(egui::Align::Center)
                                     .hint_text("git@github.com:team/api-collections.git")
                                     .desired_width(380.0),
                             );
@@ -300,7 +300,7 @@ impl PakPosApp {
                         });
                         ui.add_space(6.0);
                         ui.add(
-                            egui::TextEdit::singleline(&mut g.message)
+                            egui::TextEdit::singleline(&mut g.message).min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT)).vertical_align(egui::Align::Center)
                                 .hint_text("Commit message (e.g. Add payment endpoints)")
                                 .desired_width(f32::INFINITY),
                         );

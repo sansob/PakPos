@@ -75,7 +75,12 @@ impl PakPosApp {
                     ui.set_width(440.0);
                     title(ui, "Save request");
                     ui.label("Name");
-                    ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
+                    ui.add(
+                        egui::TextEdit::singleline(name)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(f32::INFINITY),
+                    );
                     ui.add_space(8.0);
                     ui.label("Collection");
                     egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
@@ -87,6 +92,8 @@ impl PakPosApp {
                     if collection.is_none() {
                         ui.add(
                             egui::TextEdit::singleline(new_collection)
+                                .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                .vertical_align(egui::Align::Center)
                                 .hint_text("Collection name")
                                 .desired_width(f32::INFINITY),
                         );
@@ -142,7 +149,11 @@ impl PakPosApp {
                     ui.set_width(380.0);
                     title(ui, "New collection");
                     let resp = ui.add(
-                        egui::TextEdit::singleline(name).hint_text("e.g. Payments API").desired_width(f32::INFINITY),
+                        egui::TextEdit::singleline(name)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .hint_text("e.g. Payments API")
+                            .desired_width(f32::INFINITY),
                     );
                     resp.request_focus();
                     ui.add_space(10.0);
@@ -173,7 +184,12 @@ impl PakPosApp {
                 let r = egui::Modal::new(Id::new("rename")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(380.0);
                     title(ui, "Rename");
-                    let resp = ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(name)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(f32::INFINITY),
+                    );
                     resp.request_focus();
                     ui.add_space(10.0);
                     let mut ok = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
@@ -266,14 +282,22 @@ impl PakPosApp {
                         changed |= ui
                             .add(
                                 egui::TextEdit::singleline(&mut s.http.proxy)
+                                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                    .vertical_align(egui::Align::Center)
                                     .hint_text("http://127.0.0.1:8080")
                                     .desired_width(260.0),
                             )
                             .changed();
                         ui.end_row();
                         ui.label("User-Agent");
-                        changed |=
-                            ui.add(egui::TextEdit::singleline(&mut s.http.user_agent).desired_width(260.0)).changed();
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(&mut s.http.user_agent)
+                                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                    .vertical_align(egui::Align::Center)
+                                    .desired_width(260.0),
+                            )
+                            .changed();
                         ui.end_row();
                     });
                     if !s.http.verify_tls {
@@ -449,6 +473,8 @@ impl PakPosApp {
                                         changed |= ui
                                             .add(
                                                 egui::TextEdit::singleline(&mut env.name)
+                                                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                                    .vertical_align(egui::Align::Center)
                                                     .font(egui::TextStyle::Heading)
                                                     .desired_width(260.0),
                                             )
@@ -524,7 +550,7 @@ impl PakPosApp {
                 egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| match tab {
                     CollectionTab::General => {
                         ui.label("Name");
-                        changed |= ui.add(egui::TextEdit::singleline(&mut c.name).desired_width(f32::INFINITY)).changed();
+                        changed |= ui.add(egui::TextEdit::singleline(&mut c.name).min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT)).vertical_align(egui::Align::Center).desired_width(f32::INFINITY)).changed();
                         ui.add_space(6.0);
                         ui.label("Description (Markdown)");
                         changed |= ui

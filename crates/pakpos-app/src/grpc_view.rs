@@ -117,7 +117,13 @@ pub fn editor(
             ui.label(RichText::new("Import paths").small().color(p.text_weak));
             let mut paths = cfg.import_paths.join(";");
             if ui
-                .add(egui::TextEdit::singleline(&mut paths).hint_text("dir1;dir2 (optional)").desired_width(240.0))
+                .add(
+                    egui::TextEdit::singleline(&mut paths)
+                        .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                        .vertical_align(egui::Align::Center)
+                        .hint_text("dir1;dir2 (optional)")
+                        .desired_width(240.0),
+                )
                 .changed()
             {
                 cfg.import_paths =
@@ -130,7 +136,7 @@ pub fn editor(
     let Body::Raw { content, .. } = body else { return changed };
     ui.horizontal(|ui| {
         widgets::section_title(ui, "Message (JSON)");
-        if ui.small_button("Generate example").clicked() {
+        if ui.button("Generate example").clicked() {
             *action = Some(GrpcAction::Template);
         }
         let streaming = state.methods.iter().find(|m| m.full_name == cfg.method).is_some_and(|m| m.client_streaming);

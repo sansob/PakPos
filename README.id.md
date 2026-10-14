@@ -23,7 +23,7 @@ minta akun, sync collection ke cloud orang lain, dan butuh beberapa detik cuma
 buat kebuka.
 
 PakPos balik ke dasar dan berusaha ngerjain itu dengan baik. Aplikasinya native
-(satu binary ~20 MB, tanpa Electron), kebukanya cepat, dan semua yang kamu bikin
+(satu binary ~26 MB, tanpa Electron), kebukanya cepat, dan semua yang kamu bikin
 disimpan sebagai file JSON biasa di folder pilihan kamu. Bagian terakhir ini
 penting: taruh foldernya di repo git project kamu, dan satu tim langsung pakai
 collection yang sama, perubahan di-review lewat pull request seperti kode biasa.

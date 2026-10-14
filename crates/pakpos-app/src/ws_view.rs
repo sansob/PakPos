@@ -119,7 +119,13 @@ pub fn log_view(ui: &mut Ui, state: &mut WsState, uid: u64, p: &Palette) {
             if ui.button("Clear").clicked() {
                 state.log.clear();
             }
-            ui.add(egui::TextEdit::singleline(&mut state.filter).hint_text("🔍 Filter").desired_width(160.0));
+            ui.add(
+                egui::TextEdit::singleline(&mut state.filter)
+                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                    .vertical_align(egui::Align::Center)
+                    .hint_text("🔍 Filter")
+                    .desired_width(160.0),
+            );
         });
     });
     ui.add_space(4.0);

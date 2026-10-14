@@ -64,7 +64,15 @@ pub fn oauth_form(ui: &mut Ui, cfg: &mut OAuth2Config, scope: &VarScope, p: &Pal
             changed |= widgets::var_text_edit(ui, &mut cfg.username, scope, "", w).changed();
             ui.end_row();
             ui.label("Password");
-            changed |= ui.add(egui::TextEdit::singleline(&mut cfg.password).password(true).desired_width(w)).changed();
+            changed |= ui
+                .add(
+                    egui::TextEdit::singleline(&mut cfg.password)
+                        .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                        .vertical_align(egui::Align::Center)
+                        .password(true)
+                        .desired_width(w),
+                )
+                .changed();
             ui.end_row();
         }
         ui.label("Scope");
@@ -89,7 +97,14 @@ pub fn oauth_form(ui: &mut Ui, cfg: &mut OAuth2Config, scope: &VarScope, p: &Pal
         });
         ui.end_row();
         ui.label("Header prefix");
-        changed |= ui.add(egui::TextEdit::singleline(&mut cfg.header_prefix).desired_width(120.0)).changed();
+        changed |= ui
+            .add(
+                egui::TextEdit::singleline(&mut cfg.header_prefix)
+                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                    .vertical_align(egui::Align::Center)
+                    .desired_width(120.0),
+            )
+            .changed();
         ui.end_row();
     });
     if cfg.grant == OAuth2Grant::AuthorizationCode {
@@ -159,7 +174,7 @@ pub fn token_panel(
                 );
                 ui.horizontal(|ui| {
                     ui.hyperlink_to(RichText::new("open the login page").small(), url);
-                    if ui.small_button("Copy link").clicked() {
+                    if ui.button("Copy link").clicked() {
                         ui.ctx().copy_text(url.clone());
                     }
                 });

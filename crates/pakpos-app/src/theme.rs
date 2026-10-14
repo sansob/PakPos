@@ -115,6 +115,9 @@ pub fn method_short(m: HttpMethod) -> &'static str {
     }
 }
 
+/// Height of every button, combo box and single-line input.
+pub const CONTROL_HEIGHT: f32 = 28.0;
+
 /// Applies the PakPos style to the egui context.
 pub fn apply(ctx: &egui::Context, theme: Theme, font_scale_percent: u32) {
     let p = Palette::of(theme);
@@ -197,8 +200,9 @@ pub fn apply(ctx: &egui::Context, theme: Theme, font_scale_percent: u32) {
         ]
         .into();
         style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-        style.spacing.button_padding = egui::vec2(10.0, 5.0);
-        style.spacing.interact_size.y = 26.0;
+        // One control height everywhere: buttons, combo boxes and single-line inputs.
+        style.spacing.button_padding = egui::vec2(12.0, 5.0);
+        style.spacing.interact_size.y = CONTROL_HEIGHT;
         style.spacing.window_margin = Margin::same(14);
         style.spacing.menu_margin = Margin::same(6);
         style.spacing.combo_width = 120.0;

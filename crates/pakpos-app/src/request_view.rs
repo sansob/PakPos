@@ -155,6 +155,8 @@ impl PakPosApp {
                 ui.label(RichText::new("Unsaved  /").color(p.text_weak));
             }
             let name = egui::TextEdit::singleline(&mut tab.request.name)
+                .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                .vertical_align(egui::Align::Center)
                 .frame(egui::Frame::NONE)
                 .font(egui::TextStyle::Heading)
                 .desired_width(ui.available_width() - 200.0);
@@ -602,7 +604,15 @@ fn auth_editor(
             changed |= widgets::var_text_edit(ui, username, scope, "", w).changed();
             ui.end_row();
             ui.label("Password");
-            changed |= ui.add(egui::TextEdit::singleline(password).password(true).desired_width(w)).changed();
+            changed |= ui
+                .add(
+                    egui::TextEdit::singleline(password)
+                        .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                        .vertical_align(egui::Align::Center)
+                        .password(true)
+                        .desired_width(w),
+                )
+                .changed();
             ui.end_row();
         }
         Auth::Bearer { token } => {
@@ -719,8 +729,15 @@ fn body_editor(
         }
         Body::Binary { path } => {
             ui.horizontal(|ui| {
-                changed |=
-                    ui.add(egui::TextEdit::singleline(path).hint_text("path/to/file").desired_width(420.0)).changed();
+                changed |= ui
+                    .add(
+                        egui::TextEdit::singleline(path)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .hint_text("path/to/file")
+                            .desired_width(420.0),
+                    )
+                    .changed();
                 if ui.button("Browse…").clicked() {
                     if let Some(p) = rfd::FileDialog::new().pick_file() {
                         *path = p.display().to_string();
@@ -749,7 +766,13 @@ fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palet
             ui.horizontal(|ui| {
                 changed |= ui.checkbox(&mut t.enabled, "").changed();
                 changed |= ui
-                    .add(egui::TextEdit::singleline(&mut t.target).desired_width(220.0).hint_text("json.data.id"))
+                    .add(
+                        egui::TextEdit::singleline(&mut t.target)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(220.0)
+                            .hint_text("json.data.id"),
+                    )
                     .changed();
                 egui::ComboBox::from_id_salt("op").width(120.0).selected_text(t.op.label()).show_ui(ui, |ui| {
                     for op in Operator::ALL {
@@ -758,7 +781,13 @@ fn tests_editor(ui: &mut Ui, tests: &mut Vec<Assertion>, p: &crate::theme::Palet
                 });
                 if t.op.needs_expected() {
                     changed |= ui
-                        .add(egui::TextEdit::singleline(&mut t.expected).desired_width(200.0).hint_text("expected"))
+                        .add(
+                            egui::TextEdit::singleline(&mut t.expected)
+                                .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                .vertical_align(egui::Align::Center)
+                                .desired_width(200.0)
+                                .hint_text("expected"),
+                        )
                         .changed();
                 }
                 if widgets::ghost_button(ui, "×", "Remove").clicked() {
@@ -808,11 +837,23 @@ fn extract_editor(ui: &mut Ui, ex: &mut Vec<Extraction>, p: &crate::theme::Palet
             ui.horizontal(|ui| {
                 changed |= ui.checkbox(&mut e.enabled, "").changed();
                 changed |= ui
-                    .add(egui::TextEdit::singleline(&mut e.source).desired_width(240.0).hint_text("json.data.token"))
+                    .add(
+                        egui::TextEdit::singleline(&mut e.source)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(240.0)
+                            .hint_text("json.data.token"),
+                    )
                     .changed();
                 ui.label("→");
                 changed |= ui
-                    .add(egui::TextEdit::singleline(&mut e.variable).desired_width(160.0).hint_text("variable"))
+                    .add(
+                        egui::TextEdit::singleline(&mut e.variable)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(160.0)
+                            .hint_text("variable"),
+                    )
                     .changed();
                 if widgets::ghost_button(ui, "×", "Remove").clicked() {
                     remove = Some(i);

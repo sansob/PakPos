@@ -54,8 +54,15 @@ pub fn editor(
             *action = Some(GqlAction::FetchSchema);
         }
         ui.label(RichText::new("Operation name").small().color(p.text_weak));
-        changed |=
-            ui.add(egui::TextEdit::singleline(operation_name).hint_text("optional").desired_width(140.0)).changed();
+        changed |= ui
+            .add(
+                egui::TextEdit::singleline(operation_name)
+                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                    .vertical_align(egui::Align::Center)
+                    .hint_text("optional")
+                    .desired_width(140.0),
+            )
+            .changed();
     });
     ui.add_space(4.0);
     let total = ui.available_width();

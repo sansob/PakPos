@@ -117,6 +117,8 @@ impl PakPosApp {
             }
             ui.add(
                 egui::TextEdit::singleline(&mut self.search)
+                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                    .vertical_align(egui::Align::Center)
                     .hint_text("🔍 Search requests")
                     .desired_width(ui.available_width()),
             );

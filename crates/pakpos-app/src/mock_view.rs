@@ -34,7 +34,14 @@ pub fn examples_editor(ui: &mut Ui, examples: &mut Vec<Example>, uid: u64, p: &P
             ui.horizontal(|ui| {
                 let c = theme::status_color(ex.status);
                 widgets::pill(ui, ex.status.to_string(), c, c.gamma_multiply(0.16));
-                changed |= ui.add(egui::TextEdit::singleline(&mut ex.name).desired_width(260.0)).changed();
+                changed |= ui
+                    .add(
+                        egui::TextEdit::singleline(&mut ex.name)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(260.0),
+                    )
+                    .changed();
                 ui.label(RichText::new("status").small().color(p.text_weak));
                 changed |= ui.add(egui::DragValue::new(&mut ex.status).range(100..=599)).changed();
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -141,7 +148,7 @@ impl PakPosApp {
                 ui.horizontal(|ui| {
                     widgets::pill(ui, "Running", theme::GREEN, theme::GREEN.gamma_multiply(0.16));
                     ui.label(RichText::new(&url).monospace().strong());
-                    if ui.small_button("Copy URL").clicked() {
+                    if ui.button("Copy URL").clicked() {
                         ui.ctx().copy_text(url.clone());
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

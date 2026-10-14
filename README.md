@@ -29,7 +29,7 @@ that want an account, sync your collections to someone else's cloud and take a
 few seconds to start.
 
 PakPos goes back to the basics and tries to do them well. It's a native app
-(a single ~20 MB binary, no Electron), it starts before you can blink, and everything
+(a single ~26 MB binary, no Electron), it starts before you can blink, and everything
 you make is a plain JSON file in a folder you choose. That last part matters
 more than it sounds: put the folder in your project's git repo and your whole
 team gets the same collections, with changes reviewed in pull requests like the
