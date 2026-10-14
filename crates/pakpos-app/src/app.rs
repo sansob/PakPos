@@ -942,7 +942,7 @@ impl PakPosApp {
                         if ui
                             .add(
                                 egui::Button::new(RichText::new(sync_label).color(white))
-                                    .fill(theme::NAVY_600)
+                                    .fill(p.header_button)
                                     .stroke(egui::Stroke::NONE),
                             )
                             .on_hover_text(crate::i18n::tr("Share this workspace with git"))
@@ -960,7 +960,7 @@ impl PakPosApp {
                         if ui
                             .add(
                                 egui::Button::new(RichText::new(cookies_label).color(white))
-                                    .fill(theme::NAVY_600)
+                                    .fill(p.header_button)
                                     .stroke(egui::Stroke::NONE),
                             )
                             .on_hover_text(crate::i18n::tr("View and edit the cookie jar"))
@@ -970,7 +970,7 @@ impl PakPosApp {
                         }
                         let import = ui.add(
                             egui::Button::new(RichText::new(crate::i18n::tr("Import")).color(white))
-                                .fill(theme::NAVY_600)
+                                .fill(p.header_button)
                                 .stroke(egui::Stroke::NONE),
                         );
                         egui::Popup::menu(&import).show(|ui| {

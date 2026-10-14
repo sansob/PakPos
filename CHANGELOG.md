@@ -55,6 +55,18 @@ All notable changes to this project are documented here. The format follows
 - Drag & drop in the sidebar: reorder requests and folders, move them into
   folders or to another collection; open tabs follow moved requests.
 
+### Changed
+- Dark theme: neutral near-black surfaces instead of navy (the light theme keeps
+  its navy header).
+
+### Fixed
+- Windows installer: "Add pakpos-cli to PATH" failed for all-users installs
+  (`RegCreateKeyEx failed; code 87` on `HKLM\Environment`). It now writes the
+  system environment key, and uninstall removes the folder from PATH again.
+  A CI job installs and uninstalls the installer to check this.
+- Windows: no more console windows flashing up when PakPos runs git (the
+  Sync badge refreshes every minute) or starts a stdio MCP server.
+
 ## [0.2.0-rc.1] - 2026-10-14
 
 Release candidate for the first public release.

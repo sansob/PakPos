@@ -239,7 +239,7 @@ impl PakPosApp {
 
         // URL bar.
         egui::Frame::new()
-            .fill(if p.dark { theme::INK } else { egui::Color32::WHITE })
+            .fill(p.input)
             .stroke(Stroke::new(1.0, p.border))
             .corner_radius(8)
             .inner_margin(Margin::symmetric(6, 4))

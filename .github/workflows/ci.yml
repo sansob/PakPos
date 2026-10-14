@@ -81,3 +81,51 @@ jobs:
         with:
           name: junit-report
           path: junit.xml
+
+  # Builds the Windows installer (with stand-in binaries) and checks that
+  # "Add pakpos-cli to PATH" works for all-users and per-user installs and is
+  # undone on uninstall.
+  windows-installer:
+    name: Windows installer (PATH task)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path stub | Out-Null
+          Set-Content stub\pakpos.exe "stub"
+          Set-Content stub\pakpos-cli.exe "stub"
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=0.0.0 /DArch=x64 "/DSourceDir=..\..\stub" packaging\windows\pakpos.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Install, check PATH, uninstall
+        shell: pwsh
+        run: |
+          $setup = "dist\PakPos-0.0.0-windows-x64-setup.exe"
+          $cases = @(
+            @{ Mode = "/ALLUSERS"; Dir = "$env:ProgramFiles\PakPos"; Key = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" },
+            @{ Mode = "/CURRENTUSER"; Dir = "$env:LOCALAPPDATA\Programs\PakPos"; Key = "HKCU:\Environment" }
+          )
+          function Get-RawPath($key) {
+            (Get-Item $key).GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+          }
+          foreach ($c in $cases) {
+            $before = Get-RawPath $c.Key
+            $p = Start-Process $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", $c.Mode, "/TASKS=addtopath", "/LOG=install.log" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { Get-Content install.log; throw "$($c.Mode): setup exited with $($p.ExitCode)" }
+            $after = Get-RawPath $c.Key
+            if (-not (($after -split ';') -contains $c.Dir)) { throw "$($c.Mode): $($c.Dir) not in PATH: $after" }
+            # Installing again must not add it twice.
+            Start-Process $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", $c.Mode, "/TASKS=addtopath" -Wait
+            $count = @((Get-RawPath $c.Key) -split ';' | Where-Object { $_ -eq $c.Dir }).Count
+            if ($count -ne 1) { throw "$($c.Mode): $($c.Dir) is in PATH $count times" }
+            Start-Process "$($c.Dir)\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+            for ($i = 0; $i -lt 30 -and (Test-Path "$($c.Dir)\unins000.exe"); $i++) { Start-Sleep 1 }
+            $final = Get-RawPath $c.Key
+            if (($final -split ';') -contains $c.Dir) { throw "$($c.Mode): $($c.Dir) still in PATH after uninstall" }
+            if ($final -ne $before) { throw "$($c.Mode): PATH changed by install + uninstall:`n$before`n$final" }
+            Write-Host "$($c.Mode): ok"
+          }
