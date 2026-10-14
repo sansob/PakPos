@@ -30,6 +30,9 @@ All notable changes to this project are documented here. The format follows
   bidirectional streaming, metadata and auth, JSON templates, status and
   trailers in the response, tests on gRPC responses; `pakpos-cli grpc`; a demo
   server example.
+- Built-in Git sync instead of a cloud: initialize, set a remote, commit, pull
+  (rebase, auto-reload), push, or one-click Sync, scoped to the workspace folder,
+  using the installed git and its credentials; personal files are git-ignored.
 
 ## [0.1.0-rc.1] - 2026-10-14
 

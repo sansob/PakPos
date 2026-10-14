@@ -26,6 +26,7 @@
 - [Command-line interface](reference/cli.md)
 - [MCP server](reference/mcp.md)
 - [Workspace file format](reference/workspace.md)
+- [Git sync](reference/git.md)
 - [Keyboard shortcuts](reference/shortcuts.md)
 
 # Project

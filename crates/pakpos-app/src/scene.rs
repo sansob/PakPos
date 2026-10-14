@@ -102,6 +102,31 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].section = ReqSection::Auth;
             app.send(app.active, ctx);
         }
+        "git" => {
+            // A workspace with history, a remote and one pending change.
+            let root = app.ws.root.clone();
+            let remote = root.parent().unwrap_or(&root).join("team-remote.git");
+            let sh = |dir: &std::path::Path, args: &[&str]| {
+                let _ = std::process::Command::new("git").args(args).current_dir(dir).output();
+            };
+            let _ = std::fs::create_dir_all(&remote);
+            sh(&remote, &["init", "-q", "--bare"]);
+            let _ = pakpos_core::git::init(&root);
+            sh(&root, &["config", "user.name", "Budi"]);
+            sh(&root, &["config", "user.email", "budi@example.com"]);
+            sh(&root, &["config", "commit.gpgsign", "false"]);
+            let _ = pakpos_core::git::commit_all(&root, "Add PakPos demo collection");
+            let _ = pakpos_core::git::set_remote(&root, &format!("file://{}", remote.display()));
+            let _ = pakpos_core::git::push(&root);
+            if let Some(c) = app.ws.collections.first_mut() {
+                c.description.push_str("\n\nOwned by the payments team.");
+            }
+            let id = app.ws.collections[0].id.clone();
+            app.persist_collection(&id);
+            open_by_name(app, "Get with query params");
+            app.git.open = true;
+            app.git.message = "Document collection owner".into();
+        }
         "grpc" => {
             open_by_name(app, "Health check (gRPC)");
             app.tabs[app.active].section = ReqSection::Body;
@@ -164,6 +189,7 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
     match name {
         "runner" => app.runner.as_ref().is_some_and(|r| r.report.is_some()),
         "environments" | "curl" | "snippet" | "settings" => true,
+        "git" => app.git.job.is_none() && app.git.status.as_ref().is_some_and(|s| s.as_ref().is_ok_and(|s| s.is_repo)),
         "grpc" => app.tabs.get(app.active).is_some_and(|t| {
             t.grpc.job.is_none() && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))
         }),

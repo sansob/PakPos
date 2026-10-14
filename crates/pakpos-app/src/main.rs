@@ -5,6 +5,7 @@
 mod actions;
 mod app;
 mod dialogs;
+mod git_view;
 mod graphql_view;
 mod grpc_view;
 mod mock_view;

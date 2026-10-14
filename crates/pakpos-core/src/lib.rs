@@ -16,6 +16,7 @@
 
 pub mod assertions;
 pub mod codegen;
+pub mod git;
 pub mod graphql;
 pub mod grpc;
 pub mod http;

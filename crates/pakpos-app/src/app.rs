@@ -193,6 +193,7 @@ pub struct PakPosApp {
     pub oauth_job: Option<crate::oauth_view::OAuthJob>,
     pub graphql: crate::graphql_view::GqlState,
     pub mock: Option<crate::mock_view::MockState>,
+    pub git: crate::git_view::GitState,
     applied_theme: Option<(Theme, u32)>,
     next_uid: u64,
     pub actions: Vec<Action>,
@@ -217,6 +218,7 @@ impl PakPosApp {
             oauth_job: None,
             graphql: Default::default(),
             mock: None,
+            git: Default::default(),
             applied_theme: None,
             next_uid: 1,
             actions: Vec::new(),
@@ -736,6 +738,21 @@ impl PakPosApp {
                         self.environment_picker(ui);
                         ui.label(RichText::new("Environment").color(white.gamma_multiply(0.7)).small());
                         ui.add_space(12.0);
+                        let changes = self.git.change_count();
+                        let sync_label =
+                            if changes > 0 { format!("⇅ Sync ({changes})") } else { "⇅ Sync".to_string() };
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new(sync_label).color(white))
+                                    .fill(theme::NAVY_600)
+                                    .stroke(egui::Stroke::NONE),
+                            )
+                            .on_hover_text("Share this workspace with git")
+                            .clicked()
+                        {
+                            self.git.open = true;
+                            self.git.last_refresh = None;
+                        }
                         let import = ui.add(
                             egui::Button::new(RichText::new("Import").color(white))
                                 .fill(theme::NAVY_600)
@@ -894,7 +911,8 @@ pub fn clean_items(items: &mut [Item]) {
 }
 
 impl eframe::App for PakPosApp {
-    fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_git(ctx);
         self.poll_responses();
         self.poll_runner();
         self.poll_oauth();
@@ -935,6 +953,7 @@ impl eframe::App for PakPosApp {
         self.dialogs(&ctx);
         self.runner_window(&ctx);
         self.mock_window(&ctx);
+        self.git_window(&ctx);
         self.show_toasts(&ctx);
         self.apply_actions(&ctx);
 

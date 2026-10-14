@@ -26,7 +26,7 @@ trap 'kill $MOCK $GRPC 2>/dev/null || true' EXIT
 sleep 1
 
 SCENES=("$@")
-[ ${#SCENES[@]} -eq 0 ] && SCENES=(overview tests runner history oauth graphql websocket scripts mock grpc environments curl snippet settings light)
+[ ${#SCENES[@]} -eq 0 ] && SCENES=(overview tests runner history oauth graphql websocket scripts mock grpc git environments curl snippet settings light)
 
 for scene in "${SCENES[@]}"; do
   HOME_DIR=$(mktemp -d)

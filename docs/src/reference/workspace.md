@@ -75,6 +75,8 @@ stopping the app.
 
 ## Sharing a workspace with a team
 
+The easiest way is the built-in [Git sync](git.md). Manually:
+
 ```sh
 export PAKPOS_HOME=~/code/my-api/.pakpos   # point the app and CLI at a repo folder
 ```
