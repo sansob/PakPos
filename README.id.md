@@ -116,5 +116,4 @@ pastikan `cargo fmt`, `clippy`, dan test lolos, lalu buka PR ke `develop`.
 
 MIT atau Apache-2.0, pilih yang cocok.
 
-PakPos adalah proyek independen, tidak berafiliasi dengan Postman, Inc. maupun
-PT Pos Indonesia. Warna biru dongker dan oranye cuma salam hangat buat kantor pos kita.
+PakPos adalah proyek independen dan tidak berafiliasi dengan Postman, Inc.

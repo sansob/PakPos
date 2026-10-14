@@ -1,5 +1,4 @@
-//! PakPos visual identity: deep navy surfaces with a warm orange accent,
-//! inspired by the colours of the Indonesian postal service.
+//! PakPos visual identity: deep navy surfaces with a warm orange accent.
 //!
 //! Navy is the dominant colour (header, sidebar, dark surfaces); orange is
 //! reserved for primary actions and selection so it stays meaningful.

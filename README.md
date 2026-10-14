@@ -135,6 +135,4 @@ The [architecture notes](docs/src/architecture.md) explain how the three crates
 
 MIT or Apache-2.0, whichever suits you.
 
-PakPos is an independent hobby project. It isn't affiliated with Postman, Inc.
-or PT Pos Indonesia; the navy-and-orange colours are just a friendly nod to the
-local post office.
+PakPos is an independent project and isn't affiliated with Postman, Inc.

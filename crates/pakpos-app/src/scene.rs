@@ -87,6 +87,19 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             open_by_name(app, "Create user (JSON)");
             app.dialog = Some(Dialog::Snippet { lang: SnippetLang::Python });
         }
+        "history" => {
+            let reqs: Vec<_> = app.ws.collections[0].flatten().into_iter().map(|(_, r)| r).collect();
+            let statuses = [200, 200, 201, 200, 404, 200, 401, 200, 500, 200];
+            for (i, r) in reqs.iter().cycle().take(10).enumerate() {
+                let mut r = r.clone();
+                r.url = r.url.replace("{{base_url}}", "https://api.example.com");
+                app.ws.push_history(r, Some(statuses[i]), Some(40 + i as u128 * 13));
+            }
+            app.sidebar = crate::app::SidebarView::History;
+            open_by_name(app, "Bearer token");
+            app.tabs[app.active].section = ReqSection::Auth;
+            app.send(app.active, ctx);
+        }
         "settings" => {
             open_by_name(app, "Get with query params");
             app.dialog = Some(Dialog::Settings);
