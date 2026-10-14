@@ -43,18 +43,25 @@ fn tree_row(ui: &mut Ui, p: &Palette, s: RowStyle<'_>) -> egui::Response {
         );
         x += 42.0;
     }
-    let max_w = rect.right() - x - 8.0;
-    let galley = painter.layout(s.label.to_string(), FontId::proportional(13.5), p.text, max_w.max(10.0));
-    painter.galley(egui::pos2(x, cy - galley.size().y / 2.0), galley.clone(), p.text);
+    let mut right = rect.right() - 8.0;
     if let Some(suffix) = s.weak_suffix {
-        painter.text(
-            egui::pos2(rect.right() - 8.0, cy),
-            Align2::RIGHT_CENTER,
-            suffix,
-            FontId::proportional(11.0),
-            p.text_weak,
-        );
+        let g = painter.layout_no_wrap(suffix, FontId::proportional(11.0), p.text_weak);
+        right -= g.size().x;
+        painter.galley(egui::pos2(right, cy - g.size().y / 2.0), g, p.text_weak);
+        right -= 10.0;
     }
+    let mut job = egui::text::LayoutJob::single_section(
+        s.label.to_string(),
+        egui::TextFormat { font_id: FontId::proportional(13.5), color: p.text, ..Default::default() },
+    );
+    job.wrap = egui::text::TextWrapping {
+        max_width: (right - x).max(10.0),
+        max_rows: 1,
+        break_anywhere: true,
+        overflow_character: Some('…'),
+    };
+    let galley = ui.ctx().fonts_mut(|f| f.layout_job(job));
+    painter.galley(egui::pos2(x, cy - galley.size().y / 2.0), galley, p.text);
     if resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
