@@ -634,8 +634,65 @@ fn auth_editor(
             });
             ui.end_row();
         }
+        Auth::Digest { username, password } => {
+            ui.label("Username");
+            changed |= widgets::var_text_edit(ui, username, scope, "", w).changed();
+            ui.end_row();
+            ui.label("Password");
+            changed |= password_edit(ui, password, w);
+            ui.end_row();
+            ui.label("");
+            ui.label(
+                RichText::new("Sent after the server's 401 challenge (MD5, SHA-256, -sess, qop auth).")
+                    .small()
+                    .color(p.text_weak),
+            );
+            ui.end_row();
+        }
+        Auth::Ntlm { username, password, domain, workstation } => {
+            ui.label("Username");
+            changed |= widgets::var_text_edit(ui, username, scope, "DOMAIN\\user", w).changed();
+            ui.end_row();
+            ui.label("Password");
+            changed |= password_edit(ui, password, w);
+            ui.end_row();
+            ui.label("Domain");
+            changed |= widgets::var_text_edit(ui, domain, scope, "optional", w).changed();
+            ui.end_row();
+            ui.label("Workstation");
+            changed |= widgets::var_text_edit(ui, workstation, scope, "optional", w).changed();
+            ui.end_row();
+        }
+        Auth::AwsSigV4(cfg) => {
+            ui.label("Access key");
+            changed |= widgets::var_text_edit(ui, &mut cfg.access_key, scope, "{{aws_access_key}}", w).changed();
+            ui.end_row();
+            ui.label("Secret key");
+            changed |= password_edit(ui, &mut cfg.secret_key, w);
+            ui.end_row();
+            ui.label("Session token");
+            changed |= widgets::var_text_edit(ui, &mut cfg.session_token, scope, "optional", w).changed();
+            ui.end_row();
+            ui.label("Region");
+            changed |= widgets::var_text_edit(ui, &mut cfg.region, scope, "us-east-1", w).changed();
+            ui.end_row();
+            ui.label("Service");
+            changed |= widgets::var_text_edit(ui, &mut cfg.service, scope, "execute-api, s3, lambda…", w).changed();
+            ui.end_row();
+        }
     });
     changed
+}
+
+fn password_edit(ui: &mut Ui, value: &mut String, width: f32) -> bool {
+    ui.add(
+        egui::TextEdit::singleline(value)
+            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+            .vertical_align(egui::Align::Center)
+            .password(true)
+            .desired_width(width),
+    )
+    .changed()
 }
 
 #[allow(clippy::too_many_arguments)]

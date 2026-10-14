@@ -157,7 +157,7 @@ pub fn run_collection(
         scope.runtime.insert(k.clone(), v.clone());
     }
 
-    let client = http::build_client(&options.settings);
+    let mut clients = http::Clients::new(options.settings.clone());
     let mut report = RunReport {
         collection: collection.name.clone(),
         environment: environment.as_ref().map(|e| e.name.clone()),
@@ -216,15 +216,15 @@ pub fn run_collection(
             _ => crate::oauth2::ensure_token(&req.auth, &mut scope, &mut report.tokens, &options.settings)
                 .map_err(|e| e.to_string()),
         };
-        let outcome = match (&client, token) {
-            (_, Err(e)) => Err(http::HttpError::Transport(e)),
-            (Ok(client), Ok(_)) => http::prepare(&req, &scope, None).and_then(|p| {
+        let outcome = match token {
+            Err(e) => Err(http::HttpError::Transport(e)),
+            Ok(_) => http::prepare(&req, &scope, None).and_then(|p| {
                 if !http::host_allowed(&p.url, &options.allowed_hosts) {
                     return Err(http::HttpError::Transport(format!("host of `{}` is not in the allow-list", p.url)));
                 }
+                let client = clients.for_url(&p.url)?;
                 http::send(client, &p).map(|r| (p, r))
             }),
-            (Err(e), _) => Err(http::HttpError::Transport(e.to_string())),
         };
         match outcome {
             Ok((prepared, resp)) => {

@@ -16,7 +16,9 @@ Commands:
   mcp        Start a Model Context Protocol (MCP) server on stdio
 ```
 
-`pakpos-cli <command> --help` shows every option. Colours are disabled when
+`pakpos-cli <command> --help` shows every option. `--cert`, `--key` and
+`--cacert` (client certificates, see [Authentication](auth.md)) work for
+`run`, `send` and `grpc`. Colours are disabled when
 output is not a terminal or `NO_COLOR` is set.
 
 ## run
@@ -24,7 +26,7 @@ output is not a terminal or `NO_COLOR` is set.
 ```text
 pakpos-cli run <COLLECTION> [-e ENV] [--var k=v]... [--filter TEXT] [--bail]
                [--delay MS] [--timeout S] [-k] [-r cli|json|junit] [-o FILE] [--save-env]
-               [--allow-scripts]
+               [--allow-scripts] [--cert PEM [--key PEM]] [--cacert PEM]
 ```
 
 `COLLECTION` and `ENV` are file paths (PakPos or Collection v2.1 JSON) or names from the
@@ -35,6 +37,7 @@ workspace. Exit code `0` = all passed, `1` = failures, `2` = error.
 ```text
 pakpos-cli send <METHOD> <URL> [-H 'Name: value']... [-d BODY | -d @file]
                 [-e ENV] [--var k=v]... [-i] [-k] [--timeout S]
+                [--cert PEM [--key PEM]] [--cacert PEM]
 ```
 
 The status line and headers (`-i`) go to stderr and the body to stdout, so

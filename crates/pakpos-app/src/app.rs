@@ -413,7 +413,7 @@ impl PakPosApp {
             };
             let result = http::prepare(&req, &scope, fallback.as_ref())
                 .and_then(|p| {
-                    let client = http::build_client(&settings)?;
+                    let client = http::client_for(&settings, &p.url)?;
                     http::send(&client, &p).map(|r| (p, r))
                 })
                 .map(|(prepared, response)| {

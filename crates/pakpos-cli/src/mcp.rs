@@ -396,7 +396,7 @@ impl Server {
                 self.config.allowed_hosts.join(", ")
             );
         }
-        let client = http::build_client(&self.settings())?;
+        let client = http::client_for(&self.settings(), &prepared.url)?;
         let resp = http::send(&client, &prepared)?;
         let mut body = resp.pretty_body();
         if body.chars().count() > MAX_BODY_CHARS {

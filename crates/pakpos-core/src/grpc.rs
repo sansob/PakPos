@@ -65,8 +65,17 @@ async fn connect(url: &str, settings: &HttpSettings) -> Result<Channel, GrpcErro
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(settings.timeout_secs.max(1)));
     if tls {
-        ep =
-            ep.tls_config(ClientTlsConfig::new().with_native_roots()).map_err(|e| GrpcError::Connect(e.to_string()))?;
+        let mut config = ClientTlsConfig::new().with_native_roots();
+        if let Some(cert) = settings.client_cert_for(&uri) {
+            if !cert.cert_path.trim().is_empty() {
+                let pem = cert.pem().map_err(|e| GrpcError::Connect(e.to_string()))?;
+                config = config.identity(tonic::transport::Identity::from_pem(&pem, &pem));
+            }
+            if let Some(ca) = cert.ca_pem().map_err(|e| GrpcError::Connect(e.to_string()))? {
+                config = config.ca_certificate(tonic::transport::Certificate::from_pem(ca));
+            }
+        }
+        ep = ep.tls_config(config).map_err(|e| GrpcError::Connect(e.to_string()))?;
     }
     ep.connect().await.map_err(|e| {
         use std::error::Error;

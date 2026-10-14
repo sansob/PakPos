@@ -15,6 +15,7 @@
 //! ```
 
 pub mod assertions;
+pub mod auth;
 pub mod codegen;
 pub mod git;
 pub mod graphql;

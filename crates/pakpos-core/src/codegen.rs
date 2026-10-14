@@ -283,6 +283,16 @@ pub fn snippet(lang: SnippetLang, p: &PreparedRequest) -> String {
 /// Renders a prepared request as a multi-line cURL command.
 pub fn to_curl(p: &PreparedRequest) -> String {
     let mut parts = vec![format!("curl -X {} {}", p.method, sh_quote(&p.url))];
+    match &p.challenge {
+        Some(crate::auth::ChallengeAuth::Digest { username, password }) => {
+            parts.push(format!("--digest -u {}", sh_quote(&format!("{username}:{password}"))));
+        }
+        Some(crate::auth::ChallengeAuth::Ntlm { username, password, domain, .. }) => {
+            let user = if domain.is_empty() { username.clone() } else { format!("{domain}\\{username}") };
+            parts.push(format!("--ntlm -u {}", sh_quote(&format!("{user}:{password}"))));
+        }
+        None => {}
+    }
     let is_multipart = matches!(p.body, PreparedBody::Multipart(_));
     for (k, v) in &p.headers {
         if is_multipart && k.eq_ignore_ascii_case("content-type") {
@@ -351,6 +361,24 @@ fn to_python(p: &PreparedRequest) -> String {
             args.push("data=data".into());
             args.push("files=files".into());
         }
+    }
+    match &p.challenge {
+        Some(crate::auth::ChallengeAuth::Digest { username, password }) => {
+            out = out.replacen("import requests\n", "import requests\nfrom requests.auth import HTTPDigestAuth\n", 1);
+            out.push_str(&format!("auth = HTTPDigestAuth({}, {})\n", py_str(username), py_str(password)));
+            args.push("auth=auth".into());
+        }
+        Some(crate::auth::ChallengeAuth::Ntlm { username, password, domain, .. }) => {
+            let user = if domain.is_empty() { username.clone() } else { format!("{domain}\\{username}") };
+            out = out.replacen(
+                "import requests\n",
+                "import requests\nfrom requests_ntlm import HttpNtlmAuth  # pip install requests-ntlm\n",
+                1,
+            );
+            out.push_str(&format!("auth = HttpNtlmAuth({}, {})\n", py_str(&user), py_str(password)));
+            args.push("auth=auth".into());
+        }
+        None => {}
     }
     out.push_str(&format!(
         "\nresponse = requests.request({}, {})\nprint(response.status_code)\nprint(response.text)\n",
@@ -499,5 +527,14 @@ mod tests {
         for lang in SnippetLang::ALL {
             assert!(snippet(lang, &prepared).contains("api.test"));
         }
+    }
+
+    #[test]
+    fn challenge_auth_in_snippets() {
+        let mut req = Request::new(HttpMethod::Get, "https://api.test/x");
+        req.auth = crate::model::Auth::Digest { username: "u".into(), password: "p".into() };
+        let prepared = prepare(&req, &VarScope::new(), None).unwrap();
+        assert!(to_curl(&prepared).contains("--digest -u u:p"));
+        assert!(to_python(&prepared).contains("HTTPDigestAuth(\"u\", \"p\")"));
     }
 }

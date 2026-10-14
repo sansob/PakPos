@@ -72,6 +72,9 @@ pub fn demo_collection() -> Collection {
     let mut basic = req("Basic auth", HttpMethod::Get, "{{base_url}}/basic-auth/pakpos/rahasia");
     basic.auth = Auth::Basic { username: "pakpos".into(), password: "rahasia".into() };
     basic.assertions = vec![test("status", Operator::Equals, "200")];
+    let mut digest = req("Digest auth", HttpMethod::Get, "{{base_url}}/digest-auth/auth/pakpos/rahasia");
+    digest.auth = Auth::Digest { username: "pakpos".into(), password: "rahasia".into() };
+    digest.assertions = vec![test("json.authenticated", Operator::Equals, "true")];
 
     let mut uuid = req("Get UUID (extract)", HttpMethod::Get, "{{base_url}}/uuid");
     uuid.extractions = vec![Extraction { enabled: true, variable: "last_uuid".into(), source: "json.uuid".into() }];
@@ -140,7 +143,7 @@ pub fn demo_collection() -> Collection {
     let mut basics = Folder::new("Basics");
     basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
-    auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(oauth)];
+    auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(digest), Item::Request(oauth)];
     let mut responses = Folder::new("Responses");
     responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found), Item::Request(scripted)];
     let mut graphql = Folder::new("GraphQL");
@@ -177,7 +180,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 16);
+        assert_eq!(c.request_count(), 17);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

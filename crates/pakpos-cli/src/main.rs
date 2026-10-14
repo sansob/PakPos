@@ -106,6 +106,8 @@ enum Command {
         /// Print an example request message instead of calling.
         #[arg(long)]
         template: bool,
+        #[command(flatten)]
+        tls: TlsArgs,
     },
     /// Serve the saved examples of a collection as a mock API.
     Mock {
@@ -191,6 +193,40 @@ struct RunArgs {
     /// Collections trusted in the desktop app run their scripts without this flag.
     #[arg(long)]
     allow_scripts: bool,
+    #[command(flatten)]
+    tls: TlsArgs,
+}
+
+/// Client certificate flags shared by `run`, `send` and `grpc`.
+#[derive(clap::Args, Clone, Default)]
+struct TlsArgs {
+    /// Client certificate (PEM) for mTLS, used for every host. Certificates
+    /// configured in the desktop app's settings are used as well.
+    #[arg(long)]
+    cert: Option<String>,
+    /// Private key (PEM) for --cert, if it is not in the same file.
+    #[arg(long, requires = "cert")]
+    key: Option<String>,
+    /// Extra CA certificate (PEM) to trust, e.g. for a private CA.
+    #[arg(long)]
+    cacert: Option<String>,
+}
+
+impl TlsArgs {
+    fn client_certs(&self, ws: &Workspace) -> Vec<pakpos_core::http::ClientCert> {
+        let mut certs = Vec::new();
+        if self.cert.is_some() || self.cacert.is_some() {
+            certs.push(pakpos_core::http::ClientCert {
+                enabled: true,
+                host: "*".into(),
+                cert_path: self.cert.clone().unwrap_or_default(),
+                key_path: self.key.clone().unwrap_or_default(),
+                ca_path: self.cacert.clone().unwrap_or_default(),
+            });
+        }
+        certs.extend(ws.settings.http.client_certs.iter().cloned());
+        certs
+    }
 }
 
 #[derive(clap::Args)]
@@ -217,6 +253,8 @@ struct SendArgs {
     insecure: bool,
     #[arg(long, default_value_t = 30)]
     timeout: u64,
+    #[command(flatten)]
+    tls: TlsArgs,
 }
 
 fn parse_kv(s: &str) -> Result<(String, String), String> {
@@ -341,8 +379,21 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
             vars,
             max_messages,
             template,
+            tls,
         } => cmd_grpc(
-            GrpcArgs { url, method, data, protos, import_paths, headers, environment, vars, max_messages, template },
+            GrpcArgs {
+                url,
+                method,
+                data,
+                protos,
+                import_paths,
+                headers,
+                environment,
+                vars,
+                max_messages,
+                template,
+                tls,
+            },
             style,
         ),
         Command::Mock { collection, port, host, delay } => cmd_mock(&collection, &host, port, delay, style),
@@ -419,7 +470,12 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
     };
     let (mut ws, _) = Workspace::load(storage::default_root());
     let options = RunOptions {
-        settings: HttpSettings { timeout_secs: args.timeout, verify_tls: !args.insecure, ..Default::default() },
+        settings: HttpSettings {
+            timeout_secs: args.timeout,
+            verify_tls: !args.insecure,
+            client_certs: args.tls.client_certs(&ws),
+            ..Default::default()
+        },
         filter: args.filter.clone(),
         stop_on_failure: args.bail,
         delay_ms: args.delay,
@@ -556,7 +612,12 @@ fn cmd_send(args: SendArgs, style: &Style) -> Result<ExitCode> {
     if !missing.is_empty() {
         eprintln!("{} unresolved variables: {}", style.paint("33", "warning:"), missing.join(", "));
     }
-    let settings = HttpSettings { timeout_secs: args.timeout, verify_tls: !args.insecure, ..Default::default() };
+    let settings = HttpSettings {
+        timeout_secs: args.timeout,
+        verify_tls: !args.insecure,
+        client_certs: args.tls.client_certs(&ws),
+        ..Default::default()
+    };
     let (_, resp) = http::execute(&req, &scope, None, &settings)?;
     eprintln!(
         "{} {}  {}",
@@ -711,6 +772,7 @@ struct GrpcArgs {
     vars: Vec<(String, String)>,
     max_messages: usize,
     template: bool,
+    tls: TlsArgs,
 }
 
 fn cmd_grpc(a: GrpcArgs, style: &Style) -> Result<ExitCode> {
@@ -725,7 +787,7 @@ fn cmd_grpc(a: GrpcArgs, style: &Style) -> Result<ExitCode> {
         scope.runtime.insert(k, v);
     }
     let url = scope.resolve(&a.url);
-    let settings = HttpSettings::default();
+    let settings = HttpSettings { client_certs: a.tls.client_certs(&ws), ..Default::default() };
     let cfg = pakpos_core::model::GrpcConfig {
         method: a.method.clone().unwrap_or_default(),
         proto_files: a.protos,

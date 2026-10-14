@@ -117,6 +117,26 @@ fn parse_auth(v: Option<&Value>, warnings: &mut Vec<String>) -> Auth {
             password: auth_param(auth.get("basic"), "password"),
         },
         "bearer" => Auth::Bearer { token: auth_param(auth.get("bearer"), "token") },
+        "digest" => Auth::Digest {
+            username: auth_param(auth.get("digest"), "username"),
+            password: auth_param(auth.get("digest"), "password"),
+        },
+        "ntlm" => Auth::Ntlm {
+            username: auth_param(auth.get("ntlm"), "username"),
+            password: auth_param(auth.get("ntlm"), "password"),
+            domain: auth_param(auth.get("ntlm"), "domain"),
+            workstation: auth_param(auth.get("ntlm"), "workstation"),
+        },
+        "awsv4" => {
+            let section = auth.get("awsv4");
+            Auth::AwsSigV4(crate::model::AwsSigV4Config {
+                access_key: auth_param(section, "accessKey"),
+                secret_key: auth_param(section, "secretKey"),
+                session_token: auth_param(section, "sessionToken"),
+                region: auth_param(section, "region"),
+                service: auth_param(section, "service"),
+            })
+        }
         "apikey" => {
             let section = auth.get("apikey");
             let key = auth_param(section, "key");
@@ -460,6 +480,24 @@ fn auth_to_json(auth: &Auth) -> Option<Value> {
             "basic": [kv("username", username), kv("password", password)]
         })),
         Auth::Bearer { token } => Some(json!({ "type": "bearer", "bearer": [kv("token", token)] })),
+        Auth::Digest { username, password } => Some(json!({
+            "type": "digest",
+            "digest": [kv("username", username), kv("password", password)]
+        })),
+        Auth::Ntlm { username, password, domain, workstation } => Some(json!({
+            "type": "ntlm",
+            "ntlm": [kv("username", username), kv("password", password), kv("domain", domain), kv("workstation", workstation)]
+        })),
+        Auth::AwsSigV4(c) => Some(json!({
+            "type": "awsv4",
+            "awsv4": [
+                kv("accessKey", &c.access_key),
+                kv("secretKey", &c.secret_key),
+                kv("sessionToken", &c.session_token),
+                kv("region", &c.region),
+                kv("service", &c.service),
+            ]
+        })),
         Auth::ApiKey { key, value, location } => Some(json!({
             "type": "apikey",
             "apikey": [
@@ -701,6 +739,29 @@ mod tests {
         let b: Vec<_> =
             back.flatten().into_iter().map(|(p, r)| (p, r.method, r.url, r.params, r.body, r.auth)).collect();
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn digest_ntlm_and_aws_auth_roundtrip() {
+        let auths = [
+            Auth::Digest { username: "u".into(), password: "p".into() },
+            Auth::Ntlm { username: "u".into(), password: "p".into(), domain: "D".into(), workstation: "W".into() },
+            Auth::AwsSigV4(crate::model::AwsSigV4Config {
+                access_key: "ak".into(),
+                secret_key: "sk".into(),
+                session_token: "st".into(),
+                region: "ap-southeast-3".into(),
+                service: "execute-api".into(),
+            }),
+        ];
+        for auth in auths {
+            let mut c = Collection::new("A");
+            let mut r = Request::new(HttpMethod::Get, "https://api.test");
+            r.auth = auth.clone();
+            c.items.push(Item::Request(r));
+            let back = import_collection(&export_collection(&c)).unwrap().value;
+            assert_eq!(back.flatten()[0].1.auth, auth);
+        }
     }
 
     #[test]

@@ -308,6 +308,8 @@ impl PakPosApp {
                         );
                     }
                     ui.add_space(8.0);
+                    changed |= client_certs_editor(ui, &mut s.http.client_certs, &p);
+                    ui.add_space(8.0);
                     ui.label(
                         RichText::new(format!("Workspace folder: {}", self.ws.root.display()))
                             .small()
@@ -750,4 +752,53 @@ impl PakPosApp {
             self.runner = None;
         }
     }
+}
+
+/// Client certificates (mTLS) per host, in the settings dialog.
+fn client_certs_editor(ui: &mut egui::Ui, certs: &mut Vec<pakpos_core::http::ClientCert>, p: &theme::Palette) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("CLIENT CERTIFICATES (mTLS)").small().strong().color(p.text_weak));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.button("+ Add").clicked() {
+                certs.push(pakpos_core::http::ClientCert { enabled: true, ..Default::default() });
+                changed = true;
+            }
+        });
+    });
+    if certs.is_empty() {
+        ui.label(
+            RichText::new("PEM certificate + key per host, used for HTTPS and gRPC (e.g. *.internal.example.com).")
+                .small()
+                .color(p.text_weak),
+        );
+    }
+    let mut remove = None;
+    let field = |ui: &mut egui::Ui, value: &mut String, hint: &str, width: f32| {
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .hint_text(hint)
+                .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                .vertical_align(egui::Align::Center)
+                .desired_width(width),
+        )
+        .changed()
+    };
+    for (i, cert) in certs.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            changed |= ui.checkbox(&mut cert.enabled, "").changed();
+            changed |= field(ui, &mut cert.host, "host or *.domain", 130.0);
+            changed |= field(ui, &mut cert.cert_path, "cert.pem", 120.0);
+            changed |= field(ui, &mut cert.key_path, "key.pem (optional)", 120.0);
+            changed |= field(ui, &mut cert.ca_path, "CA (optional)", 100.0);
+            if ui.button("×").on_hover_text("Remove").clicked() {
+                remove = Some(i);
+            }
+        });
+    }
+    if let Some(i) = remove {
+        certs.remove(i);
+        changed = true;
+    }
+    changed
 }

@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Digest (RFC 7616: MD5, SHA-256, -sess, qop auth/auth-int), NTLMv2 and
+  AWS Signature v4 auth, in the app, runner, CLI, MCP server, code snippets
+  and Collection v2.1 import/export.
+- Client certificates (mTLS) per host, with an optional private CA, for HTTPS
+  and gRPC; `--cert`, `--key` and `--cacert` on `run`, `send` and `grpc`.
+
 ## [0.2.0-rc.1] - 2026-10-14
 
 Release candidate for the first public release.

@@ -18,6 +18,7 @@
 - [Test & extraction language](reference/tests.md)
 - [JavaScript scripts](reference/scripts.md)
 - [Variables](reference/variables.md)
+- [Authentication & client certificates](reference/auth.md)
 - [OAuth 2.0](reference/oauth2.md)
 - [GraphQL](reference/graphql.md)
 - [WebSocket](reference/websocket.md)

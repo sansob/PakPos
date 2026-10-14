@@ -72,10 +72,12 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):  # quiet
         pass
 
-    def _send(self, status, payload, content_type="application/json"):
+    def _send(self, status, payload, content_type="application/json", extra_headers=None):
         body = payload if isinstance(payload, bytes) else json.dumps(payload, indent=2).encode()
         self.send_response(status)
         self.send_header("Content-Type", content_type)
+        for k, v in (extra_headers or {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
@@ -190,6 +192,24 @@ class Handler(BaseHTTPRequestHandler):
             expected = "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
             ok = self.headers.get("Authorization") == expected
             return self._send(200 if ok else 401, {"authenticated": ok, "user": user})
+        if path.startswith("/digest-auth/"):
+            # httpbin-compatible: /digest-auth/<qop>/<user>/<password>
+            _, _, qop, user, pw = path.split("/", 4)
+            realm, nonce = "pakpos", "5f2c-demo-nonce"
+            auth = self.headers.get("Authorization", "")
+            if auth.startswith("Digest "):
+                fields = dict(
+                    (k.strip(), v.strip().strip('"'))
+                    for k, v in (p.split("=", 1) for p in auth[7:].split(",") if "=" in p)
+                )
+                md5 = lambda x: hashlib.md5(x.encode()).hexdigest()
+                ha1 = md5(f"{user}:{realm}:{pw}")
+                ha2 = md5(f"{self.command}:{fields.get('uri', '')}")
+                expected = md5(f"{ha1}:{nonce}:{fields.get('nc')}:{fields.get('cnonce')}:{fields.get('qop')}:{ha2}")
+                if fields.get("username") == user and fields.get("response") == expected:
+                    return self._send(200, {"authenticated": True, "user": user})
+            challenge = f'Digest realm="{realm}", qop="{qop}", nonce="{nonce}", opaque="demo"'
+            return self._send(401, {"authenticated": False}, extra_headers={"WWW-Authenticate": challenge})
         # --- OAuth 2.0 demo (auto-approves everything) -------------------
         if path == "/oauth/authorize":
             q = dict(parse_qsl(urlsplit(self.path).query))

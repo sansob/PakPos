@@ -5,12 +5,12 @@
   "items": [
     {
       "kind": "folder",
-      "id": "3b2da6d4-8ce2-44ee-a19e-9061b6b0a15a",
+      "id": "e8807e2e-22f1-47fb-bc1f-b1c420437623",
       "name": "Basics",
       "items": [
         {
           "kind": "request",
-          "id": "7ccff33d-e314-4f79-b3b7-a41f23a4c75f",
+          "id": "b49357c0-4a2a-495e-b2ac-3bb7cf601ada",
           "name": "Get with query params",
           "method": "GET",
           "url": "{{base_url}}/get",
@@ -63,7 +63,7 @@
         },
         {
           "kind": "request",
-          "id": "8fa59ff8-1e72-4a59-918e-c8b2ef2da8b4",
+          "id": "00cfb6c3-f9ea-4e49-9546-d338383d69bd",
           "name": "Create user (JSON)",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -97,7 +97,7 @@
           ],
           "examples": [
             {
-              "id": "1f8f8392-8f19-4dbf-b508-1b0b744f6f1e",
+              "id": "7c2e8f25-c9a0-4348-a42b-3838abf9f59b",
               "name": "Created",
               "status": 201,
               "headers": [
@@ -110,7 +110,7 @@
               "body": "{\n  \"id\": \"usr_1001\",\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\"\n}"
             },
             {
-              "id": "eb872c80-22c0-4662-a8f8-691b115e167b",
+              "id": "8ba45eb3-3358-473f-ab5e-22a2a0e17b81",
               "name": "Validation error",
               "status": 422,
               "headers": [
@@ -126,7 +126,7 @@
         },
         {
           "kind": "request",
-          "id": "10c0a6a3-610d-4a40-aa69-e7d01cf75365",
+          "id": "c6a9cdf8-d702-4393-a7cc-2ad6d532f028",
           "name": "Submit form",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -159,7 +159,7 @@
         },
         {
           "kind": "request",
-          "id": "2c8a3be1-8996-47f3-a682-702a906c68bc",
+          "id": "452e8781-50e6-4a5f-90af-3fefa6e9050c",
           "name": "Update user",
           "method": "PUT",
           "url": "{{base_url}}/put",
@@ -174,7 +174,7 @@
         },
         {
           "kind": "request",
-          "id": "28dd2f5c-b037-4e0b-b80d-9e30f62b6832",
+          "id": "c8b2266c-5b0b-48bd-a3a8-4400e5c7d496",
           "name": "Patch user",
           "method": "PATCH",
           "url": "{{base_url}}/patch",
@@ -189,7 +189,7 @@
         },
         {
           "kind": "request",
-          "id": "69e0367d-180d-48fe-b109-5c4c3c2eb3e0",
+          "id": "757e89bf-8f5f-4f1c-8aee-bf67c7aa29e2",
           "name": "Delete user",
           "method": "DELETE",
           "url": "{{base_url}}/delete",
@@ -215,12 +215,12 @@
     },
     {
       "kind": "folder",
-      "id": "5de9ffa4-d433-41b8-978a-df7ac6033270",
+      "id": "81249e95-3313-4aad-a277-ee397a1ddea4",
       "name": "Auth",
       "items": [
         {
           "kind": "request",
-          "id": "3f89c0d4-cacb-4754-8725-35ef0f147e8c",
+          "id": "ecd0ae5a-7aff-4d3e-8b44-9eebdb0aa883",
           "name": "Bearer token",
           "method": "GET",
           "url": "{{base_url}}/bearer",
@@ -242,7 +242,7 @@
         },
         {
           "kind": "request",
-          "id": "07ff5412-f246-457d-83ac-5a00055c5cd6",
+          "id": "b985594d-dd6b-4aa0-a2c9-caf9334f995f",
           "name": "Basic auth",
           "method": "GET",
           "url": "{{base_url}}/basic-auth/pakpos/rahasia",
@@ -265,7 +265,30 @@
         },
         {
           "kind": "request",
-          "id": "f45bee18-da9e-40c2-b5d9-11b813c49619",
+          "id": "f0ce23e9-82d4-4574-859f-a54099c38e0b",
+          "name": "Digest auth",
+          "method": "GET",
+          "url": "{{base_url}}/digest-auth/auth/pakpos/rahasia",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "digest",
+            "username": "pakpos",
+            "password": "rahasia"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "json.authenticated",
+              "op": "equals",
+              "expected": "true"
+            }
+          ]
+        },
+        {
+          "kind": "request",
+          "id": "a42339b4-a047-40bd-94ff-2270745ce6dc",
           "name": "Profile (OAuth 2.0)",
           "method": "GET",
           "url": "{{base_url}}/oauth/me",
@@ -308,12 +331,12 @@
     },
     {
       "kind": "folder",
-      "id": "aed99466-7262-41a8-9921-1ce6e4ac591b",
+      "id": "f1cedf78-883a-4dc7-ac26-52296a7eaeb3",
       "name": "GraphQL",
       "items": [
         {
           "kind": "request",
-          "id": "740237bc-c4d4-4aa1-994d-89c07ce6f74f",
+          "id": "ebf43d74-d3b5-47cb-aade-a8d2af4f2ae0",
           "name": "Users by city (GraphQL)",
           "method": "POST",
           "url": "{{base_url}}/graphql",
@@ -348,12 +371,12 @@
     },
     {
       "kind": "folder",
-      "id": "7872a5d7-4b53-4c0c-bc57-a58dec2374a0",
+      "id": "1573eed2-e6d6-408d-b65d-d7f462819c6f",
       "name": "Realtime",
       "items": [
         {
           "kind": "request",
-          "id": "6ef43536-d097-4ae6-8300-785508eb5962",
+          "id": "01ca2d60-32a7-4fe7-a22f-29a9cb416a9c",
           "name": "Live prices (WebSocket)",
           "protocol": "websocket",
           "method": "GET",
@@ -371,7 +394,7 @@
         },
         {
           "kind": "request",
-          "id": "7857a668-2626-4689-8f08-bb7868fa70a3",
+          "id": "45f17d77-d9d6-40a2-87aa-6a6b747dcef0",
           "name": "Health check (gRPC)",
           "protocol": "grpc",
           "method": "POST",
@@ -410,12 +433,12 @@
     },
     {
       "kind": "folder",
-      "id": "50161352-ad08-468a-ba93-22a5822f1780",
+      "id": "53d731c2-2ef5-4be8-8cef-c459268d83e6",
       "name": "Responses",
       "items": [
         {
           "kind": "request",
-          "id": "0b0cbcf3-11fb-4be5-a64c-d634f2b67056",
+          "id": "7d9bd419-117f-4c6d-8c05-5aad9d7be982",
           "name": "Get UUID (extract)",
           "method": "GET",
           "url": "{{base_url}}/uuid",
@@ -442,7 +465,7 @@
           ],
           "examples": [
             {
-              "id": "2050d2a2-8f99-4b2a-886d-2e47ddcd1d0d",
+              "id": "16774e7c-c3f8-4909-9f67-d86f4d61e51a",
               "name": "Random UUID",
               "status": 200,
               "headers": [
@@ -458,7 +481,7 @@
         },
         {
           "kind": "request",
-          "id": "641a0333-1cbb-4c35-8ed5-cdcb8334168a",
+          "id": "e4c0266d-5401-4c7a-a6b7-1b3b60496c07",
           "name": "JSON document",
           "method": "GET",
           "url": "{{base_url}}/json",
@@ -479,7 +502,7 @@
         },
         {
           "kind": "request",
-          "id": "a0eb87a3-6bc0-432b-9162-7bd995f3093e",
+          "id": "67a57dba-941c-4f44-b643-c36674daf27c",
           "name": "Expect 404",
           "method": "GET",
           "url": "{{base_url}}/status/404",
@@ -500,7 +523,7 @@
         },
         {
           "kind": "request",
-          "id": "787e02bf-c350-45b0-8202-46d482988421",
+          "id": "b0763a79-e75b-46b6-856a-5604fb7b1128",
           "name": "Scripted checks (JavaScript)",
           "method": "GET",
           "url": "{{base_url}}/json",

@@ -306,6 +306,38 @@ pub enum Auth {
     /// OAuth 2.0; tokens are kept in the workspace token store, not here.
     #[serde(rename = "oauth2")]
     OAuth2(OAuth2Config),
+    /// HTTP Digest (RFC 7616): answered after the server's 401 challenge.
+    Digest {
+        username: String,
+        password: String,
+    },
+    /// AWS Signature Version 4.
+    #[serde(rename = "aws_sigv4")]
+    AwsSigV4(AwsSigV4Config),
+    /// NTLMv2 handshake (Windows / IIS servers).
+    Ntlm {
+        username: String,
+        password: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        domain: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        workstation: String,
+    },
+}
+
+/// AWS Signature Version 4 settings. Every field may contain `{{variables}}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct AwsSigV4Config {
+    #[serde(default)]
+    pub access_key: String,
+    #[serde(default)]
+    pub secret_key: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub session_token: String,
+    #[serde(default)]
+    pub region: String,
+    #[serde(default)]
+    pub service: String,
 }
 
 /// OAuth 2.0 grant types.
@@ -455,6 +487,9 @@ impl Auth {
             Auth::Bearer { .. } => "Bearer Token",
             Auth::ApiKey { .. } => "API Key",
             Auth::OAuth2(_) => "OAuth 2.0",
+            Auth::Digest { .. } => "Digest Auth",
+            Auth::AwsSigV4(_) => "AWS Signature",
+            Auth::Ntlm { .. } => "NTLM",
         }
     }
 
@@ -467,6 +502,18 @@ impl Auth {
             Auth::Bearer { token: String::new() },
             Auth::ApiKey { key: "X-API-Key".into(), value: String::new(), location: ApiKeyLocation::Header },
             Auth::OAuth2(OAuth2Config::default()),
+            Auth::Digest { username: String::new(), password: String::new() },
+            Auth::AwsSigV4(AwsSigV4Config {
+                region: "us-east-1".into(),
+                service: "execute-api".into(),
+                ..Default::default()
+            }),
+            Auth::Ntlm {
+                username: String::new(),
+                password: String::new(),
+                domain: String::new(),
+                workstation: String::new(),
+            },
         ]
     }
 
