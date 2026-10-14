@@ -1,0 +1,792 @@
+//! Application state and the main frame loop.
+
+use crate::theme::{self, Palette};
+use crate::widgets;
+use egui::{Margin, RichText};
+use pakpos_core::assertions::{self, AssertionResult};
+use pakpos_core::codegen::SnippetLang;
+use pakpos_core::http::{self, PreparedRequest, Response};
+use pakpos_core::model::{Auth, Collection, Environment, Item, Request};
+use pakpos_core::runner::{RequestReport, RunOptions, RunReport};
+use pakpos_core::storage::{Theme, Workspace};
+use pakpos_core::vars::VarScope;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::mpsc::{self, Receiver};
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReqSection {
+    Params,
+    Auth,
+    Headers,
+    Body,
+    Tests,
+    Extract,
+    Docs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RespSection {
+    Body,
+    Headers,
+    Tests,
+    Request,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SidebarView {
+    Collections,
+    Environments,
+    History,
+}
+
+/// Result of a finished request, computed on the worker thread.
+pub struct Outcome {
+    pub prepared: PreparedRequest,
+    pub response: Response,
+    pub pretty: String,
+    pub tests: Vec<AssertionResult>,
+    pub extracted: Vec<(String, String)>,
+}
+
+pub enum ResponseState {
+    Empty,
+    Loading { started: Instant, rx: Receiver<Result<Outcome, String>> },
+    Done(Box<Outcome>),
+    Error(String),
+}
+
+/// An open editor tab.
+pub struct Tab {
+    pub uid: u64,
+    pub request: Request,
+    /// (collection id, request id) when the tab is backed by a saved request.
+    pub source: Option<(String, String)>,
+    pub dirty: bool,
+    pub section: ReqSection,
+    pub resp_section: RespSection,
+    pub response: ResponseState,
+    pub raw_view: bool,
+    /// Text of the URL bar (base URL + query), kept in sync with params.
+    pub url_edit: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SavedTab {
+    request: Request,
+    source: Option<(String, String)>,
+    dirty: bool,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct SavedSession {
+    tabs: Vec<SavedTab>,
+    active: usize,
+    sidebar_width: Option<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenameTarget {
+    Collection(String),
+    Item { collection: String, item: String },
+    Environment(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeleteTarget {
+    Collection(String),
+    Item { collection: String, item: String },
+    Environment(String),
+}
+
+pub enum Dialog {
+    ImportCurl { text: String, error: Option<String> },
+    SaveRequest { tab: usize, collection: Option<String>, new_collection: String, name: String },
+    Rename { target: RenameTarget, name: String },
+    ConfirmDelete { target: DeleteTarget, label: String },
+    NewCollection { name: String },
+    Environments { selected: Option<String> },
+    Settings,
+    Snippet { lang: SnippetLang },
+    About,
+}
+
+pub struct Toast {
+    pub text: String,
+    pub error: bool,
+    pub until: Instant,
+}
+
+pub enum RunnerMsg {
+    Progress(RequestReport),
+    Done(RunReport, Option<Environment>),
+}
+
+pub struct RunnerState {
+    pub collection: String,
+    pub environment: Option<String>,
+    pub rx: Receiver<RunnerMsg>,
+    pub progress: Vec<RequestReport>,
+    pub report: Option<RunReport>,
+    pub total: usize,
+    pub open: bool,
+}
+
+/// Things the UI asks for; applied after drawing to keep borrows simple.
+pub enum Action {
+    OpenRequest { collection: String, request: String },
+    NewTab(Box<Request>),
+    NewRequestIn { collection: String, folder: Option<String> },
+    NewFolderIn { collection: String, folder: Option<String> },
+    Duplicate { collection: String, request: String },
+    Rename(RenameTarget, String),
+    Delete(DeleteTarget, String),
+    ExportCollection(String),
+    RunCollection(String),
+    ImportPostmanCollection,
+    ImportEnvironment,
+    ExportEnvironment(String),
+    SetActiveEnvironment(Option<String>),
+    EditEnvironment(Option<String>),
+    NewEnvironment,
+    ClearHistory,
+    Dialog(Dialog),
+}
+
+pub struct PakPosApp {
+    pub ws: Workspace,
+    pub palette: Palette,
+    pub tabs: Vec<Tab>,
+    pub active: usize,
+    pub sidebar: SidebarView,
+    pub search: String,
+    pub open_nodes: HashSet<String>,
+    pub dialog: Option<Dialog>,
+    pub toasts: Vec<Toast>,
+    pub env_dirty: Option<Instant>,
+    pub runner: Option<RunnerState>,
+    applied_theme: Option<(Theme, u32)>,
+    next_uid: u64,
+    pub actions: Vec<Action>,
+}
+
+impl PakPosApp {
+    pub fn new(cc: &eframe::CreationContext<'_>, ws: Workspace, load_errors: Vec<String>) -> Self {
+        let palette = Palette::of(ws.settings.theme);
+        let mut app = PakPosApp {
+            ws,
+            palette,
+            tabs: Vec::new(),
+            active: 0,
+            sidebar: SidebarView::Collections,
+            search: String::new(),
+            open_nodes: HashSet::new(),
+            dialog: None,
+            toasts: Vec::new(),
+            env_dirty: None,
+            runner: None,
+            applied_theme: None,
+            next_uid: 1,
+            actions: Vec::new(),
+        };
+        for c in &app.ws.collections {
+            app.open_nodes.insert(c.id.clone());
+        }
+        let restore = std::env::var_os("PAKPOS_SCENE").is_none();
+        if let Some(session) = cc
+            .storage
+            .filter(|_| restore)
+            .and_then(|s| s.get_string("session"))
+            .and_then(|s| serde_json::from_str::<SavedSession>(&s).ok())
+        {
+            for t in session.tabs {
+                let idx = app.push_tab(t.request, t.source);
+                app.tabs[idx].dirty = t.dirty;
+            }
+            app.active = session.active.min(app.tabs.len().saturating_sub(1));
+        }
+        if app.tabs.is_empty() {
+            app.new_blank_tab();
+        }
+        for e in load_errors {
+            app.toast_error(e);
+        }
+        app
+    }
+
+    // ----- tabs -------------------------------------------------------------
+
+    pub fn push_tab(&mut self, request: Request, source: Option<(String, String)>) -> usize {
+        let url_edit = crate::request_view::compose_url(&request);
+        self.tabs.push(Tab {
+            url_edit,
+            uid: self.next_uid,
+            request,
+            source,
+            dirty: false,
+            section: ReqSection::Params,
+            resp_section: RespSection::Body,
+            response: ResponseState::Empty,
+            raw_view: false,
+        });
+        self.next_uid += 1;
+        self.tabs.len() - 1
+    }
+
+    pub fn new_blank_tab(&mut self) {
+        let req = Request { name: "Untitled request".into(), ..Default::default() };
+        self.active = self.push_tab(req, None);
+    }
+
+    pub fn close_tab(&mut self, idx: usize) {
+        if idx < self.tabs.len() {
+            self.tabs.remove(idx);
+        }
+        if self.tabs.is_empty() {
+            self.new_blank_tab();
+        }
+        if self.active >= self.tabs.len() {
+            self.active = self.tabs.len() - 1;
+        } else if idx < self.active {
+            self.active -= 1;
+        }
+    }
+
+    pub fn open_saved(&mut self, collection: &str, request: &str) {
+        if let Some(i) =
+            self.tabs.iter().position(|t| t.source.as_ref().is_some_and(|(c, r)| c == collection && r == request))
+        {
+            self.active = i;
+            return;
+        }
+        let Some(req) =
+            self.ws.collections.iter().find(|c| c.id == collection).and_then(|c| c.find_request(request)).cloned()
+        else {
+            return;
+        };
+        // Replace a pristine blank tab instead of piling up tabs.
+        if let Some(t) = self.tabs.get(self.active) {
+            if t.source.is_none() && !t.dirty && t.request.url.is_empty() {
+                self.tabs.remove(self.active);
+            }
+        }
+        self.active = self.push_tab(req, Some((collection.to_string(), request.to_string())));
+    }
+
+    // ----- notifications ---------------------------------------------------
+
+    pub fn toast(&mut self, text: impl Into<String>) {
+        self.toasts.push(Toast { text: text.into(), error: false, until: Instant::now() + Duration::from_secs(3) });
+    }
+
+    pub fn toast_error(&mut self, text: impl Into<String>) {
+        self.toasts.push(Toast { text: text.into(), error: true, until: Instant::now() + Duration::from_secs(6) });
+    }
+
+    // ----- variables & sending ---------------------------------------------
+
+    pub fn collection(&self, id: &str) -> Option<&Collection> {
+        self.ws.collections.iter().find(|c| c.id == id)
+    }
+
+    pub fn collection_mut(&mut self, id: &str) -> Option<&mut Collection> {
+        self.ws.collections.iter_mut().find(|c| c.id == id)
+    }
+
+    /// Variable scope for a tab (environment + collection + globals).
+    pub fn scope_for(&self, tab: &Tab) -> VarScope {
+        let collection_vars =
+            tab.source.as_ref().and_then(|(c, _)| self.collection(c)).map(|c| c.variables.clone()).unwrap_or_default();
+        VarScope::new()
+            .with_environment(self.ws.active_environment())
+            .with_collection_vars(&collection_vars)
+            .with_globals(&self.ws.globals)
+    }
+
+    /// Auth a request would inherit from its folder / collection.
+    pub fn inherited_auth(&self, tab: &Tab) -> Option<Auth> {
+        let (cid, rid) = tab.source.as_ref()?;
+        let mut c = self.collection(cid)?.clone();
+        if let Some(r) = c.find_request_mut(rid) {
+            r.auth = Auth::Inherit;
+        }
+        c.effective_auth(rid)
+    }
+
+    pub fn send(&mut self, idx: usize, ctx: &egui::Context) {
+        let Some(tab) = self.tabs.get(idx) else { return };
+        let mut req = tab.request.clone();
+        widgets::trim_blank_rows(&mut req.params);
+        widgets::trim_blank_rows(&mut req.headers);
+        let scope = self.scope_for(tab);
+        let fallback = self.inherited_auth(tab);
+        let settings = self.ws.settings.http.clone();
+        let (tx, rx) = mpsc::channel();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = http::prepare(&req, &scope, fallback.as_ref())
+                .and_then(|p| {
+                    let client = http::build_client(&settings)?;
+                    http::send(&client, &p).map(|r| (p, r))
+                })
+                .map(|(prepared, response)| {
+                    let pretty = if response.body.len() > 2_000_000 { response.text() } else { response.pretty_body() };
+                    let tests = assertions::run_all(&response, &req.assertions, |s| scope.resolve(s));
+                    let extracted = assertions::extract_all(&response, &req.extractions);
+                    Outcome { prepared, response, pretty, tests, extracted }
+                })
+                .map_err(|e| e.to_string());
+            let _ = tx.send(result);
+            ctx.request_repaint();
+        });
+        if let Some(tab) = self.tabs.get_mut(idx) {
+            tab.response = ResponseState::Loading { started: Instant::now(), rx };
+        }
+    }
+
+    fn poll_responses(&mut self) {
+        let mut finished = Vec::new();
+        for (i, tab) in self.tabs.iter_mut().enumerate() {
+            if let ResponseState::Loading { rx, .. } = &tab.response {
+                if let Ok(result) = rx.try_recv() {
+                    finished.push((i, result));
+                }
+            }
+        }
+        for (i, result) in finished {
+            let mut req = self.tabs[i].request.clone();
+            widgets::trim_blank_rows(&mut req.params);
+            widgets::trim_blank_rows(&mut req.headers);
+            match result {
+                Ok(outcome) => {
+                    self.ws.push_history(req, Some(outcome.response.status), Some(outcome.response.elapsed_ms));
+                    if !outcome.extracted.is_empty() {
+                        let names: Vec<String> =
+                            outcome.extracted.iter().map(|(k, _)| format!("{{{{{k}}}}}")).collect();
+                        if let Some(env) = self.ws.active_environment_mut() {
+                            for (k, v) in &outcome.extracted {
+                                env.set(k, v.clone());
+                            }
+                            self.env_dirty = Some(Instant::now());
+                            self.toast(format!("Saved {} to environment", names.join(", ")));
+                        } else {
+                            for (k, v) in &outcome.extracted {
+                                if let Some(g) = self.ws.globals.iter_mut().find(|g| &g.key == k) {
+                                    g.value = v.clone();
+                                } else {
+                                    self.ws.globals.push(pakpos_core::KeyValue::new(k, v.clone()));
+                                }
+                            }
+                            let _ = self.ws.save_globals();
+                            self.toast(format!("Saved {} to globals", names.join(", ")));
+                        }
+                    }
+                    let tab = &mut self.tabs[i];
+                    if !outcome.tests.is_empty()
+                        && tab.resp_section == RespSection::Body
+                        && outcome.tests.iter().any(|t| !t.passed)
+                    {
+                        tab.resp_section = RespSection::Tests;
+                    }
+                    tab.response = ResponseState::Done(Box::new(outcome));
+                }
+                Err(e) => {
+                    self.ws.push_history(req, None, None);
+                    self.tabs[i].response = ResponseState::Error(e);
+                }
+            }
+            let _ = self.ws.save_history();
+        }
+    }
+
+    // ----- saving -----------------------------------------------------------
+
+    /// Saves the tab into its collection, or opens the "Save as" dialog.
+    pub fn save_tab(&mut self, idx: usize) {
+        let Some(tab) = self.tabs.get(idx) else { return };
+        let Some((cid, rid)) = tab.source.clone() else {
+            let name = tab.request.name.clone();
+            let collection = self.ws.collections.first().map(|c| c.id.clone());
+            self.dialog = Some(Dialog::SaveRequest { tab: idx, collection, new_collection: String::new(), name });
+            return;
+        };
+        let mut req = tab.request.clone();
+        clean_request(&mut req);
+        let saved = match self.collection_mut(&cid).and_then(|c| c.find_request_mut(&rid)) {
+            Some(slot) => {
+                *slot = req;
+                true
+            }
+            None => false,
+        };
+        if saved {
+            self.persist_collection(&cid);
+            self.tabs[idx].dirty = false;
+            self.toast("Saved");
+        } else {
+            // The saved request was deleted meanwhile: save as new.
+            self.tabs[idx].source = None;
+            self.save_tab(idx);
+        }
+    }
+
+    pub fn persist_collection(&mut self, id: &str) {
+        if let Some(c) = self.collection(id) {
+            if let Err(e) = self.ws.save_collection(c) {
+                self.toast_error(e.to_string());
+            }
+        }
+    }
+
+    pub fn persist_environments(&mut self) {
+        let mut err = None;
+        for e in &self.ws.environments {
+            if let Err(x) = self.ws.save_environment(e) {
+                err = Some(x.to_string());
+            }
+        }
+        if let Err(x) = self.ws.save_globals() {
+            err = Some(x.to_string());
+        }
+        if let Some(e) = err {
+            self.toast_error(e);
+        }
+        self.env_dirty = None;
+    }
+
+    pub fn persist_settings(&mut self) {
+        if let Err(e) = self.ws.save_settings() {
+            self.toast_error(e.to_string());
+        }
+    }
+
+    // ----- runner -------------------------------------------------------------
+
+    pub fn start_runner(&mut self, collection_id: &str, ctx: &egui::Context) {
+        let Some(collection) = self.collection(collection_id).cloned() else { return };
+        let env = self.ws.active_environment().cloned();
+        let options = RunOptions {
+            settings: self.ws.settings.http.clone(),
+            globals: self.ws.globals.clone(),
+            ..Default::default()
+        };
+        let (tx, rx) = mpsc::channel();
+        let ctx = ctx.clone();
+        self.runner = Some(RunnerState {
+            collection: collection.name.clone(),
+            environment: env.as_ref().map(|e| e.name.clone()),
+            rx,
+            progress: Vec::new(),
+            report: None,
+            total: collection.request_count(),
+            open: true,
+        });
+        std::thread::spawn(move || {
+            let mut env = env;
+            let progress_tx = tx.clone();
+            let progress_ctx = ctx.clone();
+            let report = pakpos_core::runner::run_collection(&collection, env.as_mut(), &options, |r| {
+                let _ = progress_tx.send(RunnerMsg::Progress(r.clone()));
+                progress_ctx.request_repaint();
+            });
+            let _ = tx.send(RunnerMsg::Done(report, env));
+            ctx.request_repaint();
+        });
+    }
+
+    fn poll_runner(&mut self) {
+        let mut done_env = None;
+        if let Some(r) = &mut self.runner {
+            while let Ok(msg) = r.rx.try_recv() {
+                match msg {
+                    RunnerMsg::Progress(p) => r.progress.push(p),
+                    RunnerMsg::Done(report, env) => {
+                        r.report = Some(report);
+                        done_env = env;
+                    }
+                }
+            }
+        }
+        if let Some(env) = done_env {
+            if let Some(slot) = self.ws.environments.iter_mut().find(|e| e.id == env.id) {
+                if slot.variables != env.variables {
+                    *slot = env;
+                    self.env_dirty = Some(Instant::now());
+                }
+            }
+        }
+    }
+
+    // ----- frame -------------------------------------------------------------
+
+    fn handle_shortcuts(&mut self, ctx: &egui::Context) {
+        use egui::{Key, KeyboardShortcut, Modifiers};
+        let send = KeyboardShortcut::new(Modifiers::COMMAND, Key::Enter);
+        let save = KeyboardShortcut::new(Modifiers::COMMAND, Key::S);
+        let new_tab = KeyboardShortcut::new(Modifiers::COMMAND, Key::T);
+        let close = KeyboardShortcut::new(Modifiers::COMMAND, Key::W);
+        let import = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
+        if ctx.input_mut(|i| i.consume_shortcut(&send)) {
+            self.send(self.active, ctx);
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&save)) {
+            self.save_tab(self.active);
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&new_tab)) {
+            self.new_blank_tab();
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&close)) {
+            self.close_tab(self.active);
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&import)) {
+            self.dialog = Some(Dialog::ImportCurl { text: String::new(), error: None });
+        }
+    }
+
+    fn header(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette;
+        egui::Panel::top("header")
+            .frame(egui::Frame::new().fill(p.header).inner_margin(Margin::symmetric(14, 8)))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    // Brand mark: an envelope-like badge + wordmark.
+                    let (rect, _) = ui.allocate_exact_size(egui::vec2(26.0, 26.0), egui::Sense::hover());
+                    ui.painter().rect_filled(rect, 6.0, theme::ORANGE);
+                    let r = rect.shrink2(egui::vec2(5.0, 8.0));
+                    let stroke = egui::Stroke::new(2.0, theme::NAVY_700);
+                    ui.painter().rect_stroke(r, 1.5, stroke, egui::StrokeKind::Inside);
+                    ui.painter().line_segment([r.left_top(), r.center()], stroke);
+                    ui.painter().line_segment([r.right_top(), r.center()], stroke);
+                    ui.add_space(2.0);
+                    ui.label(RichText::new("Pak").size(18.0).strong().color(theme::ORANGE));
+                    ui.add_space(-8.0);
+                    ui.label(RichText::new("Pos").size(18.0).strong().color(p.header_text));
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let white = p.header_text;
+                        if ui
+                            .add(egui::Button::new(RichText::new("⚙").size(16.0).color(white)).frame(false))
+                            .on_hover_text("Settings")
+                            .clicked()
+                        {
+                            self.dialog = Some(Dialog::Settings);
+                        }
+                        let theme_icon = if p.dark { "☀" } else { "🌙" };
+                        if ui
+                            .add(egui::Button::new(RichText::new(theme_icon).size(15.0).color(white)).frame(false))
+                            .on_hover_text("Toggle light / dark")
+                            .clicked()
+                        {
+                            self.ws.settings.theme = if p.dark { Theme::Light } else { Theme::Dark };
+                            self.persist_settings();
+                        }
+                        ui.add_space(8.0);
+                        self.environment_picker(ui);
+                        ui.label(RichText::new("Environment").color(white.gamma_multiply(0.7)).small());
+                        ui.add_space(12.0);
+                        let import = ui.add(
+                            egui::Button::new(RichText::new("Import").color(white))
+                                .fill(theme::NAVY_600)
+                                .stroke(egui::Stroke::NONE),
+                        );
+                        egui::Popup::menu(&import).show(|ui| {
+                            if ui.button("Postman / PakPos collection…").clicked() {
+                                self.actions.push(Action::ImportPostmanCollection);
+                            }
+                            if ui.button("Environment…").clicked() {
+                                self.actions.push(Action::ImportEnvironment);
+                            }
+                            if ui.button("cURL command…").clicked() {
+                                self.actions
+                                    .push(Action::Dialog(Dialog::ImportCurl { text: String::new(), error: None }));
+                            }
+                        });
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new("+ New").color(theme::INK).strong())
+                                    .fill(theme::ORANGE)
+                                    .stroke(egui::Stroke::NONE),
+                            )
+                            .clicked()
+                        {
+                            self.new_blank_tab();
+                        }
+                    });
+                });
+            });
+    }
+
+    fn environment_picker(&mut self, ui: &mut egui::Ui) {
+        let current = self.ws.active_environment().map(|e| e.name.clone()).unwrap_or_else(|| "No environment".into());
+        let mut selected = self.ws.settings.active_environment.clone();
+        egui::ComboBox::from_id_salt("env_picker").width(170.0).selected_text(current).show_ui(ui, |ui| {
+            ui.selectable_value(&mut selected, None, "No environment");
+            for e in &self.ws.environments {
+                ui.selectable_value(&mut selected, Some(e.id.clone()), &e.name);
+            }
+            ui.separator();
+            if ui.button("Manage environments…").clicked() {
+                self.actions.push(Action::EditEnvironment(self.ws.settings.active_environment.clone()));
+            }
+        });
+        if selected != self.ws.settings.active_environment {
+            self.actions.push(Action::SetActiveEnvironment(selected));
+        }
+    }
+
+    fn status_bar(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette;
+        egui::Panel::bottom("status")
+            .frame(
+                egui::Frame::new()
+                    .fill(p.surface)
+                    .inner_margin(Margin::symmetric(12, 3))
+                    .stroke(egui::Stroke::new(1.0, p.border)),
+            )
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("PakPos {}", pakpos_core::VERSION)).small().color(p.text_weak));
+                    ui.separator();
+                    ui.label(
+                        RichText::new(format!("Workspace: {}", self.ws.root.display())).small().color(p.text_weak),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(
+                                egui::Label::new(RichText::new("About").small().color(p.text_weak))
+                                    .sense(egui::Sense::click()),
+                            )
+                            .clicked()
+                        {
+                            self.dialog = Some(Dialog::About);
+                        }
+                        ui.label(
+                            RichText::new("Ctrl+Enter send  ·  Ctrl+S save  ·  Ctrl+T new tab  ·  Ctrl+I import cURL")
+                                .small()
+                                .color(p.text_weak),
+                        );
+                    });
+                });
+            });
+    }
+
+    fn show_toasts(&mut self, ctx: &egui::Context) {
+        let now = Instant::now();
+        self.toasts.retain(|t| t.until > now);
+        if self.toasts.is_empty() {
+            return;
+        }
+        let p = self.palette;
+        egui::Area::new(egui::Id::new("toasts"))
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -36.0))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                for t in &self.toasts {
+                    let accent = if t.error { theme::RED } else { theme::GREEN };
+                    egui::Frame::new()
+                        .fill(p.surface)
+                        .stroke(egui::Stroke::new(1.0, accent))
+                        .corner_radius(8)
+                        .inner_margin(Margin::symmetric(12, 8))
+                        .show(ui, |ui| {
+                            ui.set_max_width(380.0);
+                            ui.label(RichText::new(&t.text).color(p.text));
+                        });
+                    ui.add_space(6.0);
+                }
+            });
+        ctx.request_repaint_after(Duration::from_millis(250));
+    }
+
+    pub fn apply_actions(&mut self, ctx: &egui::Context) {
+        let actions = std::mem::take(&mut self.actions);
+        for action in actions {
+            crate::actions::apply(self, action, ctx);
+        }
+    }
+}
+
+/// Removes UI-only blank rows before persisting a request.
+pub fn clean_request(req: &mut Request) {
+    widgets::trim_blank_rows(&mut req.params);
+    widgets::trim_blank_rows(&mut req.headers);
+    match &mut req.body {
+        pakpos_core::Body::FormUrlEncoded { fields } => widgets::trim_blank_rows(fields),
+        pakpos_core::Body::Multipart { fields } => widgets::trim_blank_fields(fields),
+        _ => {}
+    }
+    req.assertions.retain(|a| !a.target.trim().is_empty());
+    req.extractions.retain(|e| !e.variable.trim().is_empty() || !e.source.trim().is_empty());
+}
+
+/// Removes UI-only blank rows across a collection tree.
+pub fn clean_items(items: &mut [Item]) {
+    for item in items {
+        match item {
+            Item::Request(r) => clean_request(r),
+            Item::Folder(f) => clean_items(&mut f.items),
+        }
+    }
+}
+
+impl eframe::App for PakPosApp {
+    fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_responses();
+        self.poll_runner();
+        if let Some(t) = self.env_dirty {
+            if t.elapsed() > Duration::from_millis(600) {
+                self.persist_environments();
+            }
+        }
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        let want = (self.ws.settings.theme, self.ws.settings.font_scale_percent);
+        if self.applied_theme != Some(want) {
+            theme::apply(&ctx, want.0, want.1);
+            self.palette = Palette::of(want.0);
+            self.applied_theme = Some(want);
+        }
+        if self.dialog.is_none() {
+            self.handle_shortcuts(&ctx);
+        }
+
+        self.header(ui);
+        self.status_bar(ui);
+        self.sidebar(ui);
+        self.workbench(ui);
+
+        self.dialogs(&ctx);
+        self.runner_window(&ctx);
+        self.show_toasts(&ctx);
+        self.apply_actions(&ctx);
+
+        if self.tabs.iter().any(|t| matches!(t.response, ResponseState::Loading { .. })) {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+        if self.env_dirty.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(700));
+        }
+        crate::scene::tick(self, &ctx);
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        let session = SavedSession {
+            tabs: self
+                .tabs
+                .iter()
+                .map(|t| SavedTab { request: t.request.clone(), source: t.source.clone(), dirty: t.dirty })
+                .collect(),
+            active: self.active,
+            sidebar_width: None,
+        };
+        if let Ok(json) = serde_json::to_string(&session) {
+            storage.set_string("session", json);
+        }
+        if self.env_dirty.is_some() {
+            self.persist_environments();
+        }
+    }
+}

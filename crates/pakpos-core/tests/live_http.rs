@@ -70,10 +70,7 @@ fn sends_request_and_reads_response() {
     scope.environment.insert("base".into(), base);
     let mut req = Request::new(HttpMethod::Post, "{{base}}/items");
     req.params.push(KeyValue::new("q", "1"));
-    req.body = Body::Raw {
-        content: "hello".into(),
-        language: pakpos_core::model::RawLanguage::Text,
-    };
+    req.body = Body::Raw { content: "hello".into(), language: pakpos_core::model::RawLanguage::Text };
     let (_, resp) = http::execute(&req, &scope, None, &HttpSettings::default()).unwrap();
     assert_eq!(resp.status, 200);
     let json = resp.json().unwrap();
@@ -90,11 +87,7 @@ fn runner_chains_extracted_variables() {
 
     let mut login = Request::new(HttpMethod::Post, "{{base}}/login");
     login.name = "Login".into();
-    login.extractions.push(Extraction {
-        enabled: true,
-        variable: "token".into(),
-        source: "json.token".into(),
-    });
+    login.extractions.push(Extraction { enabled: true, variable: "token".into(), source: "json.token".into() });
     let mut me = Request::new(HttpMethod::Get, "{{base}}/me");
     me.name = "Me".into();
     me.auth = pakpos_core::Auth::Bearer { token: "{{token}}".into() };

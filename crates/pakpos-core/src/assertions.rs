@@ -188,32 +188,18 @@ pub fn evaluate(response: &Response, assertion: &Assertion, expected: &str) -> A
         (Operator::Exists, a) => a.is_some(),
         (Operator::NotExists, a) => a.is_none(),
         (_, None) => false,
-        (Operator::Equals, Some(a)) => {
-            a == expected || compare_numbers(a, expected) == Some(std::cmp::Ordering::Equal)
-        }
+        (Operator::Equals, Some(a)) => a == expected || compare_numbers(a, expected) == Some(std::cmp::Ordering::Equal),
         (Operator::NotEquals, Some(a)) => {
             a != expected && compare_numbers(a, expected) != Some(std::cmp::Ordering::Equal)
         }
         (Operator::Contains, Some(a)) => a.contains(expected),
         (Operator::NotContains, Some(a)) => !a.contains(expected),
-        (Operator::LessThan, Some(a)) => {
-            compare_numbers(a, expected) == Some(std::cmp::Ordering::Less)
-        }
-        (Operator::GreaterThan, Some(a)) => {
-            compare_numbers(a, expected) == Some(std::cmp::Ordering::Greater)
-        }
+        (Operator::LessThan, Some(a)) => compare_numbers(a, expected) == Some(std::cmp::Ordering::Less),
+        (Operator::GreaterThan, Some(a)) => compare_numbers(a, expected) == Some(std::cmp::Ordering::Greater),
         (Operator::Matches, Some(a)) => glob_match(expected, a),
     };
 
-    AssertionResult {
-        name,
-        passed,
-        message: if passed {
-            "passed".into()
-        } else {
-            format!("actual: {shown}")
-        },
-    }
+    AssertionResult { name, passed, message: if passed { "passed".into() } else { format!("actual: {shown}") } }
 }
 
 /// Runs every enabled assertion; `resolve` turns `{{vars}}` in expected values.
@@ -255,12 +241,7 @@ mod tests {
     }
 
     fn a(target: &str, op: Operator, expected: &str) -> Assertion {
-        Assertion {
-            enabled: true,
-            target: target.into(),
-            op,
-            expected: expected.into(),
-        }
+        Assertion { enabled: true, target: target.into(), op, expected: expected.into() }
     }
 
     #[test]
@@ -295,11 +276,7 @@ mod tests {
     #[test]
     fn extraction() {
         let r = response();
-        let ex = vec![Extraction {
-            enabled: true,
-            variable: "token".into(),
-            source: "json.token".into(),
-        }];
+        let ex = vec![Extraction { enabled: true, variable: "token".into(), source: "json.token".into() }];
         assert_eq!(extract_all(&r, &ex), vec![("token".into(), "abc".into())]);
     }
 

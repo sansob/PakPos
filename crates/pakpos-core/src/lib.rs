@@ -20,6 +20,7 @@ pub mod http;
 pub mod model;
 pub mod postman;
 pub mod runner;
+pub mod samples;
 pub mod storage;
 pub mod vars;
 

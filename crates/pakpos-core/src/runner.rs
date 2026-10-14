@@ -55,10 +55,7 @@ impl RunReport {
     /// JUnit XML, for CI systems (GitHub Actions, GitLab, Jenkins).
     pub fn to_junit(&self) -> String {
         fn esc(s: &str) -> String {
-            s.replace('&', "&amp;")
-                .replace('<', "&lt;")
-                .replace('>', "&gt;")
-                .replace('"', "&quot;")
+            s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
         }
         let mut cases = String::new();
         let mut tests = 0;
@@ -180,10 +177,7 @@ pub fn run_collection(
         let outcome = match &client {
             Ok(client) => http::prepare(&req, &scope, None).and_then(|p| {
                 if !http::host_allowed(&p.url, &options.allowed_hosts) {
-                    return Err(http::HttpError::Transport(format!(
-                        "host of `{}` is not in the allow-list",
-                        p.url
-                    )));
+                    return Err(http::HttpError::Transport(format!("host of `{}` is not in the allow-list", p.url)));
                 }
                 http::send(client, &p).map(|r| (p, r))
             }),

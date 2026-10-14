@@ -51,9 +51,7 @@ impl HttpMethod {
 
     /// Parses a method name case-insensitively.
     pub fn parse(s: &str) -> Option<HttpMethod> {
-        HttpMethod::ALL
-            .into_iter()
-            .find(|m| m.as_str().eq_ignore_ascii_case(s.trim()))
+        HttpMethod::ALL.into_iter().find(|m| m.as_str().eq_ignore_ascii_case(s.trim()))
     }
 }
 
@@ -80,12 +78,7 @@ fn default_true() -> bool {
 
 impl KeyValue {
     pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
-        Self {
-            key: key.into(),
-            value: value.into(),
-            enabled: true,
-            description: String::new(),
-        }
+        Self { key: key.into(), value: value.into(), enabled: true, description: String::new() }
     }
 
     pub fn is_blank(&self) -> bool {
@@ -112,13 +105,8 @@ pub enum RawLanguage {
 }
 
 impl RawLanguage {
-    pub const ALL: [RawLanguage; 5] = [
-        RawLanguage::Json,
-        RawLanguage::Text,
-        RawLanguage::Xml,
-        RawLanguage::Html,
-        RawLanguage::Javascript,
-    ];
+    pub const ALL: [RawLanguage; 5] =
+        [RawLanguage::Json, RawLanguage::Text, RawLanguage::Xml, RawLanguage::Html, RawLanguage::Javascript];
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -154,12 +142,7 @@ pub struct FormField {
 
 impl Default for FormField {
     fn default() -> Self {
-        Self {
-            key: String::new(),
-            value: String::new(),
-            is_file: false,
-            enabled: true,
-        }
+        Self { key: String::new(), value: String::new(), is_file: false, enabled: true }
     }
 }
 
@@ -204,10 +187,7 @@ impl Body {
         }
         match kind {
             BodyKind::None => Body::None,
-            BodyKind::Raw => Body::Raw {
-                content: String::new(),
-                language: RawLanguage::Json,
-            },
+            BodyKind::Raw => Body::Raw { content: String::new(), language: RawLanguage::Json },
             BodyKind::FormUrlEncoded => Body::FormUrlEncoded {
                 fields: match self {
                     Body::Multipart { fields } => fields
@@ -237,9 +217,7 @@ impl Body {
                     _ => Vec::new(),
                 },
             },
-            BodyKind::Binary => Body::Binary {
-                path: String::new(),
-            },
+            BodyKind::Binary => Body::Binary { path: String::new() },
         }
     }
 }
@@ -254,13 +232,8 @@ pub enum BodyKind {
 }
 
 impl BodyKind {
-    pub const ALL: [BodyKind; 5] = [
-        BodyKind::None,
-        BodyKind::Raw,
-        BodyKind::FormUrlEncoded,
-        BodyKind::Multipart,
-        BodyKind::Binary,
-    ];
+    pub const ALL: [BodyKind; 5] =
+        [BodyKind::None, BodyKind::Raw, BodyKind::FormUrlEncoded, BodyKind::Multipart, BodyKind::Binary];
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -321,18 +294,9 @@ impl Auth {
         vec![
             Auth::Inherit,
             Auth::None,
-            Auth::Basic {
-                username: String::new(),
-                password: String::new(),
-            },
-            Auth::Bearer {
-                token: String::new(),
-            },
-            Auth::ApiKey {
-                key: "X-API-Key".into(),
-                value: String::new(),
-                location: ApiKeyLocation::Header,
-            },
+            Auth::Basic { username: String::new(), password: String::new() },
+            Auth::Bearer { token: String::new() },
+            Auth::ApiKey { key: "X-API-Key".into(), value: String::new(), location: ApiKeyLocation::Header },
         ]
     }
 
@@ -356,12 +320,7 @@ pub struct Assertion {
 
 impl Default for Assertion {
     fn default() -> Self {
-        Self {
-            enabled: true,
-            target: "status".into(),
-            op: crate::assertions::Operator::Equals,
-            expected: "200".into(),
-        }
+        Self { enabled: true, target: "status".into(), op: crate::assertions::Operator::Equals, expected: "200".into() }
     }
 }
 
@@ -423,11 +382,7 @@ impl Request {
     pub fn new(method: HttpMethod, url: impl Into<String>) -> Self {
         let url = url.into();
         Self {
-            name: if url.is_empty() {
-                "New Request".into()
-            } else {
-                url.clone()
-            },
+            name: if url.is_empty() { "New Request".into() } else { url.clone() },
             method,
             url,
             ..Default::default()
@@ -436,11 +391,7 @@ impl Request {
 
     /// Returns a copy with a fresh id (used for "Duplicate").
     pub fn duplicate(&self) -> Self {
-        Self {
-            id: new_id(),
-            name: format!("{} copy", self.name),
-            ..self.clone()
-        }
+        Self { id: new_id(), name: format!("{} copy", self.name), ..self.clone() }
     }
 }
 
@@ -460,13 +411,7 @@ pub struct Folder {
 
 impl Folder {
     pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            id: new_id(),
-            name: name.into(),
-            items: Vec::new(),
-            auth: Auth::Inherit,
-            description: String::new(),
-        }
+        Self { id: new_id(), name: name.into(), items: Vec::new(), auth: Auth::Inherit, description: String::new() }
     }
 }
 
@@ -530,12 +475,7 @@ impl Collection {
 
     /// Depth-first list of every request with the effective (inherited) auth.
     pub fn flatten(&self) -> Vec<(Vec<String>, Request)> {
-        fn walk(
-            items: &[Item],
-            path: &mut Vec<String>,
-            parent_auth: &Auth,
-            out: &mut Vec<(Vec<String>, Request)>,
-        ) {
+        fn walk(items: &[Item], path: &mut Vec<String>, parent_auth: &Auth, out: &mut Vec<(Vec<String>, Request)>) {
             for item in items {
                 match item {
                     Item::Request(r) => {
@@ -546,11 +486,7 @@ impl Collection {
                         out.push((path.clone(), r));
                     }
                     Item::Folder(f) => {
-                        let auth = if f.auth == Auth::Inherit {
-                            parent_auth.clone()
-                        } else {
-                            f.auth.clone()
-                        };
+                        let auth = if f.auth == Auth::Inherit { parent_auth.clone() } else { f.auth.clone() };
                         path.push(f.name.clone());
                         walk(&f.items, path, &auth, out);
                         path.pop();
@@ -601,10 +537,7 @@ impl Collection {
 
     /// Effective auth for a request id, resolving `Inherit` through folders.
     pub fn effective_auth(&self, request_id: &str) -> Option<Auth> {
-        self.flatten()
-            .into_iter()
-            .find(|(_, r)| r.id == request_id)
-            .map(|(_, r)| r.auth)
+        self.flatten().into_iter().find(|(_, r)| r.id == request_id).map(|(_, r)| r.auth)
     }
 
     /// Removes an item (request or folder) by id anywhere in the tree.
@@ -660,18 +593,11 @@ pub struct Environment {
 
 impl Environment {
     pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            id: new_id(),
-            name: name.into(),
-            variables: Vec::new(),
-        }
+        Self { id: new_id(), name: name.into(), variables: Vec::new() }
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {
-        self.variables
-            .iter()
-            .find(|v| v.enabled && v.key == key)
-            .map(|v| v.value.as_str())
+        self.variables.iter().find(|v| v.enabled && v.key == key).map(|v| v.value.as_str())
     }
 
     /// Sets (or inserts) a variable.
@@ -708,10 +634,7 @@ mod tests {
         let id = r.id.clone();
         f.items.push(Item::Request(r));
         c.items.push(Item::Folder(f));
-        assert_eq!(
-            c.effective_auth(&id),
-            Some(Auth::Bearer { token: "abc".into() })
-        );
+        assert_eq!(c.effective_auth(&id), Some(Auth::Bearer { token: "abc".into() }));
     }
 
     #[test]
@@ -730,10 +653,7 @@ mod tests {
     fn serde_roundtrip() {
         let mut c = Collection::new("demo");
         let mut r = Request::new(HttpMethod::Post, "{{base}}/users");
-        r.body = Body::Raw {
-            content: "{\"a\":1}".into(),
-            language: RawLanguage::Json,
-        };
+        r.body = Body::Raw { content: "{\"a\":1}".into(), language: RawLanguage::Json };
         c.items.push(Item::Request(r));
         let json = serde_json::to_string_pretty(&c).unwrap();
         let back: Collection = serde_json::from_str(&json).unwrap();

@@ -4,8 +4,8 @@
 //! test *scripts* (JavaScript) are skipped and reported as warnings.
 
 use crate::model::{
-    ApiKeyLocation, Auth, Body, Collection, Environment, Folder, FormField, HttpMethod, Item,
-    KeyValue, RawLanguage, Request,
+    ApiKeyLocation, Auth, Body, Collection, Environment, Folder, FormField, HttpMethod, Item, KeyValue, RawLanguage,
+    Request,
 };
 use serde_json::{json, Map, Value};
 
@@ -116,9 +116,7 @@ fn parse_auth(v: Option<&Value>, warnings: &mut Vec<String>) -> Auth {
             username: auth_param(auth.get("basic"), "username"),
             password: auth_param(auth.get("basic"), "password"),
         },
-        "bearer" => Auth::Bearer {
-            token: auth_param(auth.get("bearer"), "token"),
-        },
+        "bearer" => Auth::Bearer { token: auth_param(auth.get("bearer"), "token") },
         "apikey" => {
             let section = auth.get("apikey");
             let key = auth_param(section, "key");
@@ -146,10 +144,7 @@ fn parse_body(v: Option<&Value>, warnings: &mut Vec<String>) -> Body {
     };
     match s(body, "mode").as_str() {
         "raw" => {
-            let lang = body
-                .pointer("/options/raw/language")
-                .and_then(Value::as_str)
-                .unwrap_or("text");
+            let lang = body.pointer("/options/raw/language").and_then(Value::as_str).unwrap_or("text");
             Body::Raw {
                 content: s(body, "raw"),
                 language: match lang {
@@ -161,9 +156,7 @@ fn parse_body(v: Option<&Value>, warnings: &mut Vec<String>) -> Body {
                 },
             }
         }
-        "urlencoded" => Body::FormUrlEncoded {
-            fields: kv_list(body.get("urlencoded")),
-        },
+        "urlencoded" => Body::FormUrlEncoded { fields: kv_list(body.get("urlencoded")) },
         "formdata" => Body::Multipart {
             fields: body
                 .get("formdata")
@@ -176,30 +169,23 @@ fn parse_body(v: Option<&Value>, warnings: &mut Vec<String>) -> Body {
                                 key: s(e, "key"),
                                 value: if is_file {
                                     match e.get("src") {
-                                        Some(Value::Array(a)) => a
-                                            .first()
-                                            .and_then(Value::as_str)
-                                            .unwrap_or("")
-                                            .to_string(),
+                                        Some(Value::Array(a)) => {
+                                            a.first().and_then(Value::as_str).unwrap_or("").to_string()
+                                        }
                                         _ => s(e, "src"),
                                     }
                                 } else {
                                     s(e, "value")
                                 },
                                 is_file,
-                                enabled: !e
-                                    .get("disabled")
-                                    .and_then(Value::as_bool)
-                                    .unwrap_or(false),
+                                enabled: !e.get("disabled").and_then(Value::as_bool).unwrap_or(false),
                             }
                         })
                         .collect()
                 })
                 .unwrap_or_default(),
         },
-        "file" => Body::Binary {
-            path: body.get("file").map(|f| s(f, "src")).unwrap_or_default(),
-        },
+        "file" => Body::Binary { path: body.get("file").map(|f| s(f, "src")).unwrap_or_default() },
         "graphql" => {
             let query = body.pointer("/graphql/query").and_then(Value::as_str).unwrap_or("");
             let variables = body
@@ -208,10 +194,8 @@ fn parse_body(v: Option<&Value>, warnings: &mut Vec<String>) -> Body {
                 .and_then(|v| serde_json::from_str::<Value>(v).ok())
                 .unwrap_or(Value::Object(Map::new()));
             Body::Raw {
-                content: serde_json::to_string_pretty(
-                    &json!({ "query": query, "variables": variables }),
-                )
-                .unwrap_or_default(),
+                content: serde_json::to_string_pretty(&json!({ "query": query, "variables": variables }))
+                    .unwrap_or_default(),
                 language: RawLanguage::Json,
             }
         }
@@ -299,7 +283,11 @@ pub fn import_collection(json_text: &str) -> Result<Imported<Collection>, Postma
         id: crate::model::new_id(),
         name: {
             let n = s(info, "name");
-            if n.is_empty() { "Imported collection".into() } else { n }
+            if n.is_empty() {
+                "Imported collection".into()
+            } else {
+                n
+            }
         },
         description: description(info),
         items: parse_items(root.get("item"), &mut warnings),
@@ -307,10 +295,7 @@ pub fn import_collection(json_text: &str) -> Result<Imported<Collection>, Postma
         auth,
     };
     warnings.dedup();
-    Ok(Imported {
-        value: collection,
-        warnings,
-    })
+    Ok(Imported { value: collection, warnings })
 }
 
 /// Imports a Postman environment export.
@@ -334,7 +319,11 @@ pub fn import_environment(json_text: &str) -> Result<Environment, PostmanError> 
         id: crate::model::new_id(),
         name: {
             let n = s(&root, "name");
-            if n.is_empty() { "Imported environment".into() } else { n }
+            if n.is_empty() {
+                "Imported environment".into()
+            } else {
+                n
+            }
         },
         variables,
     })
@@ -369,11 +358,7 @@ fn auth_to_json(auth: &Auth) -> Option<Value> {
             "basic": [kv("username", username), kv("password", password)]
         })),
         Auth::Bearer { token } => Some(json!({ "type": "bearer", "bearer": [kv("token", token)] })),
-        Auth::ApiKey {
-            key,
-            value,
-            location,
-        } => Some(json!({
+        Auth::ApiKey { key, value, location } => Some(json!({
             "type": "apikey",
             "apikey": [
                 kv("key", key),
@@ -398,9 +383,7 @@ fn body_to_json(body: &Body) -> Option<Value> {
                 RawLanguage::Javascript => "javascript",
             } } }
         })),
-        Body::FormUrlEncoded { fields } => {
-            Some(json!({ "mode": "urlencoded", "urlencoded": kv_to_json(fields) }))
-        }
+        Body::FormUrlEncoded { fields } => Some(json!({ "mode": "urlencoded", "urlencoded": kv_to_json(fields) })),
         Body::Multipart { fields } => Some(json!({
             "mode": "formdata",
             "formdata": fields.iter().map(|f| {
@@ -422,12 +405,7 @@ fn body_to_json(body: &Body) -> Option<Value> {
 }
 
 fn raw_url(req: &Request) -> String {
-    let q: Vec<String> = req
-        .params
-        .iter()
-        .filter(|p| p.enabled)
-        .map(|p| format!("{}={}", p.key, p.value))
-        .collect();
+    let q: Vec<String> = req.params.iter().filter(|p| p.enabled).map(|p| format!("{}={}", p.key, p.value)).collect();
     if q.is_empty() {
         req.url.clone()
     } else {
@@ -456,10 +434,7 @@ fn items_to_json(items: &[Item]) -> Value {
                     let mut req = Map::new();
                     req.insert("method".into(), json!(r.method.as_str()));
                     req.insert("header".into(), kv_to_json(&r.headers));
-                    req.insert(
-                        "url".into(),
-                        json!({ "raw": raw_url(r), "query": kv_to_json(&r.params) }),
-                    );
+                    req.insert("url".into(), json!({ "raw": raw_url(r), "query": kv_to_json(&r.params) }));
                     if let Some(b) = body_to_json(&r.body) {
                         req.insert("body".into(), b);
                     }
@@ -562,7 +537,8 @@ mod tests {
         let exported = export_collection(&c);
         let back = import_collection(&exported).unwrap().value;
         let a: Vec<_> = c.flatten().into_iter().map(|(p, r)| (p, r.method, r.url, r.params, r.body, r.auth)).collect();
-        let b: Vec<_> = back.flatten().into_iter().map(|(p, r)| (p, r.method, r.url, r.params, r.body, r.auth)).collect();
+        let b: Vec<_> =
+            back.flatten().into_iter().map(|(p, r)| (p, r.method, r.url, r.params, r.body, r.auth)).collect();
         assert_eq!(a, b);
     }
 

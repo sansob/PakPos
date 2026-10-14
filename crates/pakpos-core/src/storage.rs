@@ -61,12 +61,7 @@ fn default_font_scale() -> u32 {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self {
-            http: HttpSettings::default(),
-            theme: Theme::Dark,
-            active_environment: None,
-            font_scale_percent: 100,
-        }
+        Self { http: HttpSettings::default(), theme: Theme::Dark, active_environment: None, font_scale_percent: 100 }
     }
 }
 
@@ -103,9 +98,7 @@ pub fn default_root() -> PathBuf {
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Option<T>, StorageError> {
     match fs::read_to_string(path) {
-        Ok(text) => serde_json::from_str(&text)
-            .map(Some)
-            .map_err(|e| StorageError::Json(path.to_path_buf(), e)),
+        Ok(text) => serde_json::from_str(&text).map(Some).map_err(|e| StorageError::Json(path.to_path_buf(), e)),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(StorageError::Io(path.to_path_buf(), e)),
     }
@@ -116,17 +109,13 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), StorageError> 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| StorageError::Io(parent.to_path_buf(), e))?;
     }
-    let text = serde_json::to_string_pretty(value)
-        .map_err(|e| StorageError::Json(path.to_path_buf(), e))?;
+    let text = serde_json::to_string_pretty(value).map_err(|e| StorageError::Json(path.to_path_buf(), e))?;
     let tmp = path.with_extension("json.tmp");
     fs::write(&tmp, text).map_err(|e| StorageError::Io(tmp.clone(), e))?;
     fs::rename(&tmp, path).map_err(|e| StorageError::Io(path.to_path_buf(), e))
 }
 
-fn read_dir_json<T: for<'de> Deserialize<'de>>(
-    dir: &Path,
-    errors: &mut Vec<StorageError>,
-) -> Vec<T> {
+fn read_dir_json<T: for<'de> Deserialize<'de>>(dir: &Path, errors: &mut Vec<StorageError>) -> Vec<T> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -150,10 +139,8 @@ fn read_dir_json<T: for<'de> Deserialize<'de>>(
 
 /// File names are derived from ids; keep them filesystem-safe.
 fn file_name(id: &str) -> String {
-    let safe: String = id
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-        .collect();
+    let safe: String =
+        id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
     format!("{safe}.json")
 }
 
@@ -165,24 +152,12 @@ impl Workspace {
         let mut errors = Vec::new();
         let mut collections: Vec<Collection> = read_dir_json(&root.join("collections"), &mut errors);
         collections.sort_by_key(|c| c.name.to_lowercase());
-        let mut environments: Vec<Environment> =
-            read_dir_json(&root.join("environments"), &mut errors);
+        let mut environments: Vec<Environment> = read_dir_json(&root.join("environments"), &mut errors);
         environments.sort_by_key(|e| e.name.to_lowercase());
         let globals = take(read_json(&root.join("globals.json")), &mut errors).unwrap_or_default();
         let history = take(read_json(&root.join("history.json")), &mut errors).unwrap_or_default();
-        let settings =
-            take(read_json(&root.join("settings.json")), &mut errors).unwrap_or_default();
-        (
-            Workspace {
-                root,
-                collections,
-                environments,
-                globals,
-                history,
-                settings,
-            },
-            errors,
-        )
+        let settings = take(read_json(&root.join("settings.json")), &mut errors).unwrap_or_default();
+        (Workspace { root, collections, environments, globals, history, settings }, errors)
     }
 
     pub fn collections_dir(&self) -> PathBuf {
@@ -238,13 +213,7 @@ impl Workspace {
     pub fn push_history(&mut self, request: Request, status: Option<u16>, elapsed_ms: Option<u128>) {
         self.history.insert(
             0,
-            HistoryEntry {
-                id: crate::model::new_id(),
-                timestamp: chrono::Utc::now(),
-                request,
-                status,
-                elapsed_ms,
-            },
+            HistoryEntry { id: crate::model::new_id(), timestamp: chrono::Utc::now(), request, status, elapsed_ms },
         );
         self.history.truncate(HISTORY_LIMIT);
     }
@@ -300,8 +269,7 @@ pub fn parse_collection(text: &str) -> Result<(Collection, Vec<String>), String>
 /// Loads an environment from a file: PakPos native format or Postman export.
 pub fn load_environment_file(path: &Path) -> Result<Environment, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let value: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     if value.get("values").is_some() {
         crate::postman::import_environment(&text).map_err(|e| e.to_string())
     } else {

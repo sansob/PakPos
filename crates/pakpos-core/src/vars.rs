@@ -23,10 +23,7 @@ pub struct VarScope {
 }
 
 fn to_map(vars: &[KeyValue]) -> HashMap<String, String> {
-    vars.iter()
-        .filter(|v| v.enabled && !v.key.is_empty())
-        .map(|v| (v.key.clone(), v.value.clone()))
-        .collect()
+    vars.iter().filter(|v| v.enabled && !v.key.is_empty()).map(|v| (v.key.clone(), v.value.clone())).collect()
 }
 
 impl VarScope {
@@ -169,10 +166,7 @@ mod tests {
 
     #[test]
     fn resolves_and_nests() {
-        assert_eq!(
-            scope().resolve("{{base}}/{{ path }}"),
-            "https://api.test/v1/users"
-        );
+        assert_eq!(scope().resolve("{{base}}/{{ path }}"), "https://api.test/v1/users");
     }
 
     #[test]

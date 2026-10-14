@@ -150,10 +150,7 @@ pub fn parse_curl(command: &str) -> Result<Request, CurlError> {
             "-u" | "--user" => {
                 let u = value(&flag)?;
                 let (user, pass) = u.split_once(':').unwrap_or((u.as_str(), ""));
-                auth = Auth::Basic {
-                    username: user.to_string(),
-                    password: pass.to_string(),
-                };
+                auth = Auth::Basic { username: user.to_string(), password: pass.to_string() };
             }
             "-A" | "--user-agent" => headers.push(KeyValue::new("User-Agent", value(&flag)?)),
             "-b" | "--cookie" => headers.push(KeyValue::new("Cookie", value(&flag)?)),
@@ -162,9 +159,8 @@ pub fn parse_curl(command: &str) -> Result<Request, CurlError> {
             "-I" | "--head" => method = Some(HttpMethod::Head),
             "--url" => url = Some(value(&flag)?),
             // Options that take a value we don't use.
-            "-o" | "--output" | "-m" | "--max-time" | "--connect-timeout" | "-x" | "--proxy"
-            | "-w" | "--write-out" | "--retry" | "-c" | "--cookie-jar" | "--cacert" | "--cert"
-            | "--key" => {
+            "-o" | "--output" | "-m" | "--max-time" | "--connect-timeout" | "-x" | "--proxy" | "-w" | "--write-out"
+            | "--retry" | "-c" | "--cookie-jar" | "--cacert" | "--cert" | "--key" => {
                 let _ = value(&flag)?;
             }
             f if f.starts_with('-') => {} // flags like -s -L -k --compressed
@@ -191,10 +187,8 @@ pub fn parse_curl(command: &str) -> Result<Request, CurlError> {
         None => (url.clone(), Vec::new()),
     };
 
-    let content_type = headers
-        .iter()
-        .find(|h| h.key.eq_ignore_ascii_case("content-type"))
-        .map(|h| h.value.to_lowercase());
+    let content_type =
+        headers.iter().find(|h| h.key.eq_ignore_ascii_case("content-type")).map(|h| h.value.to_lowercase());
 
     let mut body = Body::None;
     if get {
@@ -207,10 +201,7 @@ pub fn parse_curl(command: &str) -> Result<Request, CurlError> {
     } else if !form.is_empty() {
         body = Body::Multipart { fields: form };
     } else if !urlencoded.is_empty()
-        || (!data.is_empty()
-            && content_type
-                .as_deref()
-                .is_some_and(|c| c.contains("x-www-form-urlencoded")))
+        || (!data.is_empty() && content_type.as_deref().is_some_and(|c| c.contains("x-www-form-urlencoded")))
     {
         let mut fields = Vec::new();
         for d in data.iter().chain(urlencoded.iter()) {
@@ -228,20 +219,14 @@ pub fn parse_curl(command: &str) -> Result<Request, CurlError> {
             Some(c) if c.contains("json") => RawLanguage::Json,
             Some(c) if c.contains("xml") => RawLanguage::Xml,
             Some(c) if c.contains("html") => RawLanguage::Html,
-            None if serde_json::from_str::<serde_json::Value>(&content).is_ok() => {
-                RawLanguage::Json
-            }
+            None if serde_json::from_str::<serde_json::Value>(&content).is_ok() => RawLanguage::Json,
             _ => RawLanguage::Text,
         };
         body = Body::Raw { content, language };
     }
 
     let has_body = !matches!(body, Body::None);
-    let method = method.unwrap_or(if has_body {
-        HttpMethod::Post
-    } else {
-        HttpMethod::Get
-    });
+    let method = method.unwrap_or(if has_body { HttpMethod::Post } else { HttpMethod::Get });
 
     Ok(Request {
         name: format!("{} {}", method, base),
@@ -256,10 +241,7 @@ pub fn parse_curl(command: &str) -> Result<Request, CurlError> {
 }
 
 fn sh_quote(s: &str) -> String {
-    if !s.is_empty()
-        && s.chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-_./:=@%+,".contains(c))
-    {
+    if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "-_./:=@%+,".contains(c)) {
         s.to_string()
     } else {
         format!("'{}'", s.replace('\'', r"'\''"))
@@ -276,12 +258,8 @@ pub enum SnippetLang {
 }
 
 impl SnippetLang {
-    pub const ALL: [SnippetLang; 4] = [
-        SnippetLang::Curl,
-        SnippetLang::Python,
-        SnippetLang::JavaScript,
-        SnippetLang::Httpie,
-    ];
+    pub const ALL: [SnippetLang; 4] =
+        [SnippetLang::Curl, SnippetLang::Python, SnippetLang::JavaScript, SnippetLang::Httpie];
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -362,8 +340,13 @@ fn to_python(p: &PreparedRequest) -> String {
             args.push("data=data".into());
         }
         PreparedBody::Multipart(fields) => {
-            let data: Vec<String> = fields.iter().filter(|f| !f.2).map(|(k, v, _)| format!("    {}: {},", py_str(k), py_str(v))).collect();
-            let files: Vec<String> = fields.iter().filter(|f| f.2).map(|(k, v, _)| format!("    {}: open({}, \"rb\"),", py_str(k), py_str(v))).collect();
+            let data: Vec<String> =
+                fields.iter().filter(|f| !f.2).map(|(k, v, _)| format!("    {}: {},", py_str(k), py_str(v))).collect();
+            let files: Vec<String> = fields
+                .iter()
+                .filter(|f| f.2)
+                .map(|(k, v, _)| format!("    {}: open({}, \"rb\"),", py_str(k), py_str(v)))
+                .collect();
             out.push_str(&format!("data = {{\n{}\n}}\nfiles = {{\n{}\n}}\n", data.join("\n"), files.join("\n")));
             args.push("data=data".into());
             args.push("files=files".into());
@@ -472,13 +455,7 @@ mod tests {
         assert_eq!(r.url, "https://api.test/v1/users");
         assert_eq!(r.params, vec![KeyValue::new("page", "2")]);
         assert_eq!(r.headers.len(), 2);
-        assert_eq!(
-            r.body,
-            Body::Raw {
-                content: "{\"name\":\"Budi\"}".into(),
-                language: RawLanguage::Json
-            }
-        );
+        assert_eq!(r.body, Body::Raw { content: "{\"name\":\"Budi\"}".into(), language: RawLanguage::Json });
     }
 
     #[test]
@@ -511,10 +488,7 @@ mod tests {
     fn curl_roundtrip() {
         let mut req = Request::new(HttpMethod::Put, "https://api.test/items/1");
         req.headers.push(KeyValue::new("X-Trace", "it's me"));
-        req.body = Body::Raw {
-            content: "{\"a\":1}".into(),
-            language: RawLanguage::Json,
-        };
+        req.body = Body::Raw { content: "{\"a\":1}".into(), language: RawLanguage::Json };
         let prepared = prepare(&req, &VarScope::new(), None).unwrap();
         let cmd = to_curl(&prepared);
         let back = parse_curl(&cmd).unwrap();

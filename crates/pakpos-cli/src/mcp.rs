@@ -90,15 +90,9 @@ impl Server {
         let id = id?;
         let reply = match method {
             "initialize" => {
-                let requested = params
-                    .get("protocolVersion")
-                    .and_then(Value::as_str)
-                    .unwrap_or(SUPPORTED_VERSIONS[0]);
-                let version = SUPPORTED_VERSIONS
-                    .iter()
-                    .find(|v| **v == requested)
-                    .copied()
-                    .unwrap_or(SUPPORTED_VERSIONS[0]);
+                let requested = params.get("protocolVersion").and_then(Value::as_str).unwrap_or(SUPPORTED_VERSIONS[0]);
+                let version =
+                    SUPPORTED_VERSIONS.iter().find(|v| **v == requested).copied().unwrap_or(SUPPORTED_VERSIONS[0]);
                 ok_response(
                     id,
                     json!({
@@ -226,14 +220,10 @@ impl Server {
     }
 
     fn find_collection(ws: &Workspace, name: &str) -> Result<Collection> {
-        ws.collections
-            .iter()
-            .find(|c| c.name.eq_ignore_ascii_case(name) || c.id == name)
-            .cloned()
-            .ok_or_else(|| {
-                let names: Vec<_> = ws.collections.iter().map(|c| c.name.as_str()).collect();
-                anyhow::anyhow!("collection `{name}` not found. Available: {}", names.join(", "))
-            })
+        ws.collections.iter().find(|c| c.name.eq_ignore_ascii_case(name) || c.id == name).cloned().ok_or_else(|| {
+            let names: Vec<_> = ws.collections.iter().map(|c| c.name.as_str()).collect();
+            anyhow::anyhow!("collection `{name}` not found. Available: {}", names.join(", "))
+        })
     }
 
     fn find_env(ws: &Workspace, name: Option<&str>) -> Result<Option<Environment>> {
@@ -364,10 +354,8 @@ impl Server {
         env: Option<&Environment>,
         collection_vars: &[KeyValue],
     ) -> Result<String> {
-        let scope = VarScope::new()
-            .with_environment(env)
-            .with_collection_vars(collection_vars)
-            .with_globals(&ws.globals);
+        let scope =
+            VarScope::new().with_environment(env).with_collection_vars(collection_vars).with_globals(&ws.globals);
         let prepared = http::prepare(req, &scope, None)?;
         if !http::host_allowed(&prepared.url, &self.config.allowed_hosts) {
             anyhow::bail!(
@@ -410,11 +398,7 @@ mod tests {
     use super::*;
 
     fn server(dir: &std::path::Path, hosts: Vec<String>) -> Server {
-        Server::new(McpConfig {
-            allowed_hosts: hosts,
-            allow_write: true,
-            workspace_root: dir.to_path_buf(),
-        })
+        Server::new(McpConfig { allowed_hosts: hosts, allow_write: true, workspace_root: dir.to_path_buf() })
     }
 
     #[test]

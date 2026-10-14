@@ -195,11 +195,8 @@ impl Style {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let style = Style {
-        color: !cli.no_color
-            && std::env::var_os("NO_COLOR").is_none()
-            && std::io::stdout().is_terminal(),
-    };
+    let style =
+        Style { color: !cli.no_color && std::env::var_os("NO_COLOR").is_none() && std::io::stdout().is_terminal() };
     match run(cli, &style) {
         Ok(code) => code,
         Err(e) => {
@@ -213,13 +210,8 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
     match cli.command {
         Command::Run(args) => cmd_run(args, style),
         Command::Send(args) => cmd_send(args, style),
-        Command::Import {
-            input,
-            out,
-            workspace,
-        } => {
-            let (collection, warnings) =
-                storage::load_collection_file(&input).map_err(anyhow::Error::msg)?;
+        Command::Import { input, out, workspace } => {
+            let (collection, warnings) = storage::load_collection_file(&input).map_err(anyhow::Error::msg)?;
             for w in &warnings {
                 eprintln!("{} {w}", style.paint("33", "warning:"));
             }
@@ -238,8 +230,7 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Command::Export { input, out } => {
-            let (collection, _) =
-                storage::load_collection_file(&input).map_err(anyhow::Error::msg)?;
+            let (collection, _) = storage::load_collection_file(&input).map_err(anyhow::Error::msg)?;
             write_output(out.as_ref(), &postman::export_collection(&collection), true)?;
             Ok(ExitCode::SUCCESS)
         }
@@ -260,10 +251,7 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Command::Mcp {
-            allow_hosts,
-            allow_write,
-        } => {
+        Command::Mcp { allow_hosts, allow_write } => {
             mcp::serve(mcp::McpConfig {
                 allowed_hosts: allow_hosts,
                 allow_write,
@@ -308,10 +296,7 @@ fn write_output(out: Option<&PathBuf>, text: &str, stdout_fallback: bool) -> Res
 fn load_env(arg: &str) -> Result<(pakpos_core::Environment, Option<PathBuf>)> {
     let path = PathBuf::from(arg);
     if path.exists() {
-        return Ok((
-            storage::load_environment_file(&path).map_err(anyhow::Error::msg)?,
-            Some(path),
-        ));
+        return Ok((storage::load_environment_file(&path).map_err(anyhow::Error::msg)?, Some(path)));
     }
     let (ws, _) = Workspace::load(storage::default_root());
     let env = ws
@@ -347,11 +332,7 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
     };
     let (ws, _) = Workspace::load(storage::default_root());
     let options = RunOptions {
-        settings: HttpSettings {
-            timeout_secs: args.timeout,
-            verify_tls: !args.insecure,
-            ..Default::default()
-        },
+        settings: HttpSettings { timeout_secs: args.timeout, verify_tls: !args.insecure, ..Default::default() },
         filter: args.filter.clone(),
         stop_on_failure: args.bail,
         delay_ms: args.delay,
@@ -366,27 +347,20 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
             "\n{} {}{}\n",
             style.bold("PakPos ▸"),
             style.bold(&collection.name),
-            env.as_ref()
-                .map(|(e, _)| style.dim(&format!("  ·  env: {}", e.name)))
-                .unwrap_or_default()
+            env.as_ref().map(|(e, _)| style.dim(&format!("  ·  env: {}", e.name))).unwrap_or_default()
         );
     }
     let print = |r: &RequestReport| {
         if !cli_reporter {
             return;
         }
-        let folder = if r.folder.is_empty() {
-            String::new()
-        } else {
-            style.dim(&format!("{} / ", r.folder.join(" / ")))
-        };
+        let folder =
+            if r.folder.is_empty() { String::new() } else { style.dim(&format!("{} / ", r.folder.join(" / "))) };
         let mark = if r.passed() { style.green("✔") } else { style.red("✘") };
         let meta = match (r.status, r.elapsed_ms, r.size_bytes) {
-            (Some(s), Some(t), Some(b)) => format!(
-                "{} {}",
-                style.status(s),
-                style.dim(&format!("{t} ms · {}", format_size(b)))
-            ),
+            (Some(s), Some(t), Some(b)) => {
+                format!("{} {}", style.status(s), style.dim(&format!("{t} ms · {}", format_size(b))))
+            }
             _ => style.red("no response"),
         };
         println!("{mark} {folder}{}  {} {}", style.bold(&r.name), style.dim(&r.method), meta);
@@ -453,13 +427,10 @@ fn truncate(s: &str, n: usize) -> String {
 }
 
 fn cmd_send(args: SendArgs, style: &Style) -> Result<ExitCode> {
-    let method = HttpMethod::parse(&args.method)
-        .with_context(|| format!("unknown method `{}`", args.method))?;
+    let method = HttpMethod::parse(&args.method).with_context(|| format!("unknown method `{}`", args.method))?;
     let mut req = Request::new(method, &args.url);
     for h in &args.headers {
-        let (k, v) = h
-            .split_once(':')
-            .with_context(|| format!("header must be `Name: value`, got `{h}`"))?;
+        let (k, v) = h.split_once(':').with_context(|| format!("header must be `Name: value`, got `{h}`"))?;
         req.headers.push(KeyValue::new(k.trim(), v.trim()));
     }
     if let Some(data) = &args.data {
@@ -479,9 +450,7 @@ fn cmd_send(args: SendArgs, style: &Style) -> Result<ExitCode> {
         None => None,
     };
     let (ws, _) = Workspace::load(storage::default_root());
-    let mut scope = VarScope::new()
-        .with_environment(env.as_ref())
-        .with_globals(&ws.globals);
+    let mut scope = VarScope::new().with_environment(env.as_ref()).with_globals(&ws.globals);
     for (k, v) in args.vars {
         scope.runtime.insert(k, v);
     }
@@ -489,11 +458,7 @@ fn cmd_send(args: SendArgs, style: &Style) -> Result<ExitCode> {
     if !missing.is_empty() {
         eprintln!("{} unresolved variables: {}", style.paint("33", "warning:"), missing.join(", "));
     }
-    let settings = HttpSettings {
-        timeout_secs: args.timeout,
-        verify_tls: !args.insecure,
-        ..Default::default()
-    };
+    let settings = HttpSettings { timeout_secs: args.timeout, verify_tls: !args.insecure, ..Default::default() };
     let (_, resp) = http::execute(&req, &scope, None, &settings)?;
     eprintln!(
         "{} {}  {}",
