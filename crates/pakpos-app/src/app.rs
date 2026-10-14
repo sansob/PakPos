@@ -907,14 +907,11 @@ impl PakPosApp {
             .frame(egui::Frame::new().fill(p.header).inner_margin(Margin::symmetric(14, 8)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    // Brand mark: an envelope-like badge + wordmark.
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(26.0, 26.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 6.0, theme::ORANGE);
-                    let r = rect.shrink2(egui::vec2(5.0, 8.0));
-                    let stroke = egui::Stroke::new(2.0, theme::NAVY_700);
-                    ui.painter().rect_stroke(r, 1.5, stroke, egui::StrokeKind::Inside);
-                    ui.painter().line_segment([r.left_top(), r.center()], stroke);
-                    ui.painter().line_segment([r.right_top(), r.center()], stroke);
+                    // Brand mark: the app icon + wordmark.
+                    ui.add(
+                        egui::Image::new(egui::include_image!("../../../assets/icon-64.png"))
+                            .fit_to_exact_size(egui::vec2(28.0, 28.0)),
+                    );
                     ui.add_space(2.0);
                     ui.label(RichText::new("Pak").size(18.0).strong().color(theme::ORANGE));
                     ui.add_space(-8.0);

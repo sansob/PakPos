@@ -1,44 +1,57 @@
 """Generates the PakPos app icon in every format the packages need.
 
-Usage: python3 scripts/make_icons.py   (requires Pillow)
+The source is assets/icon.svg (the Pak Pos face). It is rendered once at
+1024 px with headless Chromium, then scaled down with Pillow:
+
+    python3 scripts/make_icons.py            # needs Pillow + Chromium/Chrome
+    CHROME=/path/to/chrome python3 scripts/make_icons.py
+
+Without a browser it reuses assets/icon-1024.png as the master.
 """
+import os
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
-from PIL import Image, ImageDraw
 
-NAVY = (30, 49, 112, 255)
-NAVY_DARK = (15, 27, 63, 255)
-ORANGE = (247, 148, 29, 255)
-WHITE = (255, 255, 255, 255)
+from PIL import Image
+
 ROOT = Path(__file__).resolve().parent.parent / "assets"
+SVG = ROOT / "icon.svg"
+MASTER = ROOT / "icon-1024.png"
 
 
-def draw(size: int) -> Image.Image:
-    s = size * 4  # supersample for smooth edges
-    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    pad = s * 0.06
-    d.rounded_rectangle([pad, pad, s - pad, s - pad], radius=s * 0.22, fill=NAVY)
-    # subtle lower shade
-    d.rounded_rectangle([pad, s * 0.55, s - pad, s - pad], radius=s * 0.22, fill=NAVY_DARK)
-    d.rectangle([pad, s * 0.55, s - pad, s * 0.7], fill=NAVY_DARK)
-    # envelope
-    ex0, ey0, ex1, ey1 = s * 0.2, s * 0.3, s * 0.8, s * 0.72
-    d.rounded_rectangle([ex0, ey0, ex1, ey1], radius=s * 0.05, fill=ORANGE)
-    w = max(2, int(s * 0.035))
-    cx = (ex0 + ex1) / 2
-    d.line([(ex0 + w, ey0 + w), (cx, s * 0.53), (ex1 - w, ey0 + w)], fill=NAVY_DARK, width=w, joint="curve")
-    # "send" arrow dot
-    r = s * 0.075
-    d.ellipse([ex1 - r * 1.2, ey0 - r * 1.2, ex1 + r * 0.8, ey0 + r * 0.8], fill=WHITE)
-    return img.resize((size, size), Image.LANCZOS)
+def find_chrome() -> str | None:
+    candidates = [os.environ.get("CHROME"), "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"]
+    candidates += [shutil.which(n) for n in ("chromium", "chromium-browser", "google-chrome", "chrome")]
+    return next((c for c in candidates if c and Path(c).exists()), None)
+
+
+def render_svg() -> Image.Image | None:
+    chrome = find_chrome()
+    if not chrome:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "shot.png"
+        # Taller window: headless screenshots lose a strip at the bottom.
+        subprocess.run(
+            [chrome, "--headless", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
+             "--default-background-color=00000000", "--window-size=1024,1224",
+             f"--screenshot={out}", SVG.as_uri()],
+            check=True, capture_output=True,
+        )
+        return Image.open(out).convert("RGBA").crop((0, 0, 1024, 1024))
 
 
 def main() -> None:
-    ROOT.mkdir(exist_ok=True)
-    big = draw(1024)
-    big.save(ROOT / "icon-1024.png")
+    big = render_svg()
+    if big is None:
+        print("no Chromium found: using", MASTER)
+        big = Image.open(MASTER).convert("RGBA")
+    else:
+        big.save(MASTER)
     for n in (16, 32, 48, 64, 128, 256, 512):
-        draw(n).save(ROOT / f"icon-{n}.png")
+        big.resize((n, n), Image.LANCZOS).save(ROOT / f"icon-{n}.png")
     big.save(ROOT / "icon.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     big.save(ROOT / "icon.icns")
     print("icons written to", ROOT)
