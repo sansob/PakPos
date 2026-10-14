@@ -27,6 +27,9 @@ All notable changes to this project are documented here. The format follows
   `{{baseUrl}}`, path variables, example bodies, auth from security schemes and
   response examples ready for the mock server; export to OpenAPI 3.0.3 YAML or
   JSON (app and `pakpos-cli export -f openapi|openapi-yaml`).
+- Package manager manifests on every release (Homebrew cask and formula,
+  winget, AUR `pakpos-bin`, Flatpak with metainfo), generated from the release
+  checksums; release notes no longer include the changelog's link lines.
 - MCP client request type: test MCP servers over Streamable HTTP or stdio
   like REST requests (call tools, read resources, get prompts, list tools),
   with tests, the runner and `pakpos-cli mcp-client`; stdio servers need a

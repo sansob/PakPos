@@ -41,3 +41,4 @@
 - [Contributing](contributing/development.md)
   - [Branching model](contributing/branching.md)
   - [Releasing](contributing/releasing.md)
+  - [Package managers](contributing/packaging.md)
