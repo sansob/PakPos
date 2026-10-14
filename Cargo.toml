@@ -25,7 +25,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 reqwest = { version = "0.13", features = ["blocking", "json", "multipart", "gzip", "brotli", "deflate", "cookies"] }
 directories = "6"
 rand = "0.9"
-base64 = "0.22"
+base64 = "0.23"
 url = "2"
 sha2 = "0.10"
 hmac = "0.12"
