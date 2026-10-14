@@ -4,6 +4,9 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+#ifndef Arch
+  #define Arch "x64"
+#endif
 #ifndef SourceDir
   #define SourceDir "..\..\target\release"
 #endif
@@ -17,14 +20,19 @@ AppPublisherURL=https://github.com/sansob/PakPos
 DefaultDirName={autopf}\PakPos
 DefaultGroupName=PakPos
 DisableProgramGroupPage=yes
-OutputBaseFilename=PakPos-{#AppVersion}-windows-x64-setup
+OutputBaseFilename=PakPos-{#AppVersion}-windows-{#Arch}-setup
 OutputDir=..\..\dist
 SetupIconFile=..\..\assets\icon.ico
 UninstallDisplayIcon={app}\pakpos.exe
 Compression=lzma2
 SolidCompression=yes
+#if Arch == "arm64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+#else
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 PrivilegesRequiredOverridesAllowed=dialog
 ChangesEnvironment=yes
 LicenseFile=..\..\LICENSE-MIT

@@ -83,8 +83,8 @@ dengan `--allow-host` dan sebutkan hanya API yang boleh disentuh.
 ## Cara pasang
 
 Ambil build untuk OS kamu di [halaman releases](https://github.com/sansob/PakPos/releases):
-installer atau zip portable untuk Windows, `.dmg` untuk macOS (Apple Silicon dan
-Intel jadi satu), dan `.deb` atau tarball untuk Linux.
+installer atau zip portable untuk Windows (x64 dan ARM64), `.dmg` untuk macOS
+(Apple Silicon dan Intel jadi satu), dan `.deb` atau tarball untuk Linux (x86_64 dan arm64).
 
 Build-nya belum di-code-sign, jadi OS kamu akan protes saat pertama dibuka. Di
 macOS klik kanan aplikasi lalu pilih **Open**; di Windows klik **More info → Run anyway**.

@@ -30,7 +30,8 @@ suffix (`v0.2.0-beta.1`) are marked as pre-releases.
 |---|---|---|
 | linux x86_64 | `ubuntu-22.04` | `.tar.gz`, `.deb` |
 | linux aarch64 | `ubuntu-22.04-arm` | `.tar.gz`, `.deb` |
-| windows | `windows-latest` | portable `.zip`, Inno Setup `-setup.exe` |
+| windows x64 | `windows-latest` | portable `.zip`, Inno Setup `-setup.exe` |
+| windows arm64 | `windows-11-arm` | portable `.zip`, Inno Setup `-setup.exe` |
 | macos | `macos-latest` | universal (arm64 + x86_64) `.dmg`, CLI `.tar.gz` |
 
 Plus `SHA256SUMS.txt`. Linux builds use Ubuntu 22.04 so the binaries run on
