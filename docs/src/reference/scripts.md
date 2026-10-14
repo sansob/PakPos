@@ -1,7 +1,7 @@
 # JavaScript scripts
 
 For checks that the [declarative tests](tests.md) can't express, requests,
-folders and collections can carry Postman-style scripts:
+folders and collections can carry JavaScript with a `pm.*` API:
 
 - **Pre-request script**: runs before the request is sent and can change it.
 - **Post-response script**: runs after the response arrives; `pm.test(...)`
@@ -52,7 +52,7 @@ value with an [extraction](tests.md#extractions) or `pm.environment.set`.
 | `console.log / info / warn / error` | Shown in the response's **Console** tab and in CLI output |
 | Legacy | `tests["name"] = bool`, `responseBody`, `responseCode.code`, `responseTime`, `postman.setEnvironmentVariable` |
 
-Values written with `set` are stored as strings, as in Postman. Changes to the
+Values written with `set` are stored as strings. Changes to the
 environment, collection variables and globals are saved.
 
 ## Example
@@ -72,10 +72,10 @@ pm.environment.set("order_id", json.id);
 console.log("created", json.id);
 ```
 
-## Postman compatibility
+## Imported scripts
 
-Imported Postman collections keep their scripts (collection, folder and request
+Imported collections keep their scripts (collection, folder and request
 level). Most `pm.test` / `pm.expect` / variable scripts work unchanged. Not
 available: `pm.sendRequest`, `pm.cookies`, `pm.vault`, `pm.visualizer`,
-`pm.iterationData`, `require(...)` of npm/Postman sandbox libraries (`lodash`,
+`pm.iterationData`, `require(...)` of npm libraries (`lodash`,
 `moment`, `crypto-js`, `cheerio`, …) and asynchronous code that waits on timers.

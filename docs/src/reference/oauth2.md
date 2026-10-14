@@ -15,7 +15,7 @@ same token.
 | **Authorization code** (+ PKCE) | Logging in as a user (Google, Auth0, Keycloak, Entra ID, GitHub, …) | Click **Get new access token**: your browser opens, you log in, PakPos receives the redirect on `http://127.0.0.1:<port>/…` |
 
 The implicit grant is deprecated by the OAuth 2.0 Security BCP and is not offered;
-Postman collections using it are imported as authorization code.
+imported collections using it get the authorization code grant.
 
 ## Fields
 

@@ -124,7 +124,7 @@ impl PakPosApp {
         ui.add_space(6.0);
 
         if self.ws.collections.is_empty() {
-            widgets::empty_state(ui, &p, "No collections yet", "Create one with + or import a Postman file.");
+            widgets::empty_state(ui, &p, "No collections yet", "Create one with + or import a collection file.");
             return;
         }
 
@@ -184,7 +184,7 @@ impl PakPosApp {
                     if ui.button("✏ Rename").clicked() {
                         pending.push(Action::Rename(RenameTarget::Collection(c.id.clone()), c.name.clone()));
                     }
-                    if ui.button("⬆ Export (Postman v2.1)…").clicked() {
+                    if ui.button("⬆ Export (Collection v2.1)…").clicked() {
                         pending.push(Action::ExportCollection(c.id.clone()));
                     }
                     ui.separator();
@@ -339,7 +339,7 @@ impl PakPosApp {
                     if ui.button("Rename").clicked() {
                         pending.push(Action::Rename(RenameTarget::Environment(e.id.clone()), e.name.clone()));
                     }
-                    if ui.button("⬆ Export (Postman)…").clicked() {
+                    if ui.button("⬆ Export…").clicked() {
                         pending.push(Action::ExportEnvironment(e.id.clone()));
                     }
                     ui.separator();

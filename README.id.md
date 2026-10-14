@@ -53,7 +53,7 @@ ketemu merah, jadi typo langsung kelihatan.
 
 Untuk mengecek response ada dua cara. Pengecekan sederhana seperti `status
 equals 200` atau `json.data.id exists` sudah cukup untuk kebanyakan kebutuhan
-dan gampang di-review. Kalau butuh lebih, tulis JavaScript ala Postman
+dan gampang di-review. Kalau butuh lebih, tulis JavaScript dengan API `pm.*`
 (`pm.test`, `pm.expect`, `pm.environment.set`…). Script jalan di sandbox tanpa
 akses file dan jaringan, dan script dari collection hasil import baru jalan
 setelah kamu menyatakan percaya.
@@ -61,8 +61,8 @@ setelah kamu menyatakan percaya.
 Response bisa disimpan sebagai **example**, lalu PakPos bisa menyajikannya sebagai
 mock API. Cocok kalau frontend sudah siap duluan sebelum backend.
 
-Pindahan dari Postman? Export collection (v2.1) dan environment-nya, lalu import
-di sini: folder, auth (termasuk OAuth 2.0), body GraphQL, script, dan example ikut
+Punya collection dari tool lain? File berformat Collection v2.1 JSON beserta
+environment-nya bisa [langsung diimport](docs/src/tutorial/import.md): folder, auth (termasuk OAuth 2.0), body GraphQL, script, dan example ikut
 terbawa. Bisa juga paste perintah `curl` langsung ke kolom URL, atau sebaliknya
 pakai tombol `</>` untuk dapat snippet cURL, Python, JavaScript, atau HTTPie.
 
@@ -86,7 +86,7 @@ pakpos-cli run api/collection.json -e api/staging.json --var token=$API_TOKEN \
 ```
 
 Exit code-nya bukan nol kalau ada test yang gagal, bisa output JUnit untuk GitHub
-Actions/GitLab/Jenkins, dan bisa baca file Postman juga.
+Actions/GitLab/Jenkins, dan bisa baca file Collection v2.1 juga.
 
 ## Dipakai AI agent
 
@@ -117,7 +117,7 @@ tekan **Send** (`Ctrl/⌘ + Enter`).
 
 ## Yang belum bisa
 
-Proyek ini masih muda. Supaya jujur soal kekurangannya dibanding Postman: script
+Proyek ini masih muda. Supaya jujur soal kekurangannya: script
 belum bisa melakukan panggilan jaringan (`pm.sendRequest`) atau memuat library
 npm, streaming gRPC dua arah belum interaktif (input dikirim di awal), belum ada
 Socket.IO/MQTT, runner koleksi hanya menjalankan request HTTP, dan belum ada

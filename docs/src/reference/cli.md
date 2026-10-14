@@ -6,8 +6,8 @@ pakpos-cli [--no-color] <COMMAND>
 Commands:
   run        Run every request of a collection and its tests
   send       Send a single request, like curl but with PakPos variables
-  import     Convert a Postman collection into PakPos format
-  export     Export a PakPos collection as Postman v2.1
+  import     Convert a Collection v2.1 file into PakPos format
+  export     Export a PakPos collection as Collection v2.1
   curl       Convert a cURL command into a PakPos request (JSON) or a code snippet
   ws         Open a WebSocket: stdin lines are sent, messages are printed
   grpc       Call a gRPC method (JSON in/out) or list a server's methods
@@ -27,7 +27,7 @@ pakpos-cli run <COLLECTION> [-e ENV] [--var k=v]... [--filter TEXT] [--bail]
                [--allow-scripts]
 ```
 
-`COLLECTION` and `ENV` are file paths (PakPos or Postman JSON) or names from the
+`COLLECTION` and `ENV` are file paths (PakPos or Collection v2.1 JSON) or names from the
 workspace. Exit code `0` = all passed, `1` = failures, `2` = error.
 
 ## send
@@ -43,8 +43,8 @@ The status line and headers (`-i`) go to stderr and the body to stdout, so
 ## import / export
 
 ```text
-pakpos-cli import <postman.json> [-o out.json] [--workspace]
-pakpos-cli export <collection.json> [-o out.postman_collection.json]
+pakpos-cli import <collection-v21.json> [-o out.json] [--workspace]
+pakpos-cli export <collection.json> [-o out.v21.json]
 ```
 
 ## curl

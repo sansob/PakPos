@@ -9,8 +9,8 @@ app can be built before the backend exists, or tests can run offline.
 
 Send a request, then click **＋ Example** in the response panel: status, headers
 and body are stored on the request. Edit or add them in the request's
-**Examples** tab (status code, name, headers, body). Examples from Postman
-collections (`response[]`) are imported too.
+**Examples** tab (status code, name, headers, body). Saved responses in
+imported Collection v2.1 files (`response[]`) become examples too.
 
 ## 2. Start the server
 
@@ -21,7 +21,7 @@ collections (`response[]`) are imported too.
 
   ```sh
   pakpos-cli mock "PakPos Demo"                       # workspace collection
-  pakpos-cli mock api.postman_collection.json --port 4010 --delay 300
+  pakpos-cli mock api-collection.json --port 4010 --delay 300
   pakpos-cli mock api.json --host 0.0.0.0             # reachable from your phone / LAN
   ```
 

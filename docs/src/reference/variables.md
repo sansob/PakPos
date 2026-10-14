@@ -18,8 +18,8 @@ protects against self-references.
 ## Dynamic variables
 
 `{{$guid}}`, `{{$randomUUID}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`,
-`{{$randomInt}}`, `{{$randomBoolean}}`, `{{$randomEmail}}`. They use the same
-names as Postman so imported collections keep working. A new value is produced
+`{{$randomInt}}`, `{{$randomBoolean}}`, `{{$randomEmail}}`. They use the common
+names, so imported collections keep working. A new value is produced
 every time one is resolved.
 
 ## Secrets

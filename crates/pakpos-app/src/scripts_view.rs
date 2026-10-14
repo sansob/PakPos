@@ -152,7 +152,7 @@ pub fn scripts_editor(
     );
     ui.add_space(4.0);
     ui.label(
-        RichText::new("Postman-compatible pm.* API: pm.test, pm.expect, pm.response, pm.request, pm.environment, pm.collectionVariables, pm.globals, pm.variables, console.log. No pm.sendRequest, require or file access.")
+        RichText::new("pm.* API: pm.test, pm.expect, pm.response, pm.request, pm.environment, pm.collectionVariables, pm.globals, pm.variables, console.log. No pm.sendRequest, require or file access.")
             .small()
             .color(p.text_weak),
     );

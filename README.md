@@ -35,7 +35,7 @@ more than it sounds: put the folder in your project's git repo and your whole
 team gets the same collections, with changes reviewed in pull requests like the
 rest of your code.
 
-The name comes from Indonesian: *Pak Pos* is the postman who takes your letter
+The name comes from Indonesian: *Pak Pos* is the mail carrier who takes your letter
 out and brings the reply back. That's the whole job.
 
 ## What it can do today
@@ -61,16 +61,17 @@ when they don't, which saves a surprising amount of head-scratching.
 For checking responses you have two options. Small declarative checks such as
 `status equals 200`, `json.data.id exists` or `time less than 500` cover most
 needs and are easy to review in a diff. When you need more, write
-Postman-style JavaScript (`pm.test`, `pm.expect`, `pm.environment.set`…). It
+JavaScript with a familiar `pm.*` API (`pm.test`, `pm.expect`, `pm.environment.set`…). It
 runs in a sandbox with no file or network access, and scripts from a collection
 you imported only run after you say you trust it.
 
 Save a response as an **example** and PakPos can serve those examples as a mock
 API, which is handy when the frontend is ready before the backend is.
 
-Already on Postman? Export your collection (v2.1) and environments and import
-them here: folders, auth (OAuth 2.0 too), GraphQL bodies, scripts and saved
-examples come across. You can also paste a `curl` command straight into the URL
+Have collections from another tool? Files in the common Collection v2.1 JSON
+format, and their environments, [import as-is](docs/src/tutorial/import.md):
+folders, auth (OAuth 2.0 too), GraphQL bodies, scripts and saved examples come
+across. You can also paste a `curl` command straight into the URL
 bar, and go the other way with the `</>` button to get cURL, Python, JavaScript
 or HTTPie snippets.
 
@@ -94,7 +95,7 @@ pakpos-cli run api/collection.json -e api/staging.json --var token=$API_TOKEN \
 ```
 
 It exits non-zero when a check fails, speaks JUnit for GitHub Actions, GitLab
-and Jenkins, and happily reads Postman files too. The CLI also does the rest
+and Jenkins, and reads Collection v2.1 files too. The CLI also does the rest
 from a terminal: `pakpos-cli grpc` calls gRPC methods, `pakpos-cli ws` opens a
 WebSocket, and `pakpos-cli mock` serves a collection's examples.
 
@@ -129,8 +130,7 @@ The first launch creates a small demo collection, so you have something to press
 
 ## What it doesn't do (yet)
 
-It's a young project, so to be straight about the gaps compared with Postman:
-scripts can't make network calls (`pm.sendRequest`) or load npm libraries,
+It's a young project, so to be straight about the gaps: scripts can't make network calls (`pm.sendRequest`) or load npm libraries,
 there's no interactive bidirectional gRPC streaming (inputs are sent up front)
 and no Socket.IO or MQTT, the collection runner only runs HTTP requests, and
 there are no data-driven runs from CSV yet. The builds aren't signed. The
@@ -140,7 +140,7 @@ there are no data-driven runs from CSV yet. The builds aren't signed. The
 
 The [documentation](https://sansob.github.io/PakPos/) (source in `docs/`) starts
 with six short tutorials: your first request, environments and variables, tests
-and chaining, moving from Postman, running in CI, and the MCP server. The
+and chaining, importing existing collections, running in CI, and the MCP server. The
 reference pages then cover each feature in depth: OAuth 2.0, GraphQL, WebSocket,
 gRPC, scripts, the mock server, Git sync, the CLI and the file format.
 

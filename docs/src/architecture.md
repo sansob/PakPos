@@ -30,7 +30,7 @@ desktop app, the CLI and the MCP server behave identically.
 | `http` | `prepare` (resolve vars, params, auth, body) → `PreparedRequest`; `send` with a blocking `reqwest` client; host allowlist |
 | `assertions` | Declarative tests, JSON paths, extractions |
 | `runner` | Sequential collection runs with progress callback; JUnit output |
-| `postman` | Postman Collection v2.0/2.1 and environment import/export |
+| `postman` | Collection v2.0/2.1 and environment import/export |
 | `codegen` | cURL parser and snippet generators |
 | `storage` | Workspace on disk; atomic writes; tolerant loading |
 | `oauth2` | Token requests, PKCE + local redirect listener, token store, `ensure_token` |

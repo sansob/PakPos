@@ -759,7 +759,7 @@ impl PakPosApp {
                                 .stroke(egui::Stroke::NONE),
                         );
                         egui::Popup::menu(&import).show(|ui| {
-                            if ui.button("Postman / PakPos collection…").clicked() {
+                            if ui.button("Collection file (PakPos / v2.1)…").clicked() {
                                 self.actions.push(Action::ImportPostmanCollection);
                             }
                             if ui.button("Environment…").clicked() {

@@ -69,7 +69,7 @@ pub fn apply(app: &mut PakPosApp, action: Action, ctx: &egui::Context) {
         Action::Delete(target, label) => app.dialog = Some(Dialog::ConfirmDelete { target, label }),
         Action::ExportCollection(id) => {
             let Some(c) = app.collection(&id).cloned() else { return };
-            let file = format!("{}.postman_collection.json", sanitize(&c.name));
+            let file = format!("{}.collection.json", sanitize(&c.name));
             if let Some(path) = rfd::FileDialog::new().set_file_name(file).add_filter("JSON", &["json"]).save_file() {
                 match std::fs::write(&path, postman::export_collection(&c)) {
                     Ok(()) => app.toast(format!("Exported to {}", path.display())),
@@ -124,7 +124,7 @@ pub fn apply(app: &mut PakPosApp, action: Action, ctx: &egui::Context) {
         }
         Action::ExportEnvironment(id) => {
             let Some(env) = app.ws.environments.iter().find(|e| e.id == id).cloned() else { return };
-            let file = format!("{}.postman_environment.json", sanitize(&env.name));
+            let file = format!("{}.environment.json", sanitize(&env.name));
             if let Some(path) = rfd::FileDialog::new().set_file_name(file).save_file() {
                 match std::fs::write(&path, postman::export_environment(&env)) {
                     Ok(()) => app.toast(format!("Exported to {}", path.display())),

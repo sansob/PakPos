@@ -9,7 +9,7 @@
 - [1. Your first request](tutorial/first-request.md)
 - [2. Collections, environments & variables](tutorial/collections-environments.md)
 - [3. Tests and request chaining](tutorial/tests-chaining.md)
-- [4. Moving from Postman or cURL](tutorial/import.md)
+- [4. Importing collections and cURL](tutorial/import.md)
 - [5. Running collections in CI](tutorial/ci.md)
 - [6. Using PakPos from AI agents (MCP)](tutorial/mcp.md)
 

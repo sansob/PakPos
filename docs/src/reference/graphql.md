@@ -33,6 +33,6 @@ json.errors            not exists
 json.data.user.name    equals   Budi Santoso
 ```
 
-## Postman
+## Import
 
-Postman GraphQL bodies are imported and exported in this format.
+GraphQL bodies in imported Collection v2.1 files are converted to this format, and exported back.

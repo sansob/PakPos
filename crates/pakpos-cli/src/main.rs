@@ -1,4 +1,4 @@
-//! `pakpos-cli`: run PakPos / Postman collections from the terminal or CI.
+//! `pakpos-cli`: run PakPos collections from the terminal or CI.
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -18,7 +18,7 @@ use std::process::ExitCode;
 #[command(
     name = "pakpos-cli",
     version,
-    about = "PakPos command-line runner: send requests and run collections (PakPos or Postman format).",
+    about = "PakPos command-line runner: send requests and run collections (PakPos or Collection v2.1 format).",
     long_about = None
 )]
 struct Cli {
@@ -35,9 +35,9 @@ enum Command {
     Run(RunArgs),
     /// Send a single request, like curl but with PakPos variables.
     Send(SendArgs),
-    /// Convert a Postman collection into PakPos format.
+    /// Convert a Collection v2.1 file into PakPos format.
     Import {
-        /// Postman collection JSON (v2.0 / v2.1).
+        /// Collection JSON (v2.0 / v2.1).
         input: PathBuf,
         /// Output file. Defaults to stdout.
         #[arg(short, long)]
@@ -46,7 +46,7 @@ enum Command {
         #[arg(long)]
         workspace: bool,
     },
-    /// Export a PakPos collection as Postman v2.1.
+    /// Export a PakPos collection as Collection v2.1.
     Export {
         input: PathBuf,
         #[arg(short, long)]
@@ -109,7 +109,7 @@ enum Command {
     },
     /// Serve the saved examples of a collection as a mock API.
     Mock {
-        /// Collection file (PakPos or Postman JSON) or workspace collection name.
+        /// Collection file (PakPos or v2.1 JSON) or workspace collection name.
         collection: String,
         #[arg(short, long, default_value_t = 8000)]
         port: u16,
@@ -155,7 +155,7 @@ enum Reporter {
 
 #[derive(clap::Args)]
 struct RunArgs {
-    /// Collection file (PakPos or Postman JSON), or the name of a collection in the workspace.
+    /// Collection file (PakPos or v2.1 JSON), or the name of a collection in the workspace.
     collection: String,
     /// Environment file, or the name of an environment in the workspace.
     #[arg(short, long)]
