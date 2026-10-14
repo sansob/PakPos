@@ -28,7 +28,11 @@ service Chat {
 "#;
 
 pub fn pool() -> DescriptorPool {
-    let dir = std::env::temp_dir().join(format!("pakpos-chat-proto-{}", std::process::id()));
+    // One file per call: tests run in parallel, and rewriting a shared file
+    // while another test compiles it gives an empty pool.
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("pakpos-chat-proto-{}-{n}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let file = dir.join("chat.proto");
     std::fs::write(&file, PROTO).expect("write proto");

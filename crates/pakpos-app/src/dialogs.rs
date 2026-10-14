@@ -220,6 +220,67 @@ impl PakPosApp {
                     keep = false;
                 }
             }
+            Dialog::CloseTabs { uids } => {
+                let unsaved: Vec<(usize, String, bool)> = self
+                    .tabs
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, t)| t.dirty && uids.contains(&t.uid))
+                    .map(|(i, t)| (i, t.request.name.clone(), t.source.is_some()))
+                    .collect();
+                let all_saveable = unsaved.iter().all(|(_, _, s)| *s);
+                let r = egui::Modal::new(Id::new("close_tabs")).frame(modal_frame(&p)).show(ctx, |ui| {
+                    ui.set_width(420.0);
+                    title(ui, crate::i18n::tr("Unsaved changes"));
+                    ui.label(crate::i18n::trf(
+                        "{n} tab(s) have changes that are not saved:",
+                        &[("n", &unsaved.len().to_string())],
+                    ));
+                    for (_, name, _) in unsaved.iter().take(8) {
+                        ui.label(RichText::new(format!("• {name}")).color(p.text_weak));
+                    }
+                    if unsaved.len() > 8 {
+                        ui.label(RichText::new("…").color(p.text_weak));
+                    }
+                    ui.add_space(12.0);
+                    let mut choice = None;
+                    ui.horizontal(|ui| {
+                        if all_saveable && widgets::primary_button(ui, crate::i18n::tr("Save and close")).clicked() {
+                            choice = Some(true);
+                        }
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(crate::i18n::tr("Close without saving"))
+                                        .color(egui::Color32::WHITE)
+                                        .strong(),
+                                )
+                                .fill(theme::RED),
+                            )
+                            .clicked()
+                        {
+                            choice = Some(false);
+                        }
+                        if ui.button(crate::i18n::tr("Cancel")).clicked() {
+                            keep = false;
+                        }
+                    });
+                    choice
+                });
+                if r.should_close() {
+                    keep = false;
+                }
+                if let Some(save) = r.inner {
+                    if save {
+                        for (i, _, _) in &unsaved {
+                            self.save_tab(*i);
+                        }
+                    }
+                    let uids = uids.clone();
+                    self.close_tabs(&uids);
+                    keep = false;
+                }
+            }
             Dialog::ConfirmDelete { target, label } => {
                 let r = egui::Modal::new(Id::new("confirm_delete")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(380.0);

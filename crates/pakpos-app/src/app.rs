@@ -128,16 +128,43 @@ pub enum CollectionTab {
 }
 
 pub enum Dialog {
-    CollectionSettings { id: String, tab: CollectionTab },
-    ImportCurl { text: String, error: Option<String> },
-    SaveRequest { tab: usize, collection: Option<String>, new_collection: String, name: String },
-    Rename { target: RenameTarget, name: String },
-    ConfirmDelete { target: DeleteTarget, label: String },
-    NewCollection { name: String },
-    Environments { selected: Option<String> },
+    CollectionSettings {
+        id: String,
+        tab: CollectionTab,
+    },
+    ImportCurl {
+        text: String,
+        error: Option<String>,
+    },
+    SaveRequest {
+        tab: usize,
+        collection: Option<String>,
+        new_collection: String,
+        name: String,
+    },
+    Rename {
+        target: RenameTarget,
+        name: String,
+    },
+    ConfirmDelete {
+        target: DeleteTarget,
+        label: String,
+    },
+    /// Closing tabs (by uid) when some of them have unsaved changes.
+    CloseTabs {
+        uids: Vec<u64>,
+    },
+    NewCollection {
+        name: String,
+    },
+    Environments {
+        selected: Option<String>,
+    },
     Settings,
     Cookies(crate::cookies_view::CookiesDialog),
-    Snippet { lang: SnippetLang },
+    Snippet {
+        lang: SnippetLang,
+    },
     About,
 }
 
@@ -341,18 +368,42 @@ impl PakPosApp {
         self.active = self.push_tab(req, None);
     }
 
-    pub fn close_tab(&mut self, idx: usize) {
-        if idx < self.tabs.len() {
-            self.tabs.remove(idx);
+    /// Closes the tabs with these uids, asking first when one has unsaved
+    /// changes (unless `force`).
+    pub fn request_close(&mut self, uids: Vec<u64>, force: bool) {
+        if !force && self.tabs.iter().any(|t| t.dirty && uids.contains(&t.uid)) {
+            self.dialog = Some(Dialog::CloseTabs { uids });
+        } else {
+            self.close_tabs(&uids);
         }
+    }
+
+    /// Closes the tabs with these uids; the active tab stays active if it is kept.
+    pub fn close_tabs(&mut self, uids: &[u64]) {
+        let active_uid = self.tabs.get(self.active).map(|t| t.uid);
+        let first_closed = self.tabs.iter().position(|t| uids.contains(&t.uid));
+        self.tabs.retain(|t| !uids.contains(&t.uid));
         if self.tabs.is_empty() {
             self.new_blank_tab();
+            return;
         }
-        if self.active >= self.tabs.len() {
-            self.active = self.tabs.len() - 1;
-        } else if idx < self.active {
-            self.active -= 1;
-        }
+        self.active = match self.tabs.iter().position(|t| Some(t.uid) == active_uid) {
+            Some(i) => i,
+            None => first_closed.unwrap_or(0).min(self.tabs.len() - 1),
+        };
+    }
+
+    /// Opens an unsaved copy of a tab right after it.
+    pub fn duplicate_tab(&mut self, idx: usize) {
+        let Some(tab) = self.tabs.get(idx) else { return };
+        let mut req = tab.request.clone();
+        req.id = pakpos_core::model::new_id();
+        req.name = crate::i18n::trf("{name} copy", &[("name", &req.name)]);
+        let new = self.push_tab(req, None);
+        self.tabs[new].dirty = true;
+        let t = self.tabs.remove(new);
+        self.tabs.insert(idx + 1, t);
+        self.active = idx + 1;
     }
 
     pub fn open_saved(&mut self, collection: &str, request: &str) {
@@ -830,7 +881,9 @@ impl PakPosApp {
             self.new_blank_tab();
         }
         if ctx.input_mut(|i| i.consume_shortcut(&close)) {
-            self.close_tab(self.active);
+            if let Some(uid) = self.tabs.get(self.active).map(|t| t.uid) {
+                self.request_close(vec![uid], false);
+            }
         }
         if ctx.input_mut(|i| i.consume_shortcut(&import)) {
             self.dialog = Some(Dialog::ImportCurl { text: String::new(), error: None });
