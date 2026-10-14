@@ -93,17 +93,17 @@ pub struct Tab {
 }
 
 #[derive(Serialize, Deserialize)]
-struct SavedTab {
-    request: Request,
-    source: Option<(String, String)>,
-    dirty: bool,
+pub struct SavedTab {
+    pub request: Request,
+    pub source: Option<(String, String)>,
+    pub dirty: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
-struct SavedSession {
-    tabs: Vec<SavedTab>,
-    active: usize,
-    sidebar_width: Option<f32>,
+pub struct SavedSession {
+    pub tabs: Vec<SavedTab>,
+    pub active: usize,
+    pub sidebar_width: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,6 +134,7 @@ pub enum Dialog {
     Rename { target: RenameTarget, name: String },
     ConfirmDelete { target: DeleteTarget, label: String },
     NewCollection { name: String },
+    NewWorkspace { name: String, path: String, error: Option<String> },
     Environments { selected: Option<String> },
     Settings,
     Cookies(crate::cookies_view::CookiesDialog),
@@ -255,6 +256,10 @@ pub struct PakPosApp {
     applied_theme: Option<(Theme, u32)>,
     next_uid: u64,
     pub actions: Vec<Action>,
+    /// Known workspaces (saved outside any workspace).
+    pub registry: pakpos_core::storage::WorkspaceRegistry,
+    /// Open tabs of the other workspaces, by workspace folder.
+    pub sessions: std::collections::HashMap<String, SavedSession>,
 }
 
 impl PakPosApp {
@@ -287,22 +292,24 @@ impl PakPosApp {
             applied_theme: None,
             next_uid: 1,
             actions: Vec::new(),
+            registry: pakpos_core::storage::WorkspaceRegistry::load(),
+            sessions: Default::default(),
         };
         for c in &app.ws.collections {
             app.open_nodes.insert(c.id.clone());
         }
         let restore = std::env::var_os("PAKPOS_SCENE").is_none();
-        if let Some(session) = cc
-            .storage
-            .filter(|_| restore)
-            .and_then(|s| s.get_string("session"))
-            .and_then(|s| serde_json::from_str::<SavedSession>(&s).ok())
-        {
-            for t in session.tabs {
-                let idx = app.push_tab(t.request, t.source);
-                app.tabs[idx].dirty = t.dirty;
+        if let Some(storage) = cc.storage.filter(|_| restore) {
+            app.sessions =
+                storage.get_string("sessions").and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+            let key = app.ws.root.display().to_string();
+            let current = app.sessions.remove(&key).or_else(|| {
+                // Before workspaces: one session for the only workspace.
+                storage.get_string("session").and_then(|s| serde_json::from_str::<SavedSession>(&s).ok())
+            });
+            if let Some(session) = current {
+                app.restore_session(session);
             }
-            app.active = session.active.min(app.tabs.len().saturating_sub(1));
         }
         if app.tabs.is_empty() {
             app.new_blank_tab();
@@ -855,6 +862,8 @@ impl PakPosApp {
                     ui.label(RichText::new("Pak").size(18.0).strong().color(theme::ORANGE));
                     ui.add_space(-8.0);
                     ui.label(RichText::new("Pos").size(18.0).strong().color(p.header_text));
+                    ui.add_space(14.0);
+                    self.workspace_menu(ui);
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let white = p.header_text;
@@ -1146,17 +1155,12 @@ impl eframe::App for PakPosApp {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        let session = SavedSession {
-            tabs: self
-                .tabs
-                .iter()
-                .map(|t| SavedTab { request: t.request.clone(), source: t.source.clone(), dirty: t.dirty })
-                .collect(),
-            active: self.active,
-            sidebar_width: None,
-        };
-        if let Ok(json) = serde_json::to_string(&session) {
-            storage.set_string("session", json);
+        let mut sessions: std::collections::HashMap<&String, &SavedSession> = self.sessions.iter().collect();
+        let key = self.ws.root.display().to_string();
+        let current = self.current_session();
+        sessions.insert(&key, &current);
+        if let Ok(json) = serde_json::to_string(&sessions) {
+            storage.set_string("sessions", json);
         }
         if self.env_dirty.is_some() {
             self.persist_environments();

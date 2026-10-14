@@ -84,3 +84,23 @@ export PAKPOS_HOME=~/code/my-api/.pakpos   # point the app and CLI at a repo fol
 
 Commit `collections/` and the environments without secrets; add `history.json`,
 `settings.json`, `tokens.json`, `cookies.json` and secret environments to `.gitignore`.
+
+## Several workspaces
+
+The workspace button in the header (left, next to the logo) lists your
+workspaces. From there you can:
+
+- switch to another one: pending edits are saved and the open tabs of each
+  workspace are remembered, unsaved ones included;
+- **New workspace…**: pick a name and a folder (an empty one, by default
+  `Documents/PakPos/<name>`). It starts with your current theme, language and
+  HTTP settings, but trusts no collection;
+- **Open folder as workspace…**: use any existing folder, for example a
+  `pakpos/` folder in a project repository;
+- remove an entry with `×` (the folder is left alone).
+
+The list is stored in `workspaces.json` in PakPos's config folder
+(`~/.config/PakPos` on Linux, `~/Library/Application Support/dev.PakPos.PakPos`
+on macOS, `%APPDATA%\PakPos\PakPos\config` on Windows), or in `$PAKPOS_CONFIG`
+if set. `pakpos-cli` opens the active workspace; `PAKPOS_HOME` overrides both.
+

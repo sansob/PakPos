@@ -422,6 +422,11 @@ impl PakPosApp {
             Dialog::Cookies(st) => {
                 keep = self.cookies_dialog(ctx, st);
             }
+            Dialog::NewWorkspace { name, path, error } => {
+                if self.new_workspace_dialog(ctx, name, path, error) {
+                    keep = false;
+                }
+            }
             Dialog::About => {
                 let r = egui::Modal::new(Id::new("about")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(420.0);

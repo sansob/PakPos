@@ -28,12 +28,13 @@ trap 'kill $MOCK $GRPC $MQTT 2>/dev/null || true' EXIT
 sleep 1
 
 SCENES=("$@")
-[ ${#SCENES[@]} -eq 0 ] && SCENES=(overview tests runner runner-data history oauth graphql websocket sse socketio mqtt scripts mock grpc grpc-stream mcp git environments curl snippet settings light bahasa tree search html image cookies)
+[ ${#SCENES[@]} -eq 0 ] && SCENES=(overview tests runner runner-data history oauth graphql websocket sse socketio mqtt scripts mock grpc grpc-stream mcp git environments curl snippet settings light bahasa workspaces tree search html image cookies)
 
 for scene in "${SCENES[@]}"; do
   HOME_DIR=$(mktemp -d)
   echo "▸ $scene"
   PAKPOS_HOME="$HOME_DIR/workspace" \
+  PAKPOS_CONFIG="$HOME_DIR/config" \
   PAKPOS_DEMO_BASE_URL="http://127.0.0.1:$PORT" \
   PAKPOS_SCENE="$scene" \
   PAKPOS_SCREENSHOT="$OUT/$scene.png" \
