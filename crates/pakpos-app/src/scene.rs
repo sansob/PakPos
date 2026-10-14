@@ -100,6 +100,12 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].section = ReqSection::Auth;
             app.send(app.active, ctx);
         }
+        "graphql" => {
+            open_by_name(app, "Users by city (GraphQL)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.fetch_graphql_schema(app.active, ctx);
+            app.send(app.active, ctx);
+        }
         "oauth" => {
             open_by_name(app, "Profile (OAuth 2.0)");
             app.tabs[app.active].section = ReqSection::Auth;

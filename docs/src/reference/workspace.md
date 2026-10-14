@@ -51,7 +51,8 @@ stopping the app.
 
 - `url` never contains the query string; query parameters live in `params`.
 - `body.mode`: `none`, `raw` (`language`: `json`, `text`, `xml`, `html`, `javascript`),
-  `form_url_encoded` (`fields`), `multipart` (`fields` with `is_file`), `binary` (`path`).
+  `form_url_encoded` (`fields`), `multipart` (`fields` with `is_file`), `binary` (`path`),
+  `graphql` (`query`, `variables` as JSON text, `operation_name`).
 - `auth.type`: `inherit`, `none`, `basic` (`username`, `password`), `bearer` (`token`),
   `api_key` (`key`, `value`, `location`: `header` | `query`),
   `oauth2` (`grant`: `client_credentials` | `password` | `authorization_code`, `token_url`,

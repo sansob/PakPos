@@ -233,19 +233,15 @@ fn parse_body(v: Option<&Value>, warnings: &mut Vec<String>) -> Body {
                 .unwrap_or_default(),
         },
         "file" => Body::Binary { path: body.get("file").map(|f| s(f, "src")).unwrap_or_default() },
-        "graphql" => {
-            let query = body.pointer("/graphql/query").and_then(Value::as_str).unwrap_or("");
-            let variables = body
-                .pointer("/graphql/variables")
-                .and_then(Value::as_str)
-                .and_then(|v| serde_json::from_str::<Value>(v).ok())
-                .unwrap_or(Value::Object(Map::new()));
-            Body::Raw {
-                content: serde_json::to_string_pretty(&json!({ "query": query, "variables": variables }))
-                    .unwrap_or_default(),
-                language: RawLanguage::Json,
-            }
-        }
+        "graphql" => Body::GraphQl {
+            query: body.pointer("/graphql/query").and_then(Value::as_str).unwrap_or("").to_string(),
+            variables: match body.pointer("/graphql/variables") {
+                Some(Value::String(v)) => v.clone(),
+                Some(Value::Null) | None => String::new(),
+                Some(other) => serde_json::to_string_pretty(other).unwrap_or_default(),
+            },
+            operation_name: String::new(),
+        },
         "" => Body::None,
         other => {
             warnings.push(format!("body mode `{other}` is not supported; skipped"));
@@ -474,6 +470,9 @@ fn body_to_json(body: &Body) -> Option<Value> {
             }).collect::<Vec<_>>()
         })),
         Body::Binary { path } => Some(json!({ "mode": "file", "file": { "src": path } })),
+        Body::GraphQl { query, variables, .. } => {
+            Some(json!({ "mode": "graphql", "graphql": { "query": query, "variables": variables } }))
+        }
     }
 }
 

@@ -13,11 +13,12 @@ What is converted:
 | folders, requests, methods, URLs, query params (incl. disabled) | ✅ |
 | headers, descriptions | ✅ |
 | raw / urlencoded / form-data / file bodies | ✅ |
-| GraphQL body | converted to a raw JSON `{query, variables}` body |
+| GraphQL body | ✅ GraphQL body (query + variables) |
 | auth: noauth, basic, bearer, apikey (at any level) | ✅ |
 | collection variables | ✅ |
 | pre-request & test **scripts** | ❌ skipped, with a warning; rewrite as [tests](../reference/tests.md) / extractions |
-| OAuth 2, AWS, Digest… auth | ❌ skipped, with a warning |
+| OAuth 2.0 (client credentials, password, authorization code) | ✅ (implicit is imported as authorization code) |
+| AWS, Digest, NTLM… auth | ❌ skipped, with a warning |
 
 Export back with right-click → **Export (Postman v2.1)**.
 

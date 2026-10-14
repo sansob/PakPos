@@ -11,6 +11,8 @@ All notable changes to this project are documented here. The format follows
   PKCE (local browser redirect). Tokens are cached in `tokens.json`, refreshed
   automatically, and used by the app, `pakpos-cli run` and the MCP server.
   Postman `oauth2` auth is imported and exported.
+- GraphQL body type with query, JSON variables and operation name, a schema
+  explorer powered by introspection, and Postman GraphQL import/export.
 
 ## [0.1.0-rc.1] - 2026-10-14
 

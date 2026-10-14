@@ -5,6 +5,7 @@
 mod actions;
 mod app;
 mod dialogs;
+mod graphql_view;
 mod oauth_view;
 mod request_view;
 mod response_view;

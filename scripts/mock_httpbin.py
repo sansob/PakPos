@@ -10,6 +10,58 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qsl, urlsplit
 
 
+USERS = [
+    {"id": "1", "name": "Budi Santoso", "city": "Jakarta"},
+    {"id": "2", "name": "Siti Rahma", "city": "Bandung"},
+    {"id": "3", "name": "Andi Wijaya", "city": "Surabaya"},
+]
+
+
+def _t(kind, name=None, of=None):
+    return {"kind": kind, "name": name, "ofType": of}
+
+
+def _field(name, ty, args=(), desc=None):
+    return {"name": name, "description": desc, "type": ty,
+            "args": [{"name": a, "type": t, "defaultValue": None} for a, t in args]}
+
+
+GQL_SCHEMA = {"data": {"__schema": {
+    "queryType": {"name": "Query"}, "mutationType": {"name": "Mutation"}, "subscriptionType": None,
+    "types": [
+        {"kind": "OBJECT", "name": "Query", "description": None, "fields": [
+            _field("users", _t("NON_NULL", of=_t("LIST", of=_t("OBJECT", "User"))), [("city", _t("SCALAR", "String"))], "All users, optionally by city"),
+            _field("user", _t("OBJECT", "User"), [("id", _t("NON_NULL", of=_t("SCALAR", "ID")))], "One user by id"),
+        ]},
+        {"kind": "OBJECT", "name": "Mutation", "description": None, "fields": [
+            _field("createUser", _t("OBJECT", "User"), [("name", _t("NON_NULL", of=_t("SCALAR", "String")))]),
+        ]},
+        {"kind": "OBJECT", "name": "User", "description": "A demo user", "fields": [
+            _field("id", _t("NON_NULL", of=_t("SCALAR", "ID"))),
+            _field("name", _t("SCALAR", "String")),
+            _field("city", _t("SCALAR", "String")),
+        ]},
+        {"kind": "SCALAR", "name": "String", "description": None, "fields": None},
+        {"kind": "SCALAR", "name": "ID", "description": None, "fields": None},
+    ]}}}
+
+
+def graphql(payload):
+    query = payload.get("query") or ""
+    variables = payload.get("variables") or {}
+    if "__schema" in query:
+        return GQL_SCHEMA
+    if "createUser" in query:
+        return {"data": {"createUser": {"id": "4", "name": variables.get("name", "New"), "city": None}}}
+    if "user(" in query:
+        uid = str(variables.get("id", "1"))
+        return {"data": {"user": next((u for u in USERS if u["id"] == uid), None)}}
+    if "users" in query:
+        city = variables.get("city")
+        return {"data": {"users": [u for u in USERS if not city or u["city"] == city]}}
+    return {"errors": [{"message": "Cannot query that field on the demo schema"}]}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "mock-httpbin/1.0"
 
@@ -91,6 +143,8 @@ class Handler(BaseHTTPRequestHandler):
             if auth.startswith("Bearer demo-"):
                 return self._send(200, {"user": "budi", "token": auth[7:], "scopes": ["read"]})
             return self._send(401, {"error": "invalid_token"})
+        if path == "/graphql" and self.command == "POST":
+            return self._send(200, graphql(data.get("json") or {}))
         if path == "/uuid":
             return self._send(200, {"uuid": str(uuid.uuid4())})
         if path == "/json":

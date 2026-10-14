@@ -120,6 +120,10 @@ impl PakPosApp {
         let mut snippet = false;
         let tokens = self.ws.tokens.clone();
         let mut oauth_action = None;
+        let gql_key = scope.resolve(&self.tabs[idx].request.url);
+        let gql_schema = self.graphql.schemas.get(&gql_key);
+        let gql_loading = self.graphql.job.as_ref().is_some_and(|(k, _)| k == &gql_key);
+        let mut gql_action = None;
         let oauth_job = self.oauth_job.as_ref();
         let tab = &mut self.tabs[idx];
         let mut changed = false;
@@ -277,7 +281,18 @@ impl PakPosApp {
                         &mut oauth_action,
                     )
                 }
-                ReqSection::Body => changed |= body_editor(ui, &mut tab.request.body, &scope, tab.uid),
+                ReqSection::Body => {
+                    changed |= body_editor(
+                        ui,
+                        &mut tab.request.body,
+                        &scope,
+                        tab.uid,
+                        gql_schema,
+                        gql_loading,
+                        &p,
+                        &mut gql_action,
+                    )
+                }
                 ReqSection::Tests => changed |= tests_editor(ui, &mut tab.request.assertions, &p),
                 ReqSection::Extract => changed |= extract_editor(ui, &mut tab.request.extractions, &p),
                 ReqSection::Docs => {
@@ -296,6 +311,19 @@ impl PakPosApp {
 
         if changed {
             tab.dirty = true;
+        }
+        match gql_action {
+            Some(crate::graphql_view::GqlAction::FetchSchema) => {
+                let ctx = ui.ctx().clone();
+                self.fetch_graphql_schema(idx, &ctx);
+            }
+            Some(crate::graphql_view::GqlAction::Replace(q)) => {
+                if let Body::GraphQl { query, .. } = &mut self.tabs[idx].request.body {
+                    *query = q;
+                    self.tabs[idx].dirty = true;
+                }
+            }
+            None => {}
         }
         if let Some(a) = oauth_action {
             let ctx = ui.ctx().clone();
@@ -454,7 +482,17 @@ fn auth_editor(
     changed
 }
 
-fn body_editor(ui: &mut Ui, body: &mut Body, scope: &VarScope, uid: u64) -> bool {
+#[allow(clippy::too_many_arguments)]
+fn body_editor(
+    ui: &mut Ui,
+    body: &mut Body,
+    scope: &VarScope,
+    uid: u64,
+    gql_schema: Option<&Result<pakpos_core::graphql::Schema, String>>,
+    gql_loading: bool,
+    p: &crate::theme::Palette,
+    gql_action: &mut Option<crate::graphql_view::GqlAction>,
+) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
         let current = body.kind();
@@ -520,6 +558,19 @@ fn body_editor(ui: &mut Ui, body: &mut Body, scope: &VarScope, uid: u64) -> bool
         }
         Body::FormUrlEncoded { fields } => changed |= widgets::kv_table(ui, "urlencoded", fields, scope, "Field"),
         Body::Multipart { fields } => changed |= widgets::form_table(ui, fields, scope),
+        Body::GraphQl { query, variables, operation_name } => {
+            changed |= crate::graphql_view::editor(
+                ui,
+                query,
+                variables,
+                operation_name,
+                uid,
+                gql_schema,
+                gql_loading,
+                p,
+                gql_action,
+            );
+        }
         Body::Binary { path } => {
             ui.horizontal(|ui| {
                 changed |=

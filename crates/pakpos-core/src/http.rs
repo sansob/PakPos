@@ -17,6 +17,8 @@ pub enum HttpError {
     File(String, String),
     #[error("request failed: {0}")]
     Transport(String),
+    #[error("invalid body: {0}")]
+    Body(String),
 }
 
 /// Client-side settings applied to every request.
@@ -231,6 +233,23 @@ pub fn prepare(req: &Request, scope: &VarScope, fallback_auth: Option<&Auth>) ->
                 PreparedBody::Bytes(bytes)
             }
         }
+        Body::GraphQl { query, variables, operation_name } => {
+            if !has_header(&headers, "content-type") {
+                headers.push(("Content-Type".into(), "application/json".into()));
+            }
+            let mut payload = serde_json::Map::new();
+            payload.insert("query".into(), serde_json::Value::String(scope.resolve(query)));
+            let vars = scope.resolve(variables);
+            if !vars.trim().is_empty() {
+                let v: serde_json::Value = serde_json::from_str(&vars)
+                    .map_err(|e| HttpError::Body(format!("GraphQL variables are not valid JSON: {e}")))?;
+                payload.insert("variables".into(), v);
+            }
+            if !operation_name.trim().is_empty() {
+                payload.insert("operationName".into(), serde_json::Value::String(scope.resolve(operation_name.trim())));
+            }
+            PreparedBody::Text(serde_json::Value::Object(payload).to_string())
+        }
     };
 
     Ok(PreparedRequest { method: req.method.as_str().to_string(), url: url.to_string(), headers, body })
@@ -401,6 +420,26 @@ mod tests {
     fn empty_url_is_error() {
         let req = Request::new(HttpMethod::Get, "  ");
         assert!(matches!(prepare(&req, &VarScope::new(), None), Err(HttpError::EmptyUrl)));
+    }
+
+    #[test]
+    fn graphql_body_is_json_envelope() {
+        let mut scope = VarScope::new();
+        scope.environment.insert("uid".into(), "42".into());
+        let mut req = Request::new(HttpMethod::Post, "http://h/graphql");
+        req.body = Body::GraphQl {
+            query: "query($id: ID!) { user(id: $id) { name } }".into(),
+            variables: r#"{"id": "{{uid}}"}"#.into(),
+            operation_name: String::new(),
+        };
+        let p = prepare(&req, &scope, None).unwrap();
+        assert_eq!(p.header("content-type"), Some("application/json"));
+        let PreparedBody::Text(t) = p.body else { panic!() };
+        let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+        assert_eq!(v["variables"]["id"], "42");
+        assert!(v.get("operationName").is_none());
+        req.body = Body::GraphQl { query: "{a}".into(), variables: "{oops".into(), operation_name: String::new() };
+        assert!(matches!(prepare(&req, &scope, None), Err(HttpError::Body(_))));
     }
 
     #[test]

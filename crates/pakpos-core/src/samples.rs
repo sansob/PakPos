@@ -78,18 +78,32 @@ pub fn demo_collection() -> Collection {
     oauth.assertions = vec![test("status", Operator::Equals, "200"), test("json.user", Operator::Equals, "budi")];
     oauth.description = "The token is fetched automatically (client credentials). Switch the grant to Authorization code to try the browser login against the mock API.".into();
 
+    let mut gql = req("Users by city (GraphQL)", HttpMethod::Post, "{{base_url}}/graphql");
+    gql.body = Body::GraphQl {
+        query: "query Users($city: String) {\n  users(city: $city) {\n    id\n    name\n    city\n  }\n}\n".into(),
+        variables: "{ \"city\": \"Jakarta\" }".into(),
+        operation_name: String::new(),
+    };
+    gql.assertions = vec![
+        test("json.errors", Operator::NotExists, ""),
+        test("json.data.users[0].city", Operator::Equals, "Jakarta"),
+    ];
+    gql.description = "Click “Fetch schema” in the Body tab to browse the API.".into();
+
     let mut basics = Folder::new("Basics");
     basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
     auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(oauth)];
     let mut responses = Folder::new("Responses");
     responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found)];
+    let mut graphql = Folder::new("GraphQL");
+    graphql.items = vec![Item::Request(gql)];
 
     let mut c = Collection::new("PakPos Demo");
     c.description =
         "Sample requests against an httpbin-compatible API. Select the “Demo (httpbin)” environment and press Send."
             .into();
-    c.items = vec![Item::Folder(basics), Item::Folder(auth), Item::Folder(responses)];
+    c.items = vec![Item::Folder(basics), Item::Folder(auth), Item::Folder(graphql), Item::Folder(responses)];
     c
 }
 
@@ -106,7 +120,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 12);
+        assert_eq!(c.request_count(), 13);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

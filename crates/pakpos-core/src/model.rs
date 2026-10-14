@@ -167,6 +167,16 @@ pub enum Body {
     Binary {
         path: String,
     },
+    /// GraphQL over HTTP: sent as `{"query", "variables", "operationName"}` JSON.
+    #[serde(rename = "graphql")]
+    GraphQl {
+        query: String,
+        /// JSON object text; may contain `{{variables}}`.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        variables: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        operation_name: String,
+    },
 }
 
 impl Body {
@@ -177,6 +187,7 @@ impl Body {
             Body::FormUrlEncoded { .. } => BodyKind::FormUrlEncoded,
             Body::Multipart { .. } => BodyKind::Multipart,
             Body::Binary { .. } => BodyKind::Binary,
+            Body::GraphQl { .. } => BodyKind::GraphQl,
         }
     }
 
@@ -218,6 +229,14 @@ impl Body {
                 },
             },
             BodyKind::Binary => Body::Binary { path: String::new() },
+            BodyKind::GraphQl => Body::GraphQl {
+                query: match self {
+                    Body::Raw { content, .. } => content.clone(),
+                    _ => "query {\n  \n}".into(),
+                },
+                variables: String::new(),
+                operation_name: String::new(),
+            },
         }
     }
 }
@@ -229,11 +248,18 @@ pub enum BodyKind {
     FormUrlEncoded,
     Multipart,
     Binary,
+    GraphQl,
 }
 
 impl BodyKind {
-    pub const ALL: [BodyKind; 5] =
-        [BodyKind::None, BodyKind::Raw, BodyKind::FormUrlEncoded, BodyKind::Multipart, BodyKind::Binary];
+    pub const ALL: [BodyKind; 6] = [
+        BodyKind::None,
+        BodyKind::Raw,
+        BodyKind::FormUrlEncoded,
+        BodyKind::Multipart,
+        BodyKind::Binary,
+        BodyKind::GraphQl,
+    ];
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -242,6 +268,7 @@ impl BodyKind {
             BodyKind::FormUrlEncoded => "x-www-form-urlencoded",
             BodyKind::Multipart => "form-data",
             BodyKind::Binary => "binary",
+            BodyKind::GraphQl => "GraphQL",
         }
     }
 }

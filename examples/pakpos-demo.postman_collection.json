@@ -267,6 +267,30 @@
       ]
     },
     {
+      "name": "GraphQL",
+      "item": [
+        {
+          "name": "Users by city (GraphQL)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/graphql",
+              "query": []
+            },
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Users($city: String) {\n  users(city: $city) {\n    id\n    name\n    city\n  }\n}\n",
+                "variables": "{ \"city\": \"Jakarta\" }"
+              }
+            },
+            "description": "Click “Fetch schema” in the Body tab to browse the API."
+          }
+        }
+      ]
+    },
+    {
       "name": "Responses",
       "item": [
         {

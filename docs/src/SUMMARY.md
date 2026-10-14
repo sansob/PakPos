@@ -18,6 +18,7 @@
 - [Test & extraction language](reference/tests.md)
 - [Variables](reference/variables.md)
 - [OAuth 2.0](reference/oauth2.md)
+- [GraphQL](reference/graphql.md)
 - [Command-line interface](reference/cli.md)
 - [MCP server](reference/mcp.md)
 - [Workspace file format](reference/workspace.md)

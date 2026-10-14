@@ -169,6 +169,7 @@ pub struct PakPosApp {
     pub env_dirty: Option<Instant>,
     pub runner: Option<RunnerState>,
     pub oauth_job: Option<crate::oauth_view::OAuthJob>,
+    pub graphql: crate::graphql_view::GqlState,
     applied_theme: Option<(Theme, u32)>,
     next_uid: u64,
     pub actions: Vec<Action>,
@@ -190,6 +191,7 @@ impl PakPosApp {
             env_dirty: None,
             runner: None,
             oauth_job: None,
+            graphql: Default::default(),
             applied_theme: None,
             next_uid: 1,
             actions: Vec::new(),
@@ -765,6 +767,7 @@ impl eframe::App for PakPosApp {
         self.poll_responses();
         self.poll_runner();
         self.poll_oauth();
+        self.poll_graphql();
         if let Some(t) = self.env_dirty {
             if t.elapsed() > Duration::from_millis(600) {
                 self.persist_environments();
@@ -794,7 +797,10 @@ impl eframe::App for PakPosApp {
         self.show_toasts(&ctx);
         self.apply_actions(&ctx);
 
-        if self.oauth_job.is_some() || self.tabs.iter().any(|t| matches!(t.response, ResponseState::Loading { .. })) {
+        if self.oauth_job.is_some()
+            || self.graphql.job.is_some()
+            || self.tabs.iter().any(|t| matches!(t.response, ResponseState::Loading { .. }))
+        {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         if self.env_dirty.is_some() {

@@ -5,12 +5,12 @@
   "items": [
     {
       "kind": "folder",
-      "id": "45b0f477-8f5b-4813-b5a2-f654baf854e0",
+      "id": "bd1db8c8-81ef-4974-a5f0-84153c4cc1d3",
       "name": "Basics",
       "items": [
         {
           "kind": "request",
-          "id": "3dff918c-baf9-4403-bbac-52adbb097436",
+          "id": "06ed4171-3a1f-4b78-8340-b8f757dba4ea",
           "name": "Get with query params",
           "method": "GET",
           "url": "{{base_url}}/get",
@@ -63,7 +63,7 @@
         },
         {
           "kind": "request",
-          "id": "6ef2b8c6-c3c5-48f0-be6e-15e66568dece",
+          "id": "80fb11e8-5482-4844-98b0-e472d6ac1452",
           "name": "Create user (JSON)",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -98,7 +98,7 @@
         },
         {
           "kind": "request",
-          "id": "7e239b7f-1f35-420b-906d-6da6d6a7b941",
+          "id": "f42a8431-009b-4134-aae4-1b0eff2c1546",
           "name": "Submit form",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -131,7 +131,7 @@
         },
         {
           "kind": "request",
-          "id": "8b71c528-452b-4038-92ab-6598c0c15fa8",
+          "id": "83931179-4762-4d6d-a161-f5a37c1ac85c",
           "name": "Update user",
           "method": "PUT",
           "url": "{{base_url}}/put",
@@ -146,7 +146,7 @@
         },
         {
           "kind": "request",
-          "id": "00650240-3089-4630-8ecd-8c21d197d4e1",
+          "id": "de131592-55ff-4bd4-b287-dc1a1ef95420",
           "name": "Patch user",
           "method": "PATCH",
           "url": "{{base_url}}/patch",
@@ -161,7 +161,7 @@
         },
         {
           "kind": "request",
-          "id": "5e6bace2-698f-40e6-8631-1c0ff5e3cc7c",
+          "id": "dc9e0385-e5de-46a4-89a1-072c20433677",
           "name": "Delete user",
           "method": "DELETE",
           "url": "{{base_url}}/delete",
@@ -187,12 +187,12 @@
     },
     {
       "kind": "folder",
-      "id": "b9cc6ac3-d366-47c5-ae95-cde2a91e15d4",
+      "id": "74553db5-44c2-465a-b1a9-3a8175a3671f",
       "name": "Auth",
       "items": [
         {
           "kind": "request",
-          "id": "84803d07-e873-4474-b816-b783d0da7487",
+          "id": "c887ee12-fa05-468e-92cd-f7b28096359b",
           "name": "Bearer token",
           "method": "GET",
           "url": "{{base_url}}/bearer",
@@ -214,7 +214,7 @@
         },
         {
           "kind": "request",
-          "id": "455dc89e-a898-4a5c-b323-2f043f08f74a",
+          "id": "948637ab-7d85-49e8-b64f-950d16ccd4ae",
           "name": "Basic auth",
           "method": "GET",
           "url": "{{base_url}}/basic-auth/pakpos/rahasia",
@@ -237,7 +237,7 @@
         },
         {
           "kind": "request",
-          "id": "ab79eecc-5f8c-4818-8b46-5450a1b7bba5",
+          "id": "036a4242-1969-458e-a57f-542c324d671e",
           "name": "Profile (OAuth 2.0)",
           "method": "GET",
           "url": "{{base_url}}/oauth/me",
@@ -280,12 +280,52 @@
     },
     {
       "kind": "folder",
-      "id": "805ea633-5389-4b71-9e6d-c762f2016b4c",
+      "id": "2dc63b43-a971-4810-9bb4-ef5389c3c461",
+      "name": "GraphQL",
+      "items": [
+        {
+          "kind": "request",
+          "id": "e94f1d80-f6ba-489f-b4f5-245cb562d5c7",
+          "name": "Users by city (GraphQL)",
+          "method": "POST",
+          "url": "{{base_url}}/graphql",
+          "body": {
+            "mode": "graphql",
+            "query": "query Users($city: String) {\n  users(city: $city) {\n    id\n    name\n    city\n  }\n}\n",
+            "variables": "{ \"city\": \"Jakarta\" }"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "json.errors",
+              "op": "not_exists",
+              "expected": ""
+            },
+            {
+              "enabled": true,
+              "target": "json.data.users[0].city",
+              "op": "equals",
+              "expected": "Jakarta"
+            }
+          ],
+          "description": "Click “Fetch schema” in the Body tab to browse the API."
+        }
+      ],
+      "auth": {
+        "type": "inherit"
+      }
+    },
+    {
+      "kind": "folder",
+      "id": "1687fd9e-a74c-416b-8048-6c120c01f0f3",
       "name": "Responses",
       "items": [
         {
           "kind": "request",
-          "id": "a8d92a64-ae30-4972-bfa2-a61339e16eb9",
+          "id": "0a4e945e-3c5f-4c2a-b715-4480c22408f8",
           "name": "Get UUID (extract)",
           "method": "GET",
           "url": "{{base_url}}/uuid",
@@ -313,7 +353,7 @@
         },
         {
           "kind": "request",
-          "id": "b7535d87-3848-451f-a01b-19913c4d3b31",
+          "id": "af416f5e-e69a-4eb6-a63f-2cdae04e5da2",
           "name": "JSON document",
           "method": "GET",
           "url": "{{base_url}}/json",
@@ -334,7 +374,7 @@
         },
         {
           "kind": "request",
-          "id": "a9caaad2-2c51-47d1-8463-12f34ad2d32a",
+          "id": "2464e0ee-c643-457a-905a-ab9fe4da1c2b",
           "name": "Expect 404",
           "method": "GET",
           "url": "{{base_url}}/status/404",
