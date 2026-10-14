@@ -22,6 +22,7 @@ pub const YELLOW: Color32 = Color32::from_rgb(0xF2, 0xC1, 0x4E);
 pub const BLUE: Color32 = Color32::from_rgb(0x5B, 0x9B, 0xF8);
 pub const PURPLE: Color32 = Color32::from_rgb(0xA7, 0x8B, 0xFA);
 pub const TEAL: Color32 = Color32::from_rgb(0x2B, 0xB3, 0xC0);
+pub const LIME: Color32 = Color32::from_rgb(0x9B, 0xD8, 0x5C);
 pub const PINK: Color32 = Color32::from_rgb(0xE3, 0x6D, 0xB8);
 
 /// Colours derived from the current theme, used by custom widgets.
@@ -97,6 +98,7 @@ pub fn badge(r: &pakpos_core::Request) -> (&'static str, Color32) {
     match r.kind {
         pakpos_core::model::RequestKind::Http => (method_short(r.method), method_color(r.method)),
         pakpos_core::model::RequestKind::WebSocket => ("WS", TEAL),
+        pakpos_core::model::RequestKind::Grpc => ("gRPC", LIME),
     }
 }
 

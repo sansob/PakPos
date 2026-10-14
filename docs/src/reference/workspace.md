@@ -51,7 +51,8 @@ stopping the app.
 
 - `url` never contains the query string; query parameters live in `params`.
 - `protocol` is omitted for HTTP; `"websocket"` marks a WebSocket request (its raw
-  `body` is the message draft).
+  `body` is the message draft) and `"grpc"` a gRPC call, with
+  `grpc: { method, proto_files, import_paths }` and the JSON message in the raw `body`.
 - `examples` is a list of saved responses (`name`, `status`, `headers`, `body`)
   served by the mock server.
 - `scripts` (`pre_request`, `test`) holds JavaScript; it may also appear on

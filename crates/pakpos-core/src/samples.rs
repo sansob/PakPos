@@ -129,6 +129,14 @@ pub fn demo_collection() -> Collection {
     };
     scripted.description = "Postman-style pm.* scripts, run in a sandbox. Collections you import must be trusted before their scripts run.".into();
 
+    let mut grpc_req = req("Health check (gRPC)", HttpMethod::Post, "{{grpc_url}}");
+    grpc_req.kind = crate::model::RequestKind::Grpc;
+    grpc_req.grpc =
+        Some(crate::model::GrpcConfig { method: "grpc.health.v1.Health/Check".into(), ..Default::default() });
+    grpc_req.body = Body::Raw { content: "{\n  \"service\": \"pakpos.demo\"\n}".into(), language: RawLanguage::Json };
+    grpc_req.assertions = vec![test("status", Operator::Equals, "0"), test("json.status", Operator::Exists, "")];
+    grpc_req.description = "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send.".into();
+
     let mut basics = Folder::new("Basics");
     basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
@@ -138,7 +146,7 @@ pub fn demo_collection() -> Collection {
     let mut graphql = Folder::new("GraphQL");
     graphql.items = vec![Item::Request(gql)];
     let mut realtime = Folder::new("Realtime");
-    realtime.items = vec![Item::Request(ws)];
+    realtime.items = vec![Item::Request(ws), Item::Request(grpc_req)];
 
     let mut c = Collection::new("PakPos Demo");
     c.description =
@@ -160,6 +168,7 @@ pub fn demo_environment(base_url: &str) -> Environment {
     env.set("base_url", base_url);
     env.set("token", "pakpos-demo-token");
     env.set("ws_url", crate::ws::to_ws_url(base_url));
+    env.set("grpc_url", "grpc://127.0.0.1:50051");
     env
 }
 
@@ -168,7 +177,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 15);
+        assert_eq!(c.request_count(), 16);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

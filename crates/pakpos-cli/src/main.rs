@@ -78,6 +78,35 @@ enum Command {
         #[arg(long)]
         timeout: Option<u64>,
     },
+    /// Call a gRPC method (JSON in, JSON out) or list a server's methods.
+    Grpc {
+        /// grpc://host:port, grpcs://host (TLS) or host:port.
+        url: String,
+        /// package.Service/Method. Omit to list the available methods.
+        method: Option<String>,
+        /// Request message as JSON (use @file to read it from a file).
+        #[arg(short, long, default_value = "{}")]
+        data: String,
+        /// .proto file (repeatable). Without it, server reflection is used.
+        #[arg(long = "proto")]
+        protos: Vec<String>,
+        /// Import path for --proto (repeatable).
+        #[arg(short = 'I', long = "import-path")]
+        import_paths: Vec<String>,
+        /// Metadata "name: value" (repeatable), e.g. authorization.
+        #[arg(short = 'H', long = "header")]
+        headers: Vec<String>,
+        #[arg(short, long)]
+        environment: Option<String>,
+        #[arg(long = "var", value_parser = parse_kv)]
+        vars: Vec<(String, String)>,
+        /// Stop a stream after this many messages.
+        #[arg(long, default_value_t = 100)]
+        max_messages: usize,
+        /// Print an example request message instead of calling.
+        #[arg(long)]
+        template: bool,
+    },
     /// Serve the saved examples of a collection as a mock API.
     Mock {
         /// Collection file (PakPos or Postman JSON) or workspace collection name.
@@ -301,6 +330,21 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
         Command::Ws { url, headers, environment, vars, send, timeout } => {
             cmd_ws(url, headers, environment, vars, send, timeout, style)
         }
+        Command::Grpc {
+            url,
+            method,
+            data,
+            protos,
+            import_paths,
+            headers,
+            environment,
+            vars,
+            max_messages,
+            template,
+        } => cmd_grpc(
+            GrpcArgs { url, method, data, protos, import_paths, headers, environment, vars, max_messages, template },
+            style,
+        ),
         Command::Mock { collection, port, host, delay } => cmd_mock(&collection, &host, port, delay, style),
         Command::Workspace => {
             let (ws, errors) = Workspace::load(storage::default_root());
@@ -654,4 +698,75 @@ fn cmd_mock(collection: &str, host: &str, port: u16, delay: u64, style: &Style) 
         );
     }
     Ok(ExitCode::SUCCESS)
+}
+
+struct GrpcArgs {
+    url: String,
+    method: Option<String>,
+    data: String,
+    protos: Vec<String>,
+    import_paths: Vec<String>,
+    headers: Vec<String>,
+    environment: Option<String>,
+    vars: Vec<(String, String)>,
+    max_messages: usize,
+    template: bool,
+}
+
+fn cmd_grpc(a: GrpcArgs, style: &Style) -> Result<ExitCode> {
+    use pakpos_core::grpc;
+    let env = match &a.environment {
+        Some(e) => Some(load_env(e)?.0),
+        None => None,
+    };
+    let (ws, _) = Workspace::load(storage::default_root());
+    let mut scope = VarScope::new().with_environment(env.as_ref()).with_globals(&ws.globals);
+    for (k, v) in a.vars {
+        scope.runtime.insert(k, v);
+    }
+    let url = scope.resolve(&a.url);
+    let settings = HttpSettings::default();
+    let cfg = pakpos_core::model::GrpcConfig {
+        method: a.method.clone().unwrap_or_default(),
+        proto_files: a.protos,
+        import_paths: a.import_paths,
+    };
+    let pool = grpc::load_pool(&cfg, &url, &settings)?;
+    let Some(method) = a.method else {
+        for m in grpc::methods(&pool) {
+            println!(
+                "{}  {}",
+                style.bold(&m.full_name),
+                style.dim(&format!("{} → {} · {}", m.input, m.output, m.kind_label()))
+            );
+        }
+        return Ok(ExitCode::SUCCESS);
+    };
+    if a.template {
+        println!("{}", grpc::request_template(&pool, &method)?);
+        return Ok(ExitCode::SUCCESS);
+    }
+    let data = match a.data.strip_prefix('@') {
+        Some(file) => std::fs::read_to_string(file).with_context(|| format!("reading {file}"))?,
+        None => a.data,
+    };
+    let mut metadata = Vec::new();
+    for h in &a.headers {
+        let (k, v) = h.split_once(':').with_context(|| format!("metadata must be `name: value`, got `{h}`"))?;
+        metadata.push((scope.resolve(k.trim()), scope.resolve(v.trim())));
+    }
+    let r = grpc::call(&url, &pool, &method, &scope.resolve(&data), &metadata, &settings, a.max_messages)?;
+    let status = if r.is_ok() {
+        style.green(&format!("{} {}", r.code, r.code_name))
+    } else {
+        style.red(&format!("{} {}", r.code, r.code_name))
+    };
+    eprintln!("{status}  {}", style.dim(&format!("{} ms · {} message(s)", r.elapsed_ms, r.messages.len())));
+    if !r.status_message.is_empty() {
+        eprintln!("{}", style.dim(&r.status_message));
+    }
+    for m in &r.messages {
+        println!("{m}");
+    }
+    Ok(if r.is_ok() { ExitCode::SUCCESS } else { ExitCode::from(1) })
 }

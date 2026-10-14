@@ -16,6 +16,11 @@
       "key": "ws_url",
       "value": "ws://127.0.0.1:8787",
       "enabled": true
+    },
+    {
+      "key": "grpc_url",
+      "value": "grpc://127.0.0.1:50051",
+      "enabled": true
     }
   ]
 }

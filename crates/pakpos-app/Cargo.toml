@@ -28,6 +28,7 @@ egui_extras = { version = "0.36", features = ["syntect"] }
 rfd = "0.17"
 webbrowser = "1"
 reqwest.workspace = true
+prost-reflect.workspace = true
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 

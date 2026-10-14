@@ -131,6 +131,7 @@ impl PakPosApp {
         let mut gql_action = None;
         let mut ws_action = None;
         let mut script_action = None;
+        let mut grpc_action = None;
         let (script_trust, inherited_scripts, source_collection) = {
             let t = &self.tabs[idx];
             match t.source.as_ref().and_then(|(c, _)| self.collection(c)) {
@@ -199,6 +200,23 @@ impl PakPosApp {
                                 }
                             }
                             ui.separator();
+                            let g = tab.request.kind == RequestKind::Grpc;
+                            if ui
+                                .selectable_label(g, RichText::new("gRPC").strong().monospace().color(theme::LIME))
+                                .clicked()
+                                && !g
+                            {
+                                tab.request.kind = RequestKind::Grpc;
+                                tab.request.grpc.get_or_insert_with(Default::default);
+                                if !matches!(tab.section, ReqSection::Auth | ReqSection::Headers | ReqSection::Docs) {
+                                    tab.section = ReqSection::Body;
+                                }
+                                if tab.request.url.is_empty() {
+                                    tab.request.url = "grpc://localhost:50051".into();
+                                    tab.url_edit = tab.request.url.clone();
+                                }
+                                changed = true;
+                            }
                             let ws = tab.request.kind == RequestKind::WebSocket;
                             if ui
                                 .selectable_label(
@@ -305,6 +323,21 @@ impl PakPosApp {
             (ReqSection::Examples, widgets::counted("Examples", r.examples.len())),
             (ReqSection::Docs, "Docs".to_string()),
         ];
+        if r.kind == RequestKind::Grpc {
+            items.retain(|(s, _)| !matches!(s, ReqSection::Params | ReqSection::Scripts | ReqSection::Examples));
+            for (s, label) in items.iter_mut() {
+                match s {
+                    ReqSection::Headers => {
+                        *label = widgets::counted("Metadata", r.headers.iter().filter(|k| !k.is_blank()).count())
+                    }
+                    ReqSection::Body => *label = "Message".into(),
+                    _ => {}
+                }
+            }
+            if tab.section == ReqSection::Params {
+                tab.section = ReqSection::Body;
+            }
+        }
         if r.kind == RequestKind::WebSocket {
             items.retain(|(s, _)| {
                 !matches!(s, ReqSection::Tests | ReqSection::Extract | ReqSection::Scripts | ReqSection::Examples)
@@ -352,6 +385,18 @@ impl PakPosApp {
                         oauth_job,
                         &mut oauth_action,
                     )
+                }
+                ReqSection::Body if tab.request.kind == RequestKind::Grpc => {
+                    let cfg = tab.request.grpc.get_or_insert_with(Default::default);
+                    changed |= crate::grpc_view::editor(
+                        ui,
+                        cfg,
+                        &mut tab.request.body,
+                        &tab.grpc,
+                        tab.uid,
+                        &p,
+                        &mut grpc_action,
+                    );
                 }
                 ReqSection::Body if tab.request.kind == RequestKind::WebSocket => {
                     changed |=
@@ -404,6 +449,10 @@ impl PakPosApp {
         }
         if let (Some(crate::scripts_view::ScriptAction::Trust), Some(cid)) = (script_action, source_collection) {
             self.trust_collection(&cid);
+        }
+        if let Some(a) = grpc_action {
+            let ctx = ui.ctx().clone();
+            self.handle_grpc_action(idx, a, &ctx);
         }
         if let Some(a) = ws_action {
             let ctx = ui.ctx().clone();

@@ -10,6 +10,7 @@ Commands:
   export     Export a PakPos collection as Postman v2.1
   curl       Convert a cURL command into a PakPos request (JSON) or a code snippet
   ws         Open a WebSocket: stdin lines are sent, messages are printed
+  grpc       Call a gRPC method (JSON in/out) or list a server's methods
   mock       Serve the saved examples of a collection as a mock API
   workspace  Print the workspace location and its contents
   mcp        Start a Model Context Protocol (MCP) server on stdio
@@ -59,6 +60,15 @@ pakpos-cli ws <URL> [-H 'Name: value']... [-e ENV] [--var k=v]... [-s MESSAGE]..
 ```
 
 See [WebSocket](websocket.md).
+
+## grpc
+
+```text
+pakpos-cli grpc <URL> [METHOD] [-d JSON|@file] [--proto FILE]... [-I DIR]... [-H 'k: v']...
+                [-e ENV] [--var k=v]... [--max-messages N] [--template]
+```
+
+See [gRPC](grpc.md).
 
 ## mock
 

@@ -25,6 +25,11 @@ All notable changes to this project are documented here. The format follows
   "Start mock server" in the app) with path parameters, example selection via
   `x-mock-response-code` / `x-mock-response-name`, CORS and a request log.
   Postman examples are imported and exported.
+- gRPC requests with dynamic messages: service descriptions from server
+  reflection or `.proto` files (compiled in-process), unary / server / client /
+  bidirectional streaming, metadata and auth, JSON templates, status and
+  trailers in the response, tests on gRPC responses; `pakpos-cli grpc`; a demo
+  server example.
 
 ## [0.1.0-rc.1] - 2026-10-14
 

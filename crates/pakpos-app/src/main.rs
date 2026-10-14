@@ -6,6 +6,7 @@ mod actions;
 mod app;
 mod dialogs;
 mod graphql_view;
+mod grpc_view;
 mod mock_view;
 mod oauth_view;
 mod request_view;

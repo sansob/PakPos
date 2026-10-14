@@ -5,12 +5,12 @@
   "items": [
     {
       "kind": "folder",
-      "id": "81d17177-0d48-4dac-a64c-07d8ebb07e4f",
+      "id": "3b2da6d4-8ce2-44ee-a19e-9061b6b0a15a",
       "name": "Basics",
       "items": [
         {
           "kind": "request",
-          "id": "e317cf71-74ed-4474-85b7-18affd4dccf6",
+          "id": "7ccff33d-e314-4f79-b3b7-a41f23a4c75f",
           "name": "Get with query params",
           "method": "GET",
           "url": "{{base_url}}/get",
@@ -63,7 +63,7 @@
         },
         {
           "kind": "request",
-          "id": "ec038d93-862b-4d8b-babe-e28297b60bdc",
+          "id": "8fa59ff8-1e72-4a59-918e-c8b2ef2da8b4",
           "name": "Create user (JSON)",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -97,7 +97,7 @@
           ],
           "examples": [
             {
-              "id": "facf21bd-e7d8-4f56-b9c9-073de8bd4ff9",
+              "id": "1f8f8392-8f19-4dbf-b508-1b0b744f6f1e",
               "name": "Created",
               "status": 201,
               "headers": [
@@ -110,7 +110,7 @@
               "body": "{\n  \"id\": \"usr_1001\",\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\"\n}"
             },
             {
-              "id": "7ae56d70-cc22-40f9-a4c2-86c30b14b165",
+              "id": "eb872c80-22c0-4662-a8f8-691b115e167b",
               "name": "Validation error",
               "status": 422,
               "headers": [
@@ -126,7 +126,7 @@
         },
         {
           "kind": "request",
-          "id": "d99b7741-d854-4257-9d92-cce11962d782",
+          "id": "10c0a6a3-610d-4a40-aa69-e7d01cf75365",
           "name": "Submit form",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -159,7 +159,7 @@
         },
         {
           "kind": "request",
-          "id": "ac58940f-9d61-4905-8a45-2cbcc3b1f9c7",
+          "id": "2c8a3be1-8996-47f3-a682-702a906c68bc",
           "name": "Update user",
           "method": "PUT",
           "url": "{{base_url}}/put",
@@ -174,7 +174,7 @@
         },
         {
           "kind": "request",
-          "id": "bed27850-50a6-4744-be0a-5e942ae61515",
+          "id": "28dd2f5c-b037-4e0b-b80d-9e30f62b6832",
           "name": "Patch user",
           "method": "PATCH",
           "url": "{{base_url}}/patch",
@@ -189,7 +189,7 @@
         },
         {
           "kind": "request",
-          "id": "b8d4f44b-4600-48a7-b073-f42a0c0f9270",
+          "id": "69e0367d-180d-48fe-b109-5c4c3c2eb3e0",
           "name": "Delete user",
           "method": "DELETE",
           "url": "{{base_url}}/delete",
@@ -215,12 +215,12 @@
     },
     {
       "kind": "folder",
-      "id": "7a357cf3-5f8f-4728-8dbf-d2788e0c849a",
+      "id": "5de9ffa4-d433-41b8-978a-df7ac6033270",
       "name": "Auth",
       "items": [
         {
           "kind": "request",
-          "id": "d7e6f9cb-e902-44da-b733-d7b553cb3964",
+          "id": "3f89c0d4-cacb-4754-8725-35ef0f147e8c",
           "name": "Bearer token",
           "method": "GET",
           "url": "{{base_url}}/bearer",
@@ -242,7 +242,7 @@
         },
         {
           "kind": "request",
-          "id": "5dea9e96-8c47-468a-ad6a-f5aff843f59e",
+          "id": "07ff5412-f246-457d-83ac-5a00055c5cd6",
           "name": "Basic auth",
           "method": "GET",
           "url": "{{base_url}}/basic-auth/pakpos/rahasia",
@@ -265,7 +265,7 @@
         },
         {
           "kind": "request",
-          "id": "0d1d18db-bb4e-4802-9f44-a23657f99901",
+          "id": "f45bee18-da9e-40c2-b5d9-11b813c49619",
           "name": "Profile (OAuth 2.0)",
           "method": "GET",
           "url": "{{base_url}}/oauth/me",
@@ -308,12 +308,12 @@
     },
     {
       "kind": "folder",
-      "id": "98873fd9-1f3e-4f9f-ad53-210631a187f2",
+      "id": "aed99466-7262-41a8-9921-1ce6e4ac591b",
       "name": "GraphQL",
       "items": [
         {
           "kind": "request",
-          "id": "eef7bf8f-c2d2-446b-bd2d-e6c067a5de82",
+          "id": "740237bc-c4d4-4aa1-994d-89c07ce6f74f",
           "name": "Users by city (GraphQL)",
           "method": "POST",
           "url": "{{base_url}}/graphql",
@@ -348,12 +348,12 @@
     },
     {
       "kind": "folder",
-      "id": "3f94e640-91b9-419b-9d34-5666f96f5399",
+      "id": "7872a5d7-4b53-4c0c-bc57-a58dec2374a0",
       "name": "Realtime",
       "items": [
         {
           "kind": "request",
-          "id": "d0ba4643-3988-4f42-a167-1bda5a7966ef",
+          "id": "6ef43536-d097-4ae6-8300-785508eb5962",
           "name": "Live prices (WebSocket)",
           "protocol": "websocket",
           "method": "GET",
@@ -368,6 +368,40 @@
             "token": "{{token}}"
           },
           "description": "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds."
+        },
+        {
+          "kind": "request",
+          "id": "7857a668-2626-4689-8f08-bb7868fa70a3",
+          "name": "Health check (gRPC)",
+          "protocol": "grpc",
+          "method": "POST",
+          "url": "{{grpc_url}}",
+          "body": {
+            "mode": "raw",
+            "content": "{\n  \"service\": \"pakpos.demo\"\n}",
+            "language": "json"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "0"
+            },
+            {
+              "enabled": true,
+              "target": "json.status",
+              "op": "exists",
+              "expected": ""
+            }
+          ],
+          "grpc": {
+            "method": "grpc.health.v1.Health/Check"
+          },
+          "description": "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send."
         }
       ],
       "auth": {
@@ -376,12 +410,12 @@
     },
     {
       "kind": "folder",
-      "id": "d9492298-ade8-4952-b579-9b4c6043ee48",
+      "id": "50161352-ad08-468a-ba93-22a5822f1780",
       "name": "Responses",
       "items": [
         {
           "kind": "request",
-          "id": "616f3950-8191-4be9-b2f5-a49051964be0",
+          "id": "0b0cbcf3-11fb-4be5-a64c-d634f2b67056",
           "name": "Get UUID (extract)",
           "method": "GET",
           "url": "{{base_url}}/uuid",
@@ -408,7 +442,7 @@
           ],
           "examples": [
             {
-              "id": "1906d0c7-a146-4120-b545-eb2b75bf374e",
+              "id": "2050d2a2-8f99-4b2a-886d-2e47ddcd1d0d",
               "name": "Random UUID",
               "status": 200,
               "headers": [
@@ -424,7 +458,7 @@
         },
         {
           "kind": "request",
-          "id": "6aaaf2b2-b8c4-4808-b475-20ac2e3ab363",
+          "id": "641a0333-1cbb-4c35-8ed5-cdcb8334168a",
           "name": "JSON document",
           "method": "GET",
           "url": "{{base_url}}/json",
@@ -445,7 +479,7 @@
         },
         {
           "kind": "request",
-          "id": "7026f0a6-c377-48a4-9e43-02a8411f2341",
+          "id": "a0eb87a3-6bc0-432b-9162-7bd995f3093e",
           "name": "Expect 404",
           "method": "GET",
           "url": "{{base_url}}/status/404",
@@ -466,7 +500,7 @@
         },
         {
           "kind": "request",
-          "id": "c18fed37-0438-4882-8b2e-3780e3d0f560",
+          "id": "787e02bf-c350-45b0-8202-46d482988421",
           "name": "Scripted checks (JavaScript)",
           "method": "GET",
           "url": "{{base_url}}/json",

@@ -102,6 +102,12 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].section = ReqSection::Auth;
             app.send(app.active, ctx);
         }
+        "grpc" => {
+            open_by_name(app, "Health check (gRPC)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.grpc_load(app.active, ctx);
+            app.send(app.active, ctx);
+        }
         "mock" => {
             open_by_name(app, "Create user (JSON)");
             app.tabs[app.active].section = ReqSection::Examples;
@@ -158,6 +164,9 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
     match name {
         "runner" => app.runner.as_ref().is_some_and(|r| r.report.is_some()),
         "environments" | "curl" | "snippet" | "settings" => true,
+        "grpc" => app.tabs.get(app.active).is_some_and(|t| {
+            t.grpc.job.is_none() && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))
+        }),
         "mock" => app.mock.as_ref().is_some_and(|m| m.hits.len() >= 4),
         "websocket" => app.tabs.get(app.active).is_some_and(|t| t.ws.log.iter().any(|e| e.text.contains("\"tick\""))),
         "graphql" => {

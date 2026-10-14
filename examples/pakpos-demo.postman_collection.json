@@ -349,6 +349,27 @@
             },
             "description": "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds."
           }
+        },
+        {
+          "name": "Health check (gRPC)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{grpc_url}}",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service\": \"pakpos.demo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send."
+          }
         }
       ]
     },

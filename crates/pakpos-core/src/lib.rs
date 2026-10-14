@@ -17,6 +17,7 @@
 pub mod assertions;
 pub mod codegen;
 pub mod graphql;
+pub mod grpc;
 pub mod http;
 pub mod mock;
 pub mod model;

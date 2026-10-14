@@ -561,6 +561,23 @@ pub enum RequestKind {
     /// URL, params, headers and auth are used for the upgrade; the raw body is
     /// the message composer draft.
     WebSocket,
+    /// gRPC call: `grpc` holds the method, the raw body is the JSON message and
+    /// headers are sent as metadata.
+    Grpc,
+}
+
+/// Settings of a gRPC request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct GrpcConfig {
+    /// Fully qualified method, e.g. `helloworld.Greeter/SayHello`.
+    #[serde(default)]
+    pub method: String,
+    /// `.proto` files describing the service. Empty means: use server reflection.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub proto_files: Vec<String>,
+    /// Import paths for the `.proto` files (their own folders are always included).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub import_paths: Vec<String>,
 }
 
 impl RequestKind {
@@ -598,6 +615,8 @@ pub struct Request {
     /// Saved responses (served by the mock server).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub examples: Vec<Example>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grpc: Option<GrpcConfig>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
@@ -618,6 +637,7 @@ impl Default for Request {
             extractions: Vec::new(),
             scripts: Scripts::default(),
             examples: Vec::new(),
+            grpc: None,
             description: String::new(),
         }
     }
@@ -672,6 +692,9 @@ impl Folder {
 /// An entry in a collection tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
+// Both variants are large and trees hold at most a few thousand items, so
+// boxing would add indirection everywhere for no measurable gain.
+#[allow(clippy::large_enum_variant)]
 pub enum Item {
     Folder(Folder),
     Request(Request),
