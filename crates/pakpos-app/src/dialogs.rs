@@ -492,6 +492,10 @@ impl PakPosApp {
                 let r = egui::Modal::new(Id::new("about")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(420.0);
                     ui.vertical_centered(|ui| {
+                        ui.add(
+                            egui::Image::new(egui::include_image!("../../../assets/icon-256.png"))
+                                .fit_to_exact_size(egui::vec2(96.0, 96.0)),
+                        );
                         ui.horizontal(|ui| {
                             ui.add_space(130.0);
                             ui.label(RichText::new("Pak").size(30.0).strong().color(theme::ORANGE));

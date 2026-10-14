@@ -61,6 +61,9 @@ All notable changes to this project are documented here. The format follows
   folders or to another collection; open tabs follow moved requests.
 
 ### Changed
+- New app icon: Pak Pos himself (navy cap with an envelope, on orange), also in
+  the header and the About dialog. `assets/icon.svg` is the source;
+  `scripts/make_icons.py` renders every size, `.ico` and `.icns` from it.
 - Dark theme: neutral near-black surfaces instead of navy (the light theme keeps
   its navy header).
 
