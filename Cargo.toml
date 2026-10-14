@@ -4,7 +4,7 @@ members = ["crates/pakpos-core", "crates/pakpos-cli", "crates/pakpos-app"]
 default-members = ["crates/pakpos-core", "crates/pakpos-cli", "crates/pakpos-app"]
 
 [workspace.package]
-version = "0.2.0-rc.1"
+version = "0.3.0-rc.1"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -15,7 +15,7 @@ keywords = ["http", "api", "rest", "postman", "client"]
 categories = ["development-tools", "web-programming::http-client"]
 
 [workspace.dependencies]
-pakpos-core = { path = "crates/pakpos-core", version = "0.2.0-rc.1" }
+pakpos-core = { path = "crates/pakpos-core", version = "0.3.0-rc.1" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
