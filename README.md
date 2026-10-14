@@ -41,25 +41,43 @@ out and brings the reply back. That's the whole job.
 ## What it can do today
 
 You can send any common HTTP method with query params, headers, and JSON, form,
-multipart or binary bodies. Basic, Bearer and API-key auth are built in, and a
-request can inherit auth from its folder or collection, so you set your token
-once instead of forty times.
+multipart, binary or GraphQL bodies. Basic, Bearer, API-key and OAuth 2.0 auth
+are built in (client credentials, password, and the browser login with PKCE),
+and a request can inherit auth from its folder or collection, so you set your
+token once instead of forty times. OAuth tokens are fetched and refreshed for
+you, and they live in a local file, never in the collection you share.
+
+It isn't only HTTP. A request can be a **WebSocket** (connect, send messages,
+watch the live log) or a **gRPC** call: PakPos reads the service from server
+reflection or your `.proto` files, gives you a JSON template for the message,
+and shows the reply, streaming included. GraphQL gets a schema explorer, so you
+can click your way to a starter query instead of reading SDL.
 
 Requests live in collections with folders. Environments hold variables like
 `{{base_url}}` and `{{token}}`: switch from Staging to Production in the header
 and every request follows. Variables light up green when they resolve and red
 when they don't, which saves a surprising amount of head-scratching.
 
-Instead of JavaScript test scripts, PakPos uses small declarative checks such as
-`status equals 200`, `json.data.id exists` or `time less than 500`. You can also
-pull a value out of a response (say `json.token`) into a variable and use it in
-the next request, which is all most login flows need. Because tests are data,
-not code, running a teammate's collection never runs their code on your machine.
+For checking responses you have two options. Small declarative checks such as
+`status equals 200`, `json.data.id exists` or `time less than 500` cover most
+needs and are easy to review in a diff. When you need more, write
+Postman-style JavaScript (`pm.test`, `pm.expect`, `pm.environment.set`…). It
+runs in a sandbox with no file or network access, and scripts from a collection
+you imported only run after you say you trust it.
+
+Save a response as an **example** and PakPos can serve those examples as a mock
+API, which is handy when the frontend is ready before the backend is.
 
 Already on Postman? Export your collection (v2.1) and environments and import
-them here; most things come across as-is. You can also paste a `curl` command
-straight into the URL bar, and go the other way with the `</>` button to get
-cURL, Python, JavaScript or HTTPie snippets.
+them here: folders, auth (OAuth 2.0 too), GraphQL bodies, scripts and saved
+examples come across. You can also paste a `curl` command straight into the URL
+bar, and go the other way with the `</>` button to get cURL, Python, JavaScript
+or HTTPie snippets.
+
+There's no cloud, on purpose. When the team wants to share, **⇅ Sync** turns
+the workspace into a git repository and commits, pulls and pushes it with the
+git you already have, so your history and access control stay on GitHub, GitLab
+or wherever your code lives.
 
 There's a light theme too, if that's your thing:
 
@@ -76,7 +94,9 @@ pakpos-cli run api/collection.json -e api/staging.json --var token=$API_TOKEN \
 ```
 
 It exits non-zero when a check fails, speaks JUnit for GitHub Actions, GitLab
-and Jenkins, and happily reads Postman files too.
+and Jenkins, and happily reads Postman files too. The CLI also does the rest
+from a terminal: `pakpos-cli grpc` calls gRPC methods, `pakpos-cli ws` opens a
+WebSocket, and `pakpos-cli mock` serves a collection's examples.
 
 ## Letting an AI agent use your requests
 
@@ -109,19 +129,20 @@ The first launch creates a small demo collection, so you have something to press
 
 ## What it doesn't do (yet)
 
-It's a young project, so here's what's missing compared with Postman. There are
-no JavaScript pre-request or test scripts (imported ones are skipped with a
-warning), no OAuth 2.0 flows, and no GraphQL, WebSocket or gRPC request types.
-There are no mock servers either, and no cloud sync, which is deliberate: use git
-for that. The [roadmap](docs/src/roadmap.md) lists what's planned, and any of it
-is up for grabs.
+It's a young project, so to be straight about the gaps compared with Postman:
+scripts can't make network calls (`pm.sendRequest`) or load npm libraries,
+there's no interactive bidirectional gRPC streaming (inputs are sent up front)
+and no Socket.IO or MQTT, the collection runner only runs HTTP requests, and
+there are no data-driven runs from CSV yet. The builds aren't signed. The
+[roadmap](docs/src/roadmap.md) lists what's planned, and any of it is up for grabs.
 
 ## Docs
 
 The [documentation](https://sansob.github.io/PakPos/) (source in `docs/`) starts
 with six short tutorials: your first request, environments and variables, tests
-and chaining, moving from Postman, running in CI, and the MCP server. Then come
-the references for the test language, CLI and file format.
+and chaining, moving from Postman, running in CI, and the MCP server. The
+reference pages then cover each feature in depth: OAuth 2.0, GraphQL, WebSocket,
+gRPC, scripts, the mock server, Git sync, the CLI and the file format.
 
 ## Helping out
 

@@ -1,9 +1,10 @@
 # FAQ
 
 **Is PakPos a drop-in replacement for Postman?**
-For sending requests, collections, environments, basic auth types, tests and CI
-runs: mostly yes. For JavaScript scripts, OAuth 2, GraphQL/WebSocket/gRPC, mock
-servers and team cloud features: not yet (see the [roadmap](roadmap.md)).
+For most day-to-day work, yes: HTTP, GraphQL, WebSocket and gRPC requests,
+collections, environments, OAuth 2.0, tests and scripts, mock servers, CI runs and
+team sharing (through git). The gaps are listed in the [roadmap](roadmap.md):
+`pm.sendRequest` and npm libraries in scripts, data-driven runs, some auth types.
 
 **Does PakPos run Postman's JavaScript tests?**
 Yes, in a sandbox (no file, process or network access) and only for collections
