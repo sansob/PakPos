@@ -30,6 +30,7 @@ pub mod mqtt;
 pub mod oauth2;
 pub mod openapi;
 pub mod postman;
+pub mod process;
 pub mod runner;
 pub mod samples;
 pub mod scripts;
