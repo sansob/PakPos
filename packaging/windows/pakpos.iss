@@ -7,6 +7,7 @@
 #ifndef Arch
   #define Arch "x64"
 #endif
+#define SysEnvKey "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 #ifndef SourceDir
   #define SourceDir "..\..\target\release"
 #endif
@@ -53,20 +54,60 @@ Name: "{group}\PakPos"; Filename: "{app}\pakpos.exe"
 Name: "{autodesktop}\PakPos"; Filename: "{app}\pakpos.exe"; Tasks: desktopicon
 
 [Registry]
-Root: HKA; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}'))
+; Per-user install: HKCU\Environment. All-users (admin) install: the system
+; environment key; HKLM has no "Environment" key of its own.
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: (not IsAdminInstallMode) and NeedsAddPath(ExpandConstant('{app}'))
+Root: HKLM; Subkey: "{#SysEnvKey}"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: IsAdminInstallMode and NeedsAddPath(ExpandConstant('{app}'))
 
 [Run]
 Filename: "{app}\pakpos.exe"; Description: "{cm:LaunchProgram,PakPos}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+procedure PathKey(var Root: Integer; var Key: string);
+begin
+  if IsAdminInstallMode then
+  begin
+    Root := HKEY_LOCAL_MACHINE;
+    Key := '{#SysEnvKey}';
+  end
+  else
+  begin
+    Root := HKEY_CURRENT_USER;
+    Key := 'Environment';
+  end;
+end;
+
 function NeedsAddPath(Param: string): boolean;
 var
-  OrigPath: string;
+  Root: Integer;
+  Key, OrigPath: string;
 begin
-  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath) then
+  PathKey(Root, Key);
+  if not RegQueryStringValue(Root, Key, 'Path', OrigPath) then
   begin
     Result := True;
     exit;
   end;
   Result := Pos(';' + Uppercase(Param) + ';', ';' + Uppercase(OrigPath) + ';') = 0;
+end;
+
+{ Removes the install folder from PATH again on uninstall. }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Root, P: Integer;
+  Key, Path, Dir: string;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    exit;
+  PathKey(Root, Key);
+  if not RegQueryStringValue(Root, Key, 'Path', Path) then
+    exit;
+  Dir := ExpandConstant('{app}');
+  Path := ';' + Path + ';';
+  P := Pos(';' + Uppercase(Dir) + ';', Uppercase(Path));
+  if P = 0 then
+    exit;
+  Delete(Path, P, Length(Dir) + 1);
+  Path := Copy(Path, 2, Length(Path) - 2);
+  RegWriteExpandStringValue(Root, Key, 'Path', Path);
 end;
