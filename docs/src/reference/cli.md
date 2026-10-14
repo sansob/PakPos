@@ -10,6 +10,9 @@ Commands:
   export     Export a PakPos collection as Collection v2.1
   curl       Convert a cURL command into a PakPos request (JSON) or a code snippet
   ws         Open a WebSocket: stdin lines are sent, messages are printed
+  sse        Listen to Server-Sent Events
+  socketio   Connect to a Socket.IO server: print events, emit with --emit or stdin
+  mqtt       Connect to an MQTT broker: subscribe, publish
   grpc       Call a gRPC method (JSON in/out) or list a server's methods
   mock       Serve the saved examples of a collection as a mock API
   workspace  Print the workspace location and its contents
@@ -64,6 +67,18 @@ pakpos-cli ws <URL> [-H 'Name: value']... [-e ENV] [--var k=v]... [-s MESSAGE]..
 ```
 
 See [WebSocket](websocket.md).
+
+## sse / socketio / mqtt
+
+```text
+pakpos-cli sse <URL> [-H 'Name: value']... [-e ENV] [--var k=v]... [--timeout S] [-c N]
+pakpos-cli socketio <URL> [--emit 'event=json']... [--auth JSON] [--path P] [...]
+pakpos-cli mqtt <URL> [--sub 'topic[:qos]']... [--pub TOPIC [-m MSG]...] [--qos 0|1|2]
+                [--retain] [--client-id ID] [-u USER --password PW] [-k]
+                [--cert PEM [--key PEM]] [--cacert PEM] [...]
+```
+
+See [SSE, Socket.IO and MQTT](realtime.md).
 
 ## grpc
 

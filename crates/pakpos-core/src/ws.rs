@@ -1,5 +1,8 @@
 //! WebSocket client running on a background thread, driven over channels so
 //! both the GUI and the CLI can use it without an async runtime.
+//!
+//! The same handle, commands and events are used by the other realtime
+//! protocols: [`crate::sse`], [`crate::socketio`] and [`crate::mqtt`].
 
 use crate::http::PreparedRequest;
 use chrono::{DateTime, Utc};
@@ -18,10 +21,24 @@ pub enum Direction {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WsEvent {
-    Connected { status: u16, headers: Vec<(String, String)> },
-    Message { direction: Direction, text: String, binary: bool, at: DateTime<Utc> },
+    Connected {
+        status: u16,
+        headers: Vec<(String, String)>,
+    },
+    Message {
+        direction: Direction,
+        text: String,
+        binary: bool,
+        at: DateTime<Utc>,
+        /// Socket.IO event name, MQTT topic or SSE event type.
+        label: Option<String>,
+    },
     Error(String),
-    Closed { reason: String },
+    /// A status note (e.g. "subscribed to sensors/#").
+    Info(String),
+    Closed {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +46,25 @@ pub enum WsCommand {
     Send(String),
     Ping,
     Close,
+    /// Socket.IO: emit `event` with a JSON (or text) payload.
+    Emit {
+        event: String,
+        data: String,
+    },
+    /// MQTT: publish a message.
+    Publish {
+        topic: String,
+        payload: String,
+        qos: u8,
+        retain: bool,
+    },
+    /// MQTT: subscribe to a topic filter.
+    Subscribe {
+        topic: String,
+        qos: u8,
+    },
+    /// MQTT: unsubscribe.
+    Unsubscribe(String),
 }
 
 /// Handle to a running connection.
@@ -70,6 +106,38 @@ fn set_timeout(ws: &WebSocket<MaybeTlsStream<TcpStream>>, t: Option<Duration>) {
     }
 }
 
+pub(crate) type Socket = WebSocket<MaybeTlsStream<TcpStream>>;
+
+/// Opens a WebSocket with extra request headers (auth already applied).
+pub(crate) fn open_socket(
+    url: &str,
+    headers: &[(String, String)],
+) -> Result<(Socket, tungstenite::handshake::client::Response), String> {
+    let mut request = url.into_client_request().map_err(|e| format!("invalid WebSocket URL `{url}`: {e}"))?;
+    for (k, v) in headers {
+        // Content-Type etc. from the editor make no sense on an upgrade.
+        if k.eq_ignore_ascii_case("content-type") {
+            continue;
+        }
+        if let (Ok(name), Ok(value)) =
+            (tungstenite::http::HeaderName::from_bytes(k.as_bytes()), tungstenite::http::HeaderValue::from_str(v))
+        {
+            request.headers_mut().append(name, value);
+        }
+    }
+    let (ws, response) = tungstenite::connect(request).map_err(|e| format!("connection failed: {e}"))?;
+    set_timeout(&ws, Some(Duration::from_millis(50)));
+    Ok((ws, response))
+}
+
+pub(crate) fn response_headers(response: &tungstenite::handshake::client::Response) -> Vec<(String, String)> {
+    response
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), String::from_utf8_lossy(v.as_bytes()).into_owned()))
+        .collect()
+}
+
 /// Connects using the URL and headers of a prepared request (auth already applied).
 /// `on_event` is called after each event is queued (e.g. to request a repaint).
 pub fn connect(prepared: &PreparedRequest, on_event: impl Fn() + Send + 'static) -> WsHandle {
@@ -82,37 +150,14 @@ pub fn connect(prepared: &PreparedRequest, on_event: impl Fn() + Send + 'static)
             let _ = ev_tx.send(e);
             on_event();
         };
-        let mut request = match url.as_str().into_client_request() {
-            Ok(r) => r,
-            Err(e) => return emit(WsEvent::Error(format!("invalid WebSocket URL `{url}`: {e}"))),
-        };
-        for (k, v) in &headers {
-            // Content-Type etc. from the editor make no sense on an upgrade.
-            if k.eq_ignore_ascii_case("content-type") {
-                continue;
-            }
-            if let (Ok(name), Ok(value)) =
-                (tungstenite::http::HeaderName::from_bytes(k.as_bytes()), tungstenite::http::HeaderValue::from_str(v))
-            {
-                request.headers_mut().append(name, value);
-            }
-        }
-        let (mut ws, response) = match tungstenite::connect(request) {
+        let (mut ws, response) = match open_socket(&url, &headers) {
             Ok(x) => x,
             Err(e) => {
-                emit(WsEvent::Error(format!("connection failed: {e}")));
+                emit(WsEvent::Error(e));
                 return emit(WsEvent::Closed { reason: "not connected".into() });
             }
         };
-        emit(WsEvent::Connected {
-            status: response.status().as_u16(),
-            headers: response
-                .headers()
-                .iter()
-                .map(|(k, v)| (k.to_string(), String::from_utf8_lossy(v.as_bytes()).into_owned()))
-                .collect(),
-        });
-        set_timeout(&ws, Some(Duration::from_millis(50)));
+        emit(WsEvent::Connected { status: response.status().as_u16(), headers: response_headers(&response) });
         loop {
             // Outgoing first, so typing never waits for the network.
             loop {
@@ -121,11 +166,21 @@ pub fn connect(prepared: &PreparedRequest, on_event: impl Fn() + Send + 'static)
                         if let Err(e) = ws.send(Message::Text(text.clone().into())) {
                             emit(WsEvent::Error(format!("send failed: {e}")));
                         } else {
-                            emit(WsEvent::Message { direction: Direction::Sent, text, binary: false, at: Utc::now() });
+                            emit(WsEvent::Message {
+                                direction: Direction::Sent,
+                                text,
+                                binary: false,
+                                at: Utc::now(),
+                                label: None,
+                            });
                         }
                     }
                     Ok(WsCommand::Ping) => {
                         let _ = ws.send(Message::Ping(Vec::new().into()));
+                    }
+                    Ok(WsCommand::Emit { .. } | WsCommand::Publish { .. } | WsCommand::Subscribe { .. })
+                    | Ok(WsCommand::Unsubscribe(_)) => {
+                        emit(WsEvent::Error("not supported on a plain WebSocket".into()));
                     }
                     Ok(WsCommand::Close) | Err(TryRecvError::Disconnected) => {
                         let _ = ws.close(None);
@@ -141,6 +196,7 @@ pub fn connect(prepared: &PreparedRequest, on_event: impl Fn() + Send + 'static)
                     text: t.to_string(),
                     binary: false,
                     at: Utc::now(),
+                    label: None,
                 }),
                 Ok(Message::Binary(b)) => emit(WsEvent::Message {
                     direction: Direction::Received,
@@ -150,6 +206,7 @@ pub fn connect(prepared: &PreparedRequest, on_event: impl Fn() + Send + 'static)
                     },
                     binary: true,
                     at: Utc::now(),
+                    label: None,
                 }),
                 Ok(Message::Close(frame)) => {
                     let reason = frame

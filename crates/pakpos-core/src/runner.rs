@@ -215,8 +215,8 @@ pub fn run_collection(
         scope.data =
             options.data.get(iteration % options.data.len().max(1)).cloned().unwrap_or_default().into_iter().collect();
         for (folder, mut req) in collection.flatten() {
-            // WebSocket sessions are interactive; HTTP and gRPC requests run.
-            if req.kind == crate::model::RequestKind::WebSocket {
+            // Realtime sessions (WebSocket, SSE, Socket.IO, MQTT) are interactive; HTTP and gRPC run.
+            if req.kind.is_realtime() {
                 continue;
             }
             if let Some(f) = &filter {

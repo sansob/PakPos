@@ -99,6 +99,9 @@ pub fn badge(r: &pakpos_core::Request) -> (&'static str, Color32) {
         pakpos_core::model::RequestKind::Http => (method_short(r.method), method_color(r.method)),
         pakpos_core::model::RequestKind::WebSocket => ("WS", TEAL),
         pakpos_core::model::RequestKind::Grpc => ("gRPC", LIME),
+        pakpos_core::model::RequestKind::Sse => ("SSE", PURPLE),
+        pakpos_core::model::RequestKind::SocketIo => ("SIO", PINK),
+        pakpos_core::model::RequestKind::Mqtt => ("MQTT", YELLOW),
     }
 }
 

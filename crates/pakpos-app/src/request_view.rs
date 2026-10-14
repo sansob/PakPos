@@ -219,20 +219,40 @@ impl PakPosApp {
                                 }
                                 changed = true;
                             }
-                            let ws = tab.request.kind == RequestKind::WebSocket;
-                            if ui
-                                .selectable_label(
-                                    ws,
-                                    RichText::new("WebSocket").strong().monospace().color(theme::TEAL),
-                                )
-                                .clicked()
-                                && !ws
-                            {
-                                tab.request.kind = RequestKind::WebSocket;
-                                if tab.section == ReqSection::Tests || tab.section == ReqSection::Extract {
-                                    tab.section = ReqSection::Params;
+                            for (kind, color, example) in [
+                                (RequestKind::WebSocket, theme::TEAL, "ws://localhost:8080"),
+                                (RequestKind::Sse, theme::PURPLE, "http://localhost:8080/events"),
+                                (RequestKind::SocketIo, theme::PINK, "http://localhost:3000"),
+                                (RequestKind::Mqtt, theme::YELLOW, "mqtt://localhost:1883"),
+                            ] {
+                                let selected = tab.request.kind == kind;
+                                if ui
+                                    .selectable_label(
+                                        selected,
+                                        RichText::new(kind.label()).strong().monospace().color(color),
+                                    )
+                                    .clicked()
+                                    && !selected
+                                {
+                                    tab.request.kind = kind;
+                                    if matches!(kind, RequestKind::SocketIo | RequestKind::Mqtt) {
+                                        tab.request.realtime.get_or_insert_with(Default::default);
+                                    }
+                                    if tab.request.url.is_empty() {
+                                        tab.request.url = example.into();
+                                        tab.url_edit = tab.request.url.clone();
+                                    }
+                                    if matches!(
+                                        tab.section,
+                                        ReqSection::Tests
+                                            | ReqSection::Extract
+                                            | ReqSection::Scripts
+                                            | ReqSection::Examples
+                                    ) {
+                                        tab.section = ReqSection::Body;
+                                    }
+                                    changed = true;
                                 }
-                                changed = true;
                             }
                         });
                     let send_w = 96.0;
@@ -263,7 +283,7 @@ impl PakPosApp {
                     if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         send = true;
                     }
-                    if tab.request.kind == RequestKind::WebSocket {
+                    if tab.request.kind.is_realtime() {
                         let st = &tab.ws;
                         let label = if st.connected {
                             "Disconnect"
@@ -340,11 +360,19 @@ impl PakPosApp {
                 tab.section = ReqSection::Body;
             }
         }
-        if r.kind == RequestKind::WebSocket {
+        if r.kind.is_realtime() {
             items.retain(|(s, _)| {
                 !matches!(s, ReqSection::Tests | ReqSection::Extract | ReqSection::Scripts | ReqSection::Examples)
             });
-            items[3].1 = "Message".to_string();
+            items[3].1 = match r.kind {
+                RequestKind::Sse => "Stream",
+                RequestKind::Mqtt => "Topics",
+                _ => "Message",
+            }
+            .to_string();
+            if r.kind == RequestKind::Mqtt {
+                items.retain(|(s, _)| !matches!(s, ReqSection::Params | ReqSection::Headers));
+            }
         }
         widgets::tab_bar(ui, &mut tab.section, &items);
 
@@ -400,9 +428,17 @@ impl PakPosApp {
                         &mut grpc_action,
                     );
                 }
-                ReqSection::Body if tab.request.kind == RequestKind::WebSocket => {
-                    changed |=
-                        crate::ws_view::composer(ui, &mut tab.request.body, &tab.ws, tab.uid, &p, &mut ws_action);
+                ReqSection::Body if tab.request.kind.is_realtime() => {
+                    changed |= crate::ws_view::realtime_composer(
+                        ui,
+                        tab.request.kind,
+                        &mut tab.request.realtime,
+                        &mut tab.request.body,
+                        &tab.ws,
+                        tab.uid,
+                        &p,
+                        &mut ws_action,
+                    );
                 }
                 ReqSection::Body => {
                     changed |= body_editor(

@@ -132,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
         data = bytes(b ^ mask[i % 4] for i, b in enumerate(self.rfile.read(n)))
         return opcode, data
 
-    def websocket(self):
+    def _ws_handshake(self):
         key = self.headers.get("Sec-WebSocket-Key", "")
         accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
         self.protocol_version = "HTTP/1.1"  # 101 Switching Protocols requires HTTP/1.1
@@ -143,6 +143,52 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.flush()
         self._ws_lock = threading.Lock()
+
+    def socketio(self):
+        """Minimal Socket.IO v5 / Engine.IO v4 server: namespace "/", a
+        "tick" event every 2 s, "echo" for every event received."""
+        self._ws_handshake()
+        alive = {"on": False}
+        sid = uuid.uuid4().hex[:12]
+        self._ws_send("0" + json.dumps({"sid": sid, "upgrades": [], "pingInterval": 25000, "pingTimeout": 20000, "maxPayload": 1000000}))
+
+        def ticker():
+            i = 0
+            while alive["on"]:
+                time.sleep(2)
+                i += 1
+                try:
+                    self._ws_send("42" + json.dumps(["tick", {"n": i, "parcels_in_transit": 120 + i}]))
+                except OSError:
+                    break
+
+        while True:
+            frame = self._ws_recv()
+            if frame is None or frame[0] == 0x8:
+                break
+            text = frame[1].decode("utf-8", "replace")
+            if text.startswith("40"):
+                auth = text[2:] or "null"
+                self._ws_send("40" + json.dumps({"sid": sid}))
+                self._ws_send("42" + json.dumps(["welcome", {"server": "PakPos mock", "auth": json.loads(auth)}]))
+                if not alive["on"]:
+                    alive["on"] = True
+                    threading.Thread(target=ticker, daemon=True).start()
+            elif text.startswith("42"):
+                try:
+                    event, *args = json.loads(text[2:])
+                except ValueError:
+                    continue
+                self._ws_send("42" + json.dumps(["echo", {"event": event, "args": args}]))
+            elif text.startswith("41"):
+                break
+            elif text == "3":
+                pass  # pong
+        alive["on"] = False
+        self.close_connection = True
+
+    def websocket(self):
+        self._ws_handshake()
         alive = {"on": True}
         self._ws_send(json.dumps({"type": "welcome", "server": "PakPos mock", "auth": self.headers.get("Authorization")}))
 
@@ -173,8 +219,11 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
 
     def handle_any(self):
-        if urlsplit(self.path).path == "/ws" and self.headers.get("Upgrade", "").lower() == "websocket":
+        upgrade = self.headers.get("Upgrade", "").lower() == "websocket"
+        if urlsplit(self.path).path == "/ws" and upgrade:
             return self.websocket()
+        if urlsplit(self.path).path == "/socket.io/" and upgrade:
+            return self.socketio()
         path, data = self._echo()
         method = self.command.lower()
         if path == f"/{method}" or path == "/anything":
@@ -192,6 +241,29 @@ class Handler(BaseHTTPRequestHandler):
             expected = "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
             ok = self.headers.get("Authorization") == expected
             return self._send(200 if ok else 401, {"authenticated": ok, "user": user})
+        if path == "/sse":
+            # Server-Sent Events: a few price updates, then the stream ends.
+            q = dict(parse_qsl(urlsplit(self.path).query))
+            count = int(q.get("count", "5"))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            try:
+                self.wfile.write(b": PakPos demo stream\n\n")
+                for i in range(count):
+                    price = 15000 + i * 25
+                    msg = f"id: {i + 1}\nevent: price\ndata: {{\"symbol\": \"PPOS\", \"price\": {price}}}\n\n"
+                    self.wfile.write(msg.encode())
+                    self.wfile.flush()
+                    time.sleep(float(q.get("interval", "0.4")))
+                self.wfile.write(b"event: done\ndata: bye\n\n")
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return None
         if path == "/cookies/set":
             # httpbin-compatible: set every query parameter as a cookie, then redirect.
             self.send_response(302)

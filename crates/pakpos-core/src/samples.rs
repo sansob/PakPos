@@ -160,7 +160,29 @@ pub fn demo_collection() -> Collection {
     };
     chat.description =
         "A bidirectional stream: Open stream, then Send message as often as you like; End stream when done.".into();
-    realtime.items = vec![Item::Request(ws), Item::Request(grpc_req), Item::Request(chat)];
+    let mut sse = req("Price stream (SSE)", HttpMethod::Get, "{{base_url}}/sse");
+    sse.kind = crate::model::RequestKind::Sse;
+    let mut sio = req("Parcel events (Socket.IO)", HttpMethod::Get, "{{base_url}}");
+    sio.kind = crate::model::RequestKind::SocketIo;
+    sio.realtime = Some(crate::model::RealtimeConfig { event: "track".into(), ..Default::default() });
+    sio.body = Body::Raw { content: "{ \"resi\": \"PP-2026-0042\" }".into(), language: RawLanguage::Json };
+    let mut mqtt = req("Office sensors (MQTT)", HttpMethod::Get, "{{mqtt_url}}");
+    mqtt.kind = crate::model::RequestKind::Mqtt;
+    mqtt.realtime = Some(crate::model::RealtimeConfig {
+        subscriptions: vec![crate::model::MqttTopic { enabled: true, topic: "kantor/#".into(), qos: 1 }],
+        topic: "kantor/1/lampu".into(),
+        ..Default::default()
+    });
+    mqtt.body = Body::Raw { content: "{ \"on\": true }".into(), language: RawLanguage::Json };
+    mqtt.description = "Start the demo broker with `python3 scripts/mock_mqtt.py`, then Connect.".into();
+    realtime.items = vec![
+        Item::Request(ws),
+        Item::Request(sse),
+        Item::Request(sio),
+        Item::Request(mqtt),
+        Item::Request(grpc_req),
+        Item::Request(chat),
+    ];
 
     let mut c = Collection::new("PakPos Demo");
     c.description =
@@ -183,6 +205,7 @@ pub fn demo_environment(base_url: &str) -> Environment {
     env.set("token", "pakpos-demo-token");
     env.set("ws_url", crate::ws::to_ws_url(base_url));
     env.set("grpc_url", "grpc://127.0.0.1:50051");
+    env.set("mqtt_url", "mqtt://127.0.0.1:1883");
     env
 }
 
@@ -191,7 +214,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 19);
+        assert_eq!(c.request_count(), 22);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

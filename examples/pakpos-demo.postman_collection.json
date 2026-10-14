@@ -388,6 +388,58 @@
           }
         },
         {
+          "name": "Price stream (SSE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sse",
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "Parcel events (Socket.IO)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"resi\": \"PP-2026-0042\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Office sensors (MQTT)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mqtt_url}}",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"on\": true }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Start the demo broker with `python3 scripts/mock_mqtt.py`, then Connect."
+          }
+        },
+        {
           "name": "Health check (gRPC)",
           "request": {
             "method": "POST",

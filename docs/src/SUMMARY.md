@@ -23,6 +23,7 @@
 - [OAuth 2.0](reference/oauth2.md)
 - [GraphQL](reference/graphql.md)
 - [WebSocket](reference/websocket.md)
+- [SSE, Socket.IO and MQTT](reference/realtime.md)
 - [gRPC](reference/grpc.md)
 - [Mock server](reference/mock.md)
 - [Command-line interface](reference/cli.md)

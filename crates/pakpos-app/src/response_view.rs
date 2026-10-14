@@ -11,7 +11,7 @@ impl PakPosApp {
         let p = self.palette;
         let idx = self.active;
         let Some(tab) = self.tabs.get_mut(idx) else { return };
-        if tab.request.kind == pakpos_core::model::RequestKind::WebSocket {
+        if tab.request.kind.is_realtime() {
             crate::ws_view::log_view(ui, &mut tab.ws, tab.uid, &p);
             return;
         }

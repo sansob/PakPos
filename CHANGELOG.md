@@ -23,6 +23,10 @@ All notable changes to this project are documented here. The format follows
 - Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
   view (copy a value or its test path), image preview and a simplified HTML
   preview with *Open in browser*; *Save* picks the extension from the content type.
+- Server-Sent Events, Socket.IO (v5 / Engine.IO v4) and MQTT 3.1.1 (QoS 0-2,
+  retained messages, TLS and client certificates) as request kinds with the
+  live message log; `pakpos-cli sse`, `socketio` and `mqtt`; an offline
+  Socket.IO server in the mock API and `scripts/mock_mqtt.py`.
 - Interactive gRPC streams: open a client-streaming or bidirectional call,
   send messages one by one, see answers live, end or cancel it. The demo
   server gains `pakpos.demo.Chat` (`Talk`, `Sum`).

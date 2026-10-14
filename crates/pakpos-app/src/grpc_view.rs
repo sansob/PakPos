@@ -367,7 +367,7 @@ impl PakPosApp {
                     grpc::StreamEvent::Message { direction, text, at } => {
                         st.live.connecting = false;
                         st.live.connected = true;
-                        st.live.log.push(LogEntry { direction: Some(direction), text, at, error: false });
+                        st.live.log.push(LogEntry { direction: Some(direction), text, at, error: false, label: None });
                     }
                     grpc::StreamEvent::Error(e) => st.live.system(e, true),
                     grpc::StreamEvent::Closed { code, code_name, message, trailers } => {

@@ -2821,6 +2821,8 @@ dependencies = [
  "rand 0.9.5",
  "reqwest",
  "rquickjs",
+ "rustls",
+ "rustls-native-certs",
  "serde",
  "serde_json",
  "sha2",

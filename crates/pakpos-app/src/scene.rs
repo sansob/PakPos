@@ -161,6 +161,16 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].resp_section = RespSection::Tests;
             app.send(app.active, ctx);
         }
+        "sse" | "socketio" | "mqtt" => {
+            let name = match name {
+                "sse" => "Price stream (SSE)",
+                "socketio" => "Parcel events (Socket.IO)",
+                _ => "Office sensors (MQTT)",
+            };
+            open_by_name(app, name);
+            app.tabs[app.active].section = ReqSection::Body;
+            app.ws_connect(app.active, ctx);
+        }
         "websocket" => {
             open_by_name(app, "Live prices (WebSocket)");
             app.tabs[app.active].section = ReqSection::Body;
@@ -250,6 +260,9 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
             t.grpc.live.log.iter().filter(|e| e.direction == Some(pakpos_core::ws::Direction::Received)).count() >= 2
         }),
         "websocket" => app.tabs.get(app.active).is_some_and(|t| t.ws.log.iter().any(|e| e.text.contains("\"tick\""))),
+        "sse" | "socketio" | "mqtt" => app.tabs.get(app.active).is_some_and(|t| {
+            t.ws.log.iter().filter(|e| e.direction == Some(pakpos_core::ws::Direction::Received)).count() >= 4
+        }),
         "graphql" => {
             app.graphql.job.is_none()
                 && app
@@ -284,6 +297,22 @@ pub fn tick(app: &mut PakPosApp, ctx: &egui::Context) {
             for text in ["paket saya sudah sampai mana?", "terima kasih!"] {
                 let msg = format!("{{\"user\": \"budi\", \"text\": \"{text}\"}}");
                 app.handle_grpc_action(idx, crate::grpc_view::GrpcAction::StreamSend(msg), ctx);
+            }
+        }
+    }
+    if state.name == "socketio" || state.name == "mqtt" {
+        let idx = app.active;
+        if !state.sent && app.tabs.get(idx).is_some_and(|t| t.ws.connected) {
+            state.sent = true;
+            let r = app.tabs[idx].request.clone();
+            let cfg = r.realtime.clone().unwrap_or_default();
+            if let pakpos_core::Body::Raw { content, .. } = r.body {
+                let action = if state.name == "mqtt" {
+                    crate::ws_view::WsAction::Publish { topic: cfg.topic, payload: content, qos: 1, retain: false }
+                } else {
+                    crate::ws_view::WsAction::Emit { event: cfg.event, data: content }
+                };
+                app.handle_ws_action(idx, action, ctx);
             }
         }
     }

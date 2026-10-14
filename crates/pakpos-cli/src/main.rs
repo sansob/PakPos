@@ -11,6 +11,7 @@ use pakpos_core::{postman, Body, HttpMethod, KeyValue, Request};
 use std::io::IsTerminal;
 
 mod mcp;
+mod realtime;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -78,6 +79,12 @@ enum Command {
         #[arg(long)]
         timeout: Option<u64>,
     },
+    /// Listen to Server-Sent Events (text/event-stream).
+    Sse(realtime::SseArgs),
+    /// Connect to a Socket.IO server: print events, emit with --emit or stdin.
+    Socketio(realtime::SocketIoArgs),
+    /// Connect to an MQTT broker: subscribe, publish (--pub, --message or stdin).
+    Mqtt(realtime::MqttArgs),
     /// Call a gRPC method (JSON in, JSON out) or list a server's methods.
     Grpc {
         /// grpc://host:port, grpcs://host (TLS) or host:port.
@@ -379,6 +386,9 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
         Command::Ws { url, headers, environment, vars, send, timeout } => {
             cmd_ws(url, headers, environment, vars, send, timeout, style)
         }
+        Command::Sse(a) => realtime::sse(a, style),
+        Command::Socketio(a) => realtime::socketio(a, style),
+        Command::Mqtt(a) => realtime::mqtt(a, style),
         Command::Grpc {
             url,
             method,
@@ -724,6 +734,7 @@ fn cmd_ws(
             }
             Ok(WsEvent::Message { direction: Direction::Received, text, .. }) => println!("{text}"),
             Ok(WsEvent::Error(e)) => eprintln!("{} {e}", style.red("error:")),
+            Ok(WsEvent::Info(t)) => eprintln!("{} {t}", style.dim("•")),
             Ok(WsEvent::Closed { reason }) => {
                 eprintln!("{} {reason}", style.dim("closed:"));
                 return Ok(ExitCode::SUCCESS);

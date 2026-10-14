@@ -453,6 +453,33 @@ fn build_client_with(
     builder.build().map_err(|e| HttpError::Transport(e.to_string()))
 }
 
+/// An async client for long-lived streams (Server-Sent Events): same TLS,
+/// proxy and client-certificate settings, but only a connect timeout.
+pub fn streaming_client_for(settings: &HttpSettings, url: &str) -> Result<reqwest::Client, HttpError> {
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(settings.timeout_secs.max(1)))
+        .user_agent(settings.user_agent.clone())
+        .tls_danger_accept_invalid_certs(!settings.verify_tls);
+    if !settings.proxy.trim().is_empty() {
+        let proxy = reqwest::Proxy::all(settings.proxy.trim())
+            .map_err(|e| HttpError::InvalidUrl(settings.proxy.clone(), e.to_string()))?;
+        builder = builder.proxy(proxy);
+    }
+    if let Some(cert) = settings.client_cert_for(url) {
+        if !cert.cert_path.trim().is_empty() {
+            let identity = reqwest::Identity::from_pem(&cert.pem()?)
+                .map_err(|e| HttpError::Transport(format!("client certificate `{}`: {e}", cert.cert_path)))?;
+            builder = builder.identity(identity);
+        }
+        if let Some(ca) = cert.ca_pem()? {
+            for c in reqwest::Certificate::from_pem_bundle(&ca).map_err(|e| HttpError::Transport(e.to_string()))? {
+                builder = builder.add_root_certificate(c);
+            }
+        }
+    }
+    builder.build().map_err(|e| HttpError::Transport(describe_error(&e)))
+}
+
 /// Sends a prepared request with an existing client, answering a Digest or
 /// NTLM challenge when the request carries those credentials.
 pub fn send(client: &reqwest::blocking::Client, prepared: &PreparedRequest) -> Result<Response, HttpError> {

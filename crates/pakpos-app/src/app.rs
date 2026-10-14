@@ -413,7 +413,7 @@ impl PakPosApp {
 
     pub fn send(&mut self, idx: usize, ctx: &egui::Context) {
         let Some(tab) = self.tabs.get(idx) else { return };
-        if tab.request.kind == pakpos_core::model::RequestKind::WebSocket {
+        if tab.request.kind.is_realtime() {
             self.ws_connect(idx, ctx);
             return;
         }
@@ -732,8 +732,7 @@ impl PakPosApp {
             stop_on_failure: setup.stop_on_failure,
             ..Default::default()
         };
-        let runnable =
-            collection.flatten().iter().filter(|(_, r)| r.kind != pakpos_core::model::RequestKind::WebSocket).count();
+        let runnable = collection.flatten().iter().filter(|(_, r)| !r.kind.is_realtime()).count();
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         let total = runnable * options.iteration_count();

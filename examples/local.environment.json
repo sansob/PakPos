@@ -21,6 +21,11 @@
       "key": "grpc_url",
       "value": "grpc://127.0.0.1:50051",
       "enabled": true
+    },
+    {
+      "key": "mqtt_url",
+      "value": "mqtt://127.0.0.1:1883",
+      "enabled": true
     }
   ]
 }

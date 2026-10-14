@@ -611,6 +611,76 @@ pub enum RequestKind {
     /// gRPC call: `grpc` holds the method, the raw body is the JSON message and
     /// headers are sent as metadata.
     Grpc,
+    /// Server-Sent Events: the request opens a `text/event-stream`.
+    Sse,
+    /// Socket.IO: the URL path is the namespace; `realtime.event` is the event
+    /// the composer emits, the raw body its payload.
+    SocketIo,
+    /// MQTT: the URL is the broker, `realtime` holds topics; Basic auth gives
+    /// the user name and password.
+    Mqtt,
+}
+
+/// Settings of Socket.IO and MQTT requests.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RealtimeConfig {
+    /// Socket.IO: event to emit.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub event: String,
+    /// Socket.IO: server path (default `/socket.io/`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub path: String,
+    /// Socket.IO: JSON auth payload for the namespace connect.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auth: String,
+    /// MQTT: client id (random when empty).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub client_id: String,
+    /// MQTT: topic filters subscribed on connect.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subscriptions: Vec<MqttTopic>,
+    /// MQTT: topic the composer publishes to.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub topic: String,
+    #[serde(default)]
+    pub qos: u8,
+    #[serde(default)]
+    pub retain: bool,
+    #[serde(default = "default_keep_alive")]
+    pub keep_alive_secs: u16,
+    #[serde(default = "default_true")]
+    pub clean_session: bool,
+}
+
+fn default_keep_alive() -> u16 {
+    60
+}
+
+impl Default for RealtimeConfig {
+    fn default() -> Self {
+        Self {
+            event: String::new(),
+            path: String::new(),
+            auth: String::new(),
+            client_id: String::new(),
+            subscriptions: Vec::new(),
+            topic: String::new(),
+            qos: 0,
+            retain: false,
+            keep_alive_secs: default_keep_alive(),
+            clean_session: true,
+        }
+    }
+}
+
+/// An MQTT subscription.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct MqttTopic {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub topic: String,
+    #[serde(default)]
+    pub qos: u8,
 }
 
 /// Settings of a gRPC request.
@@ -630,6 +700,22 @@ pub struct GrpcConfig {
 impl RequestKind {
     pub fn is_http(&self) -> bool {
         *self == RequestKind::Http
+    }
+
+    /// Long-lived sessions with a message log (not runnable in the runner).
+    pub fn is_realtime(&self) -> bool {
+        matches!(self, RequestKind::WebSocket | RequestKind::Sse | RequestKind::SocketIo | RequestKind::Mqtt)
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            RequestKind::Http => "HTTP",
+            RequestKind::WebSocket => "WebSocket",
+            RequestKind::Grpc => "gRPC",
+            RequestKind::Sse => "SSE",
+            RequestKind::SocketIo => "Socket.IO",
+            RequestKind::Mqtt => "MQTT",
+        }
     }
 }
 
@@ -664,6 +750,8 @@ pub struct Request {
     pub examples: Vec<Example>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grpc: Option<GrpcConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realtime: Option<RealtimeConfig>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
@@ -685,6 +773,7 @@ impl Default for Request {
             scripts: Scripts::default(),
             examples: Vec::new(),
             grpc: None,
+            realtime: None,
             description: String::new(),
         }
     }
