@@ -5,16 +5,12 @@ use egui::text::{LayoutJob, TextFormat};
 use egui::{Color32, CornerRadius, FontId, Margin, RichText, Sense, Stroke, Ui, Vec2};
 use pakpos_core::model::{FormField, KeyValue};
 use pakpos_core::vars::VarScope;
-use pakpos_core::HttpMethod;
 use std::sync::Arc;
 
 /// Coloured method label, e.g. `GET` in green.
-pub fn method_label(ui: &mut Ui, m: HttpMethod, short: bool) -> egui::Response {
-    let text = if short { theme::method_short(m) } else { m.as_str() };
-    ui.add(
-        egui::Label::new(RichText::new(text).color(theme::method_color(m)).strong().monospace().size(11.5))
-            .selectable(false),
-    )
+pub fn method_label(ui: &mut Ui, r: &pakpos_core::Request) -> egui::Response {
+    let (text, color) = theme::badge(r);
+    ui.add(egui::Label::new(RichText::new(text).color(color).strong().monospace().size(11.5)).selectable(false))
 }
 
 /// A filled rounded "pill" with text.

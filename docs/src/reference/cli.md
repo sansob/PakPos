@@ -9,6 +9,7 @@ Commands:
   import     Convert a Postman collection into PakPos format
   export     Export a PakPos collection as Postman v2.1
   curl       Convert a cURL command into a PakPos request (JSON) or a code snippet
+  ws         Open a WebSocket: stdin lines are sent, messages are printed
   workspace  Print the workspace location and its contents
   mcp        Start a Model Context Protocol (MCP) server on stdio
 ```
@@ -48,6 +49,14 @@ pakpos-cli export <collection.json> [-o out.postman_collection.json]
 ```text
 pakpos-cli curl "<curl command>" [--to curl|python|javascript|httpie]
 ```
+
+## ws
+
+```text
+pakpos-cli ws <URL> [-H 'Name: value']... [-e ENV] [--var k=v]... [-s MESSAGE]... [--timeout S]
+```
+
+See [WebSocket](websocket.md).
 
 ## mcp
 

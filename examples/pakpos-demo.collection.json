@@ -5,12 +5,12 @@
   "items": [
     {
       "kind": "folder",
-      "id": "bd1db8c8-81ef-4974-a5f0-84153c4cc1d3",
+      "id": "fd708cd0-4c24-45ac-a184-20b91898f1ad",
       "name": "Basics",
       "items": [
         {
           "kind": "request",
-          "id": "06ed4171-3a1f-4b78-8340-b8f757dba4ea",
+          "id": "1014f1d6-d1a1-4d1c-b8db-3db9912a85ac",
           "name": "Get with query params",
           "method": "GET",
           "url": "{{base_url}}/get",
@@ -63,7 +63,7 @@
         },
         {
           "kind": "request",
-          "id": "80fb11e8-5482-4844-98b0-e472d6ac1452",
+          "id": "a7175607-9138-41af-b633-1f4e5d9ca0bc",
           "name": "Create user (JSON)",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -98,7 +98,7 @@
         },
         {
           "kind": "request",
-          "id": "f42a8431-009b-4134-aae4-1b0eff2c1546",
+          "id": "27714396-e242-4ccd-b2ab-edf319739791",
           "name": "Submit form",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -131,7 +131,7 @@
         },
         {
           "kind": "request",
-          "id": "83931179-4762-4d6d-a161-f5a37c1ac85c",
+          "id": "b4b6c8e3-bb09-4a59-8411-c7d277276fcf",
           "name": "Update user",
           "method": "PUT",
           "url": "{{base_url}}/put",
@@ -146,7 +146,7 @@
         },
         {
           "kind": "request",
-          "id": "de131592-55ff-4bd4-b287-dc1a1ef95420",
+          "id": "68c8200b-f930-4b63-94c3-9f4f07926af4",
           "name": "Patch user",
           "method": "PATCH",
           "url": "{{base_url}}/patch",
@@ -161,7 +161,7 @@
         },
         {
           "kind": "request",
-          "id": "dc9e0385-e5de-46a4-89a1-072c20433677",
+          "id": "a81711e6-3d20-43a2-9809-0e3265c23947",
           "name": "Delete user",
           "method": "DELETE",
           "url": "{{base_url}}/delete",
@@ -187,12 +187,12 @@
     },
     {
       "kind": "folder",
-      "id": "74553db5-44c2-465a-b1a9-3a8175a3671f",
+      "id": "f14b41c4-4428-482f-8d34-f93cc7cf494b",
       "name": "Auth",
       "items": [
         {
           "kind": "request",
-          "id": "c887ee12-fa05-468e-92cd-f7b28096359b",
+          "id": "f4a88062-a4e6-468e-a842-c57e50deb429",
           "name": "Bearer token",
           "method": "GET",
           "url": "{{base_url}}/bearer",
@@ -214,7 +214,7 @@
         },
         {
           "kind": "request",
-          "id": "948637ab-7d85-49e8-b64f-950d16ccd4ae",
+          "id": "07de5aa2-c4e2-41eb-a14f-9fb1e42f0c45",
           "name": "Basic auth",
           "method": "GET",
           "url": "{{base_url}}/basic-auth/pakpos/rahasia",
@@ -237,7 +237,7 @@
         },
         {
           "kind": "request",
-          "id": "036a4242-1969-458e-a57f-542c324d671e",
+          "id": "28f1bff1-f1a9-4c99-86d7-a003ece4f8fe",
           "name": "Profile (OAuth 2.0)",
           "method": "GET",
           "url": "{{base_url}}/oauth/me",
@@ -280,12 +280,12 @@
     },
     {
       "kind": "folder",
-      "id": "2dc63b43-a971-4810-9bb4-ef5389c3c461",
+      "id": "42a24986-c6ef-438e-80c4-c737e0c805ce",
       "name": "GraphQL",
       "items": [
         {
           "kind": "request",
-          "id": "e94f1d80-f6ba-489f-b4f5-245cb562d5c7",
+          "id": "06499f5c-d35c-41a3-9609-c7c3ccb8a218",
           "name": "Users by city (GraphQL)",
           "method": "POST",
           "url": "{{base_url}}/graphql",
@@ -320,12 +320,40 @@
     },
     {
       "kind": "folder",
-      "id": "1687fd9e-a74c-416b-8048-6c120c01f0f3",
+      "id": "11d04647-adfd-4df7-9e29-489d8358e1e9",
+      "name": "Realtime",
+      "items": [
+        {
+          "kind": "request",
+          "id": "73e84bf9-d2a9-4c94-b573-8bfc7d2de147",
+          "name": "Live prices (WebSocket)",
+          "kind": "websocket",
+          "method": "GET",
+          "url": "{{ws_url}}/ws",
+          "body": {
+            "mode": "raw",
+            "content": "{\n  \"type\": \"subscribe\",\n  \"symbol\": \"IDR\"\n}",
+            "language": "json"
+          },
+          "auth": {
+            "type": "bearer",
+            "token": "{{token}}"
+          },
+          "description": "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds."
+        }
+      ],
+      "auth": {
+        "type": "inherit"
+      }
+    },
+    {
+      "kind": "folder",
+      "id": "72585eb4-a4fb-46fd-991d-6b9c28d268ae",
       "name": "Responses",
       "items": [
         {
           "kind": "request",
-          "id": "0a4e945e-3c5f-4c2a-b715-4480c22408f8",
+          "id": "b948aeeb-5d0a-465b-ad3b-4e658ed08348",
           "name": "Get UUID (extract)",
           "method": "GET",
           "url": "{{base_url}}/uuid",
@@ -353,7 +381,7 @@
         },
         {
           "kind": "request",
-          "id": "af416f5e-e69a-4eb6-a63f-2cdae04e5da2",
+          "id": "a0afa0cc-ecc9-430e-9969-6622c19d26f5",
           "name": "JSON document",
           "method": "GET",
           "url": "{{base_url}}/json",
@@ -374,7 +402,7 @@
         },
         {
           "kind": "request",
-          "id": "2464e0ee-c643-457a-905a-ab9fe4da1c2b",
+          "id": "8c657044-b21d-4277-96d9-0114d15856ad",
           "name": "Expect 404",
           "method": "GET",
           "url": "{{base_url}}/status/404",

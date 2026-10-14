@@ -25,6 +25,7 @@ pub mod runner;
 pub mod samples;
 pub mod storage;
 pub mod vars;
+pub mod ws;
 
 pub use model::{Auth, Body, Collection, Environment, HttpMethod, Item, KeyValue, Request};
 

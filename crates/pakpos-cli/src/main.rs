@@ -60,6 +60,24 @@ enum Command {
         #[arg(long, value_enum)]
         to: Option<Lang>,
     },
+    /// Open a WebSocket: lines from stdin are sent, messages are printed.
+    Ws {
+        /// ws:// or wss:// URL (http(s):// is converted), may contain {{variables}}.
+        url: String,
+        /// Header "Name: value" (repeatable), e.g. for Authorization.
+        #[arg(short = 'H', long = "header")]
+        headers: Vec<String>,
+        #[arg(short, long)]
+        environment: Option<String>,
+        #[arg(long = "var", value_parser = parse_kv)]
+        vars: Vec<(String, String)>,
+        /// Send this message after connecting (repeatable), then keep reading.
+        #[arg(short, long)]
+        send: Vec<String>,
+        /// Exit after this many seconds (default: run until stdin closes / Ctrl+C).
+        #[arg(long)]
+        timeout: Option<u64>,
+    },
     /// Print the workspace location and its contents.
     Workspace,
     /// Start a Model Context Protocol (MCP) server on stdio, so AI agents
@@ -258,6 +276,9 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
                 workspace_root: storage::default_root(),
             })?;
             Ok(ExitCode::SUCCESS)
+        }
+        Command::Ws { url, headers, environment, vars, send, timeout } => {
+            cmd_ws(url, headers, environment, vars, send, timeout, style)
         }
         Command::Workspace => {
             let (ws, errors) = Workspace::load(storage::default_root());
@@ -481,4 +502,75 @@ fn cmd_send(args: SendArgs, style: &Style) -> Result<ExitCode> {
     }
     println!("{}", resp.pretty_body());
     Ok(if resp.status < 400 { ExitCode::SUCCESS } else { ExitCode::from(1) })
+}
+
+fn cmd_ws(
+    url: String,
+    headers: Vec<String>,
+    environment: Option<String>,
+    vars: Vec<(String, String)>,
+    send: Vec<String>,
+    timeout: Option<u64>,
+    style: &Style,
+) -> Result<ExitCode> {
+    use pakpos_core::ws::{Direction, WsEvent};
+    let mut req = Request::new(HttpMethod::Get, &url);
+    for h in &headers {
+        let (k, v) = h.split_once(':').with_context(|| format!("header must be `Name: value`, got `{h}`"))?;
+        req.headers.push(KeyValue::new(k.trim(), v.trim()));
+    }
+    let env = match &environment {
+        Some(e) => Some(load_env(e)?.0),
+        None => None,
+    };
+    let (ws, _) = Workspace::load(storage::default_root());
+    let mut scope = VarScope::new().with_environment(env.as_ref()).with_globals(&ws.globals);
+    for (k, v) in vars {
+        scope.runtime.insert(k, v);
+    }
+    let prepared = http::prepare(&req, &scope, None)?;
+    let handle = pakpos_core::ws::connect(&prepared, || {});
+    // Forward stdin lines as messages.
+    let tx = handle.tx.clone();
+    let stdin_scope = scope.clone();
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        for line in std::io::stdin().lock().lines().map_while(Result::ok) {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let _ = tx.send(pakpos_core::ws::WsCommand::Send(stdin_scope.resolve(&line)));
+        }
+    });
+    let deadline = timeout.map(|s| std::time::Instant::now() + std::time::Duration::from_secs(s));
+    let mut pending = send.into_iter().map(|m| scope.resolve(&m)).collect::<Vec<_>>();
+    loop {
+        if deadline.is_some_and(|d| std::time::Instant::now() > d) {
+            handle.close();
+            return Ok(ExitCode::SUCCESS);
+        }
+        match handle.rx.recv_timeout(std::time::Duration::from_millis(200)) {
+            Ok(WsEvent::Connected { status, .. }) => {
+                eprintln!(
+                    "{} {}",
+                    style.green("connected"),
+                    style.dim(&format!("HTTP {status} · {}", pakpos_core::ws::to_ws_url(&prepared.url)))
+                );
+                for m in pending.drain(..) {
+                    handle.send(m);
+                }
+            }
+            Ok(WsEvent::Message { direction: Direction::Sent, text, .. }) => {
+                eprintln!("{} {text}", style.paint("33", "↑"))
+            }
+            Ok(WsEvent::Message { direction: Direction::Received, text, .. }) => println!("{text}"),
+            Ok(WsEvent::Error(e)) => eprintln!("{} {e}", style.red("error:")),
+            Ok(WsEvent::Closed { reason }) => {
+                eprintln!("{} {reason}", style.dim("closed:"));
+                return Ok(ExitCode::SUCCESS);
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(ExitCode::from(1)),
+        }
+    }
 }

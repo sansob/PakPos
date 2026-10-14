@@ -291,6 +291,42 @@
       ]
     },
     {
+      "name": "Realtime",
+      "item": [
+        {
+          "name": "Live prices (WebSocket)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ws_url}}/ws",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"subscribe\",\n  \"symbol\": \"IDR\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds."
+          }
+        }
+      ]
+    },
+    {
       "name": "Responses",
       "item": [
         {

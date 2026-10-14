@@ -505,12 +505,31 @@ pub struct Extraction {
     pub source: String,
 }
 
-/// A single HTTP request definition.
+/// Protocol of a request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RequestKind {
+    #[default]
+    Http,
+    /// URL, params, headers and auth are used for the upgrade; the raw body is
+    /// the message composer draft.
+    WebSocket,
+}
+
+impl RequestKind {
+    pub fn is_http(&self) -> bool {
+        *self == RequestKind::Http
+    }
+}
+
+/// A single request definition (HTTP, or another protocol per [`RequestKind`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Request {
     #[serde(default = "new_id")]
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "RequestKind::is_http")]
+    pub kind: RequestKind,
     #[serde(default)]
     pub method: HttpMethod,
     pub url: String,
@@ -535,6 +554,7 @@ impl Default for Request {
         Self {
             id: new_id(),
             name: "New Request".into(),
+            kind: RequestKind::Http,
             method: HttpMethod::Get,
             url: String::new(),
             params: Vec::new(),

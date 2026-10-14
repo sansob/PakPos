@@ -92,6 +92,14 @@ pub fn status_color(status: u16) -> Color32 {
     }
 }
 
+/// Short coloured badge for a request (method, or protocol for non-HTTP).
+pub fn badge(r: &pakpos_core::Request) -> (&'static str, Color32) {
+    match r.kind {
+        pakpos_core::model::RequestKind::Http => (method_short(r.method), method_color(r.method)),
+        pakpos_core::model::RequestKind::WebSocket => ("WS", TEAL),
+    }
+}
+
 /// Short method label used in the sidebar and tabs.
 pub fn method_short(m: HttpMethod) -> &'static str {
     match m {

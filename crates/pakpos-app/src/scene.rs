@@ -16,6 +16,7 @@ struct SceneState {
     setup_done: bool,
     ready_at: Option<Instant>,
     requested: bool,
+    sent: bool,
 }
 
 static SCENE: Mutex<Option<SceneState>> = Mutex::new(None);
@@ -29,6 +30,7 @@ pub fn init_from_env() {
             setup_done: false,
             ready_at: None,
             requested: false,
+            sent: false,
         });
     }
 }
@@ -100,6 +102,11 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].section = ReqSection::Auth;
             app.send(app.active, ctx);
         }
+        "websocket" => {
+            open_by_name(app, "Live prices (WebSocket)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.ws_connect(app.active, ctx);
+        }
         "graphql" => {
             open_by_name(app, "Users by city (GraphQL)");
             app.tabs[app.active].section = ReqSection::Body;
@@ -128,6 +135,14 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
     match name {
         "runner" => app.runner.as_ref().is_some_and(|r| r.report.is_some()),
         "environments" | "curl" | "snippet" | "settings" => true,
+        "websocket" => app.tabs.get(app.active).is_some_and(|t| t.ws.log.iter().any(|e| e.text.contains("\"tick\""))),
+        "graphql" => {
+            app.graphql.job.is_none()
+                && app
+                    .tabs
+                    .get(app.active)
+                    .is_some_and(|t| matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_)))
+        }
         _ => app
             .tabs
             .get(app.active)
@@ -145,6 +160,16 @@ pub fn tick(app: &mut PakPosApp, ctx: &egui::Context) {
         setup(app, &name, ctx);
         ctx.request_repaint();
         return;
+    }
+    if state.name == "websocket" {
+        let idx = app.active;
+        let needs_send = !state.sent && app.tabs.get(idx).is_some_and(|t| t.ws.connected);
+        if needs_send {
+            state.sent = true;
+            if let pakpos_core::Body::Raw { content, .. } = app.tabs[idx].request.body.clone() {
+                app.handle_ws_action(idx, crate::ws_view::WsAction::Send(content), ctx);
+            }
+        }
     }
     if state.ready_at.is_none() && (is_ready(app, &state.name) || state.started.elapsed() > Duration::from_secs(20)) {
         state.ready_at = Some(Instant::now());

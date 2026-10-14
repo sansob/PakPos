@@ -11,6 +11,11 @@
       "key": "token",
       "value": "pakpos-demo-token",
       "enabled": true
+    },
+    {
+      "key": "ws_url",
+      "value": "ws://127.0.0.1:8787",
+      "enabled": true
     }
   ]
 }

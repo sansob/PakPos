@@ -5,7 +5,7 @@ use crate::theme;
 use crate::widgets;
 use egui::{Margin, RichText, Sense, Stroke, Ui};
 use pakpos_core::assertions::Operator;
-use pakpos_core::model::{ApiKeyLocation, Assertion, Auth, Body, BodyKind, Extraction, RawLanguage};
+use pakpos_core::model::{ApiKeyLocation, Assertion, Auth, Body, BodyKind, Extraction, RawLanguage, RequestKind};
 use pakpos_core::vars::VarScope;
 use pakpos_core::HttpMethod;
 
@@ -28,7 +28,12 @@ impl PakPosApp {
                         .inner_margin(Margin::symmetric(16, 10))
                         .stroke(Stroke::new(1.0, p.border)),
                 )
-                .show(ui, |ui| self.response_panel(ui));
+                .show(ui, |ui| {
+                    self.response_panel(ui);
+                    // A resizable panel remembers the size its content used;
+                    // claim the rest so an empty response doesn't shrink it.
+                    ui.take_available_space();
+                });
             egui::CentralPanel::default()
                 .frame(egui::Frame::new().fill(p.surface).inner_margin(Margin::symmetric(16, 12)))
                 .show(ui, |ui| self.request_editor(ui));
@@ -53,7 +58,7 @@ impl PakPosApp {
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     ui.spacing_mut().item_spacing.x = 6.0;
-                                    widgets::method_label(ui, tab.request.method, true);
+                                    widgets::method_label(ui, &tab.request);
                                     let mut name = tab.request.name.clone();
                                     if name.chars().count() > 26 {
                                         name = format!("{}…", name.chars().take(26).collect::<String>());
@@ -124,6 +129,7 @@ impl PakPosApp {
         let gql_schema = self.graphql.schemas.get(&gql_key);
         let gql_loading = self.graphql.job.as_ref().is_some_and(|(k, _)| k == &gql_key);
         let mut gql_action = None;
+        let mut ws_action = None;
         let oauth_job = self.oauth_job.as_ref();
         let tab = &mut self.tabs[idx];
         let mut changed = false;
@@ -161,16 +167,40 @@ impl PakPosApp {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     let m = tab.request.method;
+                    let _ = m;
+                    let (badge, badge_color) = theme::badge(&tab.request);
+                    let shown = if tab.request.kind.is_http() { tab.request.method.as_str() } else { badge };
                     egui::ComboBox::from_id_salt(("method", tab.uid))
                         .width(92.0)
-                        .selected_text(RichText::new(m.as_str()).strong().monospace().color(theme::method_color(m)))
+                        .selected_text(RichText::new(shown).strong().monospace().color(badge_color))
                         .show_ui(ui, |ui| {
                             for method in HttpMethod::ALL {
                                 let label = RichText::new(method.as_str())
                                     .strong()
                                     .monospace()
                                     .color(theme::method_color(method));
-                                changed |= ui.selectable_value(&mut tab.request.method, method, label).changed();
+                                let selected = tab.request.kind.is_http() && tab.request.method == method;
+                                if ui.selectable_label(selected, label).clicked() && !selected {
+                                    tab.request.method = method;
+                                    tab.request.kind = RequestKind::Http;
+                                    changed = true;
+                                }
+                            }
+                            ui.separator();
+                            let ws = tab.request.kind == RequestKind::WebSocket;
+                            if ui
+                                .selectable_label(
+                                    ws,
+                                    RichText::new("WebSocket").strong().monospace().color(theme::TEAL),
+                                )
+                                .clicked()
+                                && !ws
+                            {
+                                tab.request.kind = RequestKind::WebSocket;
+                                if tab.section == ReqSection::Tests || tab.section == ReqSection::Extract {
+                                    tab.section = ReqSection::Params;
+                                }
+                                changed = true;
                             }
                         });
                     let send_w = 96.0;
@@ -201,12 +231,34 @@ impl PakPosApp {
                     if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         send = true;
                     }
-                    let loading = matches!(tab.response, crate::app::ResponseState::Loading { .. });
-                    if widgets::primary_button(ui, if loading { "Sending…" } else { "Send" })
-                        .on_hover_text("Ctrl+Enter")
-                        .clicked()
-                    {
-                        send = true;
+                    if tab.request.kind == RequestKind::WebSocket {
+                        let st = &tab.ws;
+                        let label = if st.connected {
+                            "Disconnect"
+                        } else if st.connecting {
+                            "Connecting…"
+                        } else {
+                            "Connect"
+                        };
+                        if widgets::primary_button(ui, label).clicked() {
+                            ws_action = Some(if st.connected || st.connecting {
+                                crate::ws_view::WsAction::Disconnect
+                            } else {
+                                crate::ws_view::WsAction::Connect
+                            });
+                        }
+                        if send && !st.connected {
+                            ws_action = Some(crate::ws_view::WsAction::Connect);
+                        }
+                        send = false;
+                    } else {
+                        let loading = matches!(tab.response, crate::app::ResponseState::Loading { .. });
+                        if widgets::primary_button(ui, if loading { "Sending…" } else { "Send" })
+                            .on_hover_text("Ctrl+Enter")
+                            .clicked()
+                        {
+                            send = true;
+                        }
                     }
                 });
             });
@@ -230,7 +282,7 @@ impl PakPosApp {
             Body::None => "Body".to_string(),
             b => format!("Body ({})", b.kind().label()),
         };
-        let items = [
+        let mut items = vec![
             (ReqSection::Params, widgets::counted("Params", r.params.iter().filter(|k| !k.is_blank()).count())),
             (ReqSection::Auth, "Auth".to_string()),
             (ReqSection::Headers, widgets::counted("Headers", r.headers.iter().filter(|k| !k.is_blank()).count())),
@@ -239,6 +291,10 @@ impl PakPosApp {
             (ReqSection::Extract, widgets::counted("Extract", r.extractions.len())),
             (ReqSection::Docs, "Docs".to_string()),
         ];
+        if r.kind == RequestKind::WebSocket {
+            items.retain(|(s, _)| !matches!(s, ReqSection::Tests | ReqSection::Extract));
+            items[3].1 = "Message".to_string();
+        }
         widgets::tab_bar(ui, &mut tab.section, &items);
 
         egui::ScrollArea::vertical().id_salt(("req_scroll", tab.uid)).auto_shrink([false, false]).show(ui, |ui| {
@@ -281,6 +337,10 @@ impl PakPosApp {
                         &mut oauth_action,
                     )
                 }
+                ReqSection::Body if tab.request.kind == RequestKind::WebSocket => {
+                    changed |=
+                        crate::ws_view::composer(ui, &mut tab.request.body, &tab.ws, tab.uid, &p, &mut ws_action);
+                }
                 ReqSection::Body => {
                     changed |= body_editor(
                         ui,
@@ -311,6 +371,10 @@ impl PakPosApp {
 
         if changed {
             tab.dirty = true;
+        }
+        if let Some(a) = ws_action {
+            let ctx = ui.ctx().clone();
+            self.handle_ws_action(idx, a, &ctx);
         }
         match gql_action {
             Some(crate::graphql_view::GqlAction::FetchSchema) => {

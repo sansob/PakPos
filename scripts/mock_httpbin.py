@@ -3,7 +3,11 @@
 Usage: python3 scripts/mock_httpbin.py [port]   (default 8787)
 """
 import base64
+import hashlib
 import json
+import struct
+import threading
+import time
 import sys
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -98,7 +102,77 @@ class Handler(BaseHTTPRequestHandler):
                 data["json"] = None
         return parts.path, data
 
+    # --- WebSocket echo on /ws (RFC 6455, text frames only) -------------
+    def _ws_send(self, text):
+        payload = text.encode()
+        header = bytes([0x81])
+        n = len(payload)
+        if n < 126:
+            header += bytes([n])
+        elif n < 65536:
+            header += bytes([126]) + struct.pack(">H", n)
+        else:
+            header += bytes([127]) + struct.pack(">Q", n)
+        with self._ws_lock:
+            self.wfile.write(header + payload)
+            self.wfile.flush()
+
+    def _ws_recv(self):
+        head = self.rfile.read(2)
+        if len(head) < 2:
+            return None
+        opcode, n = head[0] & 0x0F, head[1] & 0x7F
+        if n == 126:
+            n = struct.unpack(">H", self.rfile.read(2))[0]
+        elif n == 127:
+            n = struct.unpack(">Q", self.rfile.read(8))[0]
+        mask = self.rfile.read(4) if head[1] & 0x80 else b"\0\0\0\0"
+        data = bytes(b ^ mask[i % 4] for i, b in enumerate(self.rfile.read(n)))
+        return opcode, data
+
+    def websocket(self):
+        key = self.headers.get("Sec-WebSocket-Key", "")
+        accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
+        self.protocol_version = "HTTP/1.1"  # 101 Switching Protocols requires HTTP/1.1
+        self.send_response(101)
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept)
+        self.end_headers()
+        self.wfile.flush()
+        self._ws_lock = threading.Lock()
+        alive = {"on": True}
+        self._ws_send(json.dumps({"type": "welcome", "server": "PakPos mock", "auth": self.headers.get("Authorization")}))
+
+        def ticker():
+            i = 0
+            while alive["on"]:
+                time.sleep(2)
+                i += 1
+                try:
+                    self._ws_send(json.dumps({"type": "tick", "n": i, "price": round(15000 + i * 12.5, 2)}))
+                except OSError:
+                    break
+
+        threading.Thread(target=ticker, daemon=True).start()
+        while True:
+            frame = self._ws_recv()
+            if frame is None or frame[0] == 0x8:
+                break
+            if frame[0] == 0x9:  # ping -> pong
+                continue
+            text = frame[1].decode("utf-8", "replace")
+            try:
+                reply = {"type": "echo", "received": json.loads(text)}
+            except ValueError:
+                reply = {"type": "echo", "received": text}
+            self._ws_send(json.dumps(reply))
+        alive["on"] = False
+        self.close_connection = True
+
     def handle_any(self):
+        if urlsplit(self.path).path == "/ws" and self.headers.get("Upgrade", "").lower() == "websocket":
+            return self.websocket()
         path, data = self._echo()
         method = self.command.lower()
         if path == f"/{method}" or path == "/anything":

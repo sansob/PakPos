@@ -13,6 +13,8 @@ All notable changes to this project are documented here. The format follows
   Postman `oauth2` auth is imported and exported.
 - GraphQL body type with query, JSON variables and operation name, a schema
   explorer powered by introspection, and Postman GraphQL import/export.
+- WebSocket requests: connect with params, headers and auth, compose and send
+  messages, live message log; `pakpos-cli ws` for the terminal.
 
 ## [0.1.0-rc.1] - 2026-10-14
 

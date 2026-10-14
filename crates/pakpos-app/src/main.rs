@@ -13,6 +13,7 @@ mod scene;
 mod sidebar;
 mod theme;
 mod widgets;
+mod ws_view;
 
 use pakpos_core::storage::{self, Workspace};
 

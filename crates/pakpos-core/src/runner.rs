@@ -159,6 +159,10 @@ pub fn run_collection(
 
     let filter = options.filter.as_ref().map(|f| f.to_lowercase());
     for (folder, req) in collection.flatten() {
+        // Only HTTP requests are runnable in a sequential test run.
+        if !req.kind.is_http() {
+            continue;
+        }
         if let Some(f) = &filter {
             let hay = format!("{} {}", folder.join("/"), req.name).to_lowercase();
             if !hay.contains(f) {

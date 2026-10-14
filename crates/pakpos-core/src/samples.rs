@@ -90,6 +90,15 @@ pub fn demo_collection() -> Collection {
     ];
     gql.description = "Click “Fetch schema” in the Body tab to browse the API.".into();
 
+    let mut ws = req("Live prices (WebSocket)", HttpMethod::Get, "{{ws_url}}/ws");
+    ws.kind = crate::model::RequestKind::WebSocket;
+    ws.auth = Auth::Bearer { token: "{{token}}".into() };
+    ws.body = Body::Raw {
+        content: "{\n  \"type\": \"subscribe\",\n  \"symbol\": \"IDR\"\n}".into(),
+        language: RawLanguage::Json,
+    };
+    ws.description = "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds.".into();
+
     let mut basics = Folder::new("Basics");
     basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
@@ -98,12 +107,20 @@ pub fn demo_collection() -> Collection {
     responses.items = vec![Item::Request(uuid), Item::Request(json), Item::Request(not_found)];
     let mut graphql = Folder::new("GraphQL");
     graphql.items = vec![Item::Request(gql)];
+    let mut realtime = Folder::new("Realtime");
+    realtime.items = vec![Item::Request(ws)];
 
     let mut c = Collection::new("PakPos Demo");
     c.description =
         "Sample requests against an httpbin-compatible API. Select the “Demo (httpbin)” environment and press Send."
             .into();
-    c.items = vec![Item::Folder(basics), Item::Folder(auth), Item::Folder(graphql), Item::Folder(responses)];
+    c.items = vec![
+        Item::Folder(basics),
+        Item::Folder(auth),
+        Item::Folder(graphql),
+        Item::Folder(realtime),
+        Item::Folder(responses),
+    ];
     c
 }
 
@@ -112,6 +129,7 @@ pub fn demo_environment(base_url: &str) -> Environment {
     let mut env = Environment::new("Demo (httpbin)");
     env.set("base_url", base_url);
     env.set("token", "pakpos-demo-token");
+    env.set("ws_url", crate::ws::to_ws_url(base_url));
     env
 }
 
@@ -120,7 +138,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 13);
+        assert_eq!(c.request_count(), 14);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

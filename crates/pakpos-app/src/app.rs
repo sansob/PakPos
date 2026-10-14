@@ -72,6 +72,7 @@ pub struct Tab {
     pub raw_view: bool,
     /// Text of the URL bar (base URL + query), kept in sync with params.
     pub url_edit: String,
+    pub ws: crate::ws_view::WsState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -227,6 +228,7 @@ impl PakPosApp {
         let url_edit = crate::request_view::compose_url(&request);
         self.tabs.push(Tab {
             url_edit,
+            ws: Default::default(),
             uid: self.next_uid,
             request,
             source,
@@ -324,6 +326,10 @@ impl PakPosApp {
 
     pub fn send(&mut self, idx: usize, ctx: &egui::Context) {
         let Some(tab) = self.tabs.get(idx) else { return };
+        if tab.request.kind == pakpos_core::model::RequestKind::WebSocket {
+            self.ws_connect(idx, ctx);
+            return;
+        }
         let mut req = tab.request.clone();
         widgets::trim_blank_rows(&mut req.params);
         widgets::trim_blank_rows(&mut req.headers);
@@ -768,6 +774,7 @@ impl eframe::App for PakPosApp {
         self.poll_runner();
         self.poll_oauth();
         self.poll_graphql();
+        self.poll_ws();
         if let Some(t) = self.env_dirty {
             if t.elapsed() > Duration::from_millis(600) {
                 self.persist_environments();

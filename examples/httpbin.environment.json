@@ -11,6 +11,11 @@
       "key": "token",
       "value": "pakpos-demo-token",
       "enabled": true
+    },
+    {
+      "key": "ws_url",
+      "value": "wss://httpbin.org",
+      "enabled": true
     }
   ]
 }

@@ -301,9 +301,8 @@ fn parse_items(items: Option<&Value>, warnings: &mut Vec<String>) -> Vec<Item> {
                     headers,
                     body,
                     auth,
-                    assertions: Vec::new(),
-                    extractions: Vec::new(),
                     description: desc,
+                    ..Default::default()
                 })
             }
         })
