@@ -9,6 +9,10 @@ All notable changes to this project are documented here. The format follows
 ## [0.3.0-rc.1] - 2026-10-14
 
 ### Added
+- Tab context menu: new, duplicate, close, force close, close other tabs,
+  close tabs to the right, close all, force close all; middle-click closes a tab.
+  Closing tabs with unsaved changes now asks (save and close, close without
+  saving or cancel) instead of dropping the changes.
 - The UI in Bahasa Indonesia (Settings → Language; follows the system locale
   by default), with a test that fails on untranslated UI text.
 - Digest (RFC 7616: MD5, SHA-256, -sess, qop auth/auth-int), NTLMv2 and

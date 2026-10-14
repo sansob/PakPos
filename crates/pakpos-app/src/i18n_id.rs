@@ -416,6 +416,19 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("🌐 Globals", "🌐 Global"),
     ("💾 Save", "💾 Simpan"),
     ("No \"error\"", "Tanpa \"error\""),
+    ("New tab", "Tab baru"),
+    ("Duplicate tab", "Duplikat tab"),
+    ("Close tab", "Tutup tab"),
+    ("Force close tab", "Tutup paksa tab"),
+    ("Close other tabs", "Tutup tab lain"),
+    ("Close tabs to the right", "Tutup tab di sebelah kanan"),
+    ("Close all tabs", "Tutup semua tab"),
+    ("Force close all tabs", "Tutup paksa semua tab"),
+    ("Unsaved changes", "Perubahan belum disimpan"),
+    ("{n} tab(s) have changes that are not saved:", "{n} tab punya perubahan yang belum disimpan:"),
+    ("Save and close", "Simpan lalu tutup"),
+    ("Close without saving", "Tutup tanpa menyimpan"),
+    ("{name} copy", "{name} salinan"),
 ];
 
 /// UI text that stays the same in Indonesian (names, examples, code).

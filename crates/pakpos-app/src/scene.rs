@@ -64,6 +64,16 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].resp_section = RespSection::Tests;
             app.send(app.active, ctx);
         }
+        "close-tabs" => {
+            open_by_name(app, "Create user (JSON)");
+            open_by_name(app, "Get with query params");
+            open_by_name(app, "Update user");
+            for t in &mut app.tabs[..2] {
+                t.dirty = true;
+            }
+            let uids = app.tabs.iter().map(|t| t.uid).collect();
+            app.request_close(uids, false);
+        }
         "light" => {
             app.ws.settings.theme = Theme::Light;
             open_by_name(app, "Create user (JSON)");
