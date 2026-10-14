@@ -407,6 +407,27 @@
             },
             "description": "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send."
           }
+        },
+        {
+          "name": "Chat (gRPC stream)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{grpc_url}}",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user\": \"budi\",\n  \"text\": \"paket saya sudah sampai mana?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "A bidirectional stream: Open stream, then Send message as often as you like; End stream when done."
+          }
         }
       ]
     },

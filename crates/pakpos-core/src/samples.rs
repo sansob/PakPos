@@ -151,7 +151,16 @@ pub fn demo_collection() -> Collection {
     let mut graphql = Folder::new("GraphQL");
     graphql.items = vec![Item::Request(gql)];
     let mut realtime = Folder::new("Realtime");
-    realtime.items = vec![Item::Request(ws), Item::Request(grpc_req)];
+    let mut chat = req("Chat (gRPC stream)", HttpMethod::Post, "{{grpc_url}}");
+    chat.kind = crate::model::RequestKind::Grpc;
+    chat.grpc = Some(crate::model::GrpcConfig { method: "pakpos.demo.Chat/Talk".into(), ..Default::default() });
+    chat.body = Body::Raw {
+        content: "{\n  \"user\": \"budi\",\n  \"text\": \"paket saya sudah sampai mana?\"\n}".into(),
+        language: RawLanguage::Json,
+    };
+    chat.description =
+        "A bidirectional stream: Open stream, then Send message as often as you like; End stream when done.".into();
+    realtime.items = vec![Item::Request(ws), Item::Request(grpc_req), Item::Request(chat)];
 
     let mut c = Collection::new("PakPos Demo");
     c.description =
@@ -182,7 +191,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 18);
+        assert_eq!(c.request_count(), 19);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

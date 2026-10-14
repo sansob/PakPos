@@ -341,8 +341,10 @@ pub fn request_template(pool: &DescriptorPool, full_method: &str) -> Result<Stri
 
 // ---- calls ------------------------------------------------------------------
 
+/// Protobuf codec for [`DynamicMessage`]s: encodes any message, decodes into
+/// the given descriptor. Also usable on the server side (demo / test servers).
 #[derive(Clone)]
-struct DynamicCodec(MessageDescriptor);
+pub struct DynamicCodec(pub MessageDescriptor);
 
 impl Codec for DynamicCodec {
     type Encode = DynamicMessage;
@@ -575,6 +577,214 @@ pub fn call(
         out.elapsed_ms = started.elapsed().as_millis();
         Ok(out)
     })
+}
+
+// ---- interactive streams ------------------------------------------------------
+
+/// Commands for an open client / bidirectional stream.
+#[derive(Debug, Clone)]
+pub enum StreamCommand {
+    /// Send one message (JSON).
+    Send(String),
+    /// Half-close: no more messages from the client.
+    End,
+    /// Abort the call.
+    Cancel,
+}
+
+/// What happens on an open stream.
+#[derive(Debug, Clone)]
+pub enum StreamEvent {
+    /// Response headers arrived (bidirectional streams).
+    Opened {
+        headers: Vec<(String, String)>,
+    },
+    Message {
+        direction: crate::ws::Direction,
+        text: String,
+        at: chrono::DateTime<chrono::Utc>,
+    },
+    /// A message could not be sent (invalid JSON for the message type…); the stream stays open.
+    Error(String),
+    /// The call ended. `code` 0 = OK; 1 = cancelled by the user.
+    Closed {
+        code: i32,
+        code_name: String,
+        message: String,
+        trailers: Vec<(String, String)>,
+    },
+}
+
+/// Handle to an open stream; dropping it cancels the call.
+pub struct StreamHandle {
+    pub tx: tokio::sync::mpsc::UnboundedSender<StreamCommand>,
+    pub rx: std::sync::mpsc::Receiver<StreamEvent>,
+}
+
+impl StreamHandle {
+    pub fn send(&self, json: impl Into<String>) {
+        let _ = self.tx.send(StreamCommand::Send(json.into()));
+    }
+
+    pub fn end(&self) {
+        let _ = self.tx.send(StreamCommand::End);
+    }
+
+    pub fn cancel(&self) {
+        let _ = self.tx.send(StreamCommand::Cancel);
+    }
+}
+
+/// Opens a client-streaming or bidirectional call and keeps it open: messages
+/// are sent one by one with [`StreamHandle::send`], responses arrive as
+/// events. `notify` is called after every event (e.g. to repaint a UI).
+pub fn open_stream(
+    url: &str,
+    pool: &DescriptorPool,
+    full_method: &str,
+    metadata: &[(String, String)],
+    settings: &HttpSettings,
+    notify: impl Fn() + Send + 'static,
+) -> Result<StreamHandle, GrpcError> {
+    let method = find_method(pool, full_method)?;
+    if !method.is_client_streaming() {
+        return Err(GrpcError::Message(format!("{full_method} is not a client or bidirectional stream")));
+    }
+    let path: tonic::codegen::http::uri::PathAndQuery =
+        format!("/{}/{}", method.parent_service().full_name(), method.name())
+            .parse()
+            .map_err(|_| GrpcError::NoMethod(full_method.into()))?;
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel::<StreamCommand>();
+    let (ev_tx, ev_rx) = std::sync::mpsc::channel::<StreamEvent>();
+    let (url, settings, metadata) = (url.to_string(), settings.clone(), metadata.to_vec());
+
+    std::thread::spawn(move || {
+        let emit = |e: StreamEvent| {
+            let _ = ev_tx.send(e);
+            notify();
+        };
+        let closed = |s: &Status| StreamEvent::Closed {
+            code: s.code() as i32,
+            code_name: format!("{:?}", s.code()),
+            message: s.message().to_string(),
+            trailers: metadata_pairs(s.metadata()),
+        };
+        let cancelled = || StreamEvent::Closed {
+            code: 1,
+            code_name: "Cancelled".into(),
+            message: "cancelled by you".into(),
+            trailers: Vec::new(),
+        };
+        let input = method.input();
+        runtime().block_on(async move {
+            let channel = match connect(&url, &settings).await {
+                Ok(c) => c,
+                Err(e) => {
+                    emit(StreamEvent::Closed { code: 14, code_name: "Unavailable".into(), message: e.to_string(), trailers: Vec::new() });
+                    return;
+                }
+            };
+            let mut grpc = tonic::client::Grpc::new(channel);
+            if let Err(e) = grpc.ready().await {
+                emit(StreamEvent::Closed { code: 14, code_name: "Unavailable".into(), message: e.to_string(), trailers: Vec::new() });
+                return;
+            }
+            let (msg_tx, msg_rx) = tokio::sync::mpsc::unbounded_channel::<DynamicMessage>();
+            let mut msg_tx = Some(msg_tx);
+            let mut req = tonic::Request::new(tokio_stream::wrappers::UnboundedReceiverStream::new(msg_rx));
+            for (k, v) in &metadata {
+                let k = k.trim().to_ascii_lowercase();
+                if k.is_empty() || k == "content-type" || k == "user-agent" || k.ends_with("-bin") {
+                    continue;
+                }
+                if let (Ok(key), Ok(val)) = (
+                    tonic::metadata::MetadataKey::<tonic::metadata::Ascii>::from_bytes(k.as_bytes()),
+                    tonic::metadata::MetadataValue::try_from(v.as_str()),
+                ) {
+                    req.metadata_mut().insert(key, val);
+                }
+            }
+            // Returns false when the call must stop.
+            let handle_cmd = |cmd: Option<StreamCommand>, msg_tx: &mut Option<tokio::sync::mpsc::UnboundedSender<DynamicMessage>>| -> bool {
+                match cmd {
+                    Some(StreamCommand::Send(json)) => {
+                        let parsed = serde_json::from_str::<serde_json::Value>(if json.trim().is_empty() { "{}" } else { &json })
+                            .map_err(|e| format!("not valid JSON: {e}"))
+                            .and_then(|v| parse_message(&input, v).map_err(|e| e.to_string()));
+                        match (parsed, msg_tx.as_ref()) {
+                            (Ok(m), Some(tx)) => {
+                                let text = to_json(&m);
+                                if tx.send(m).is_ok() {
+                                    emit(StreamEvent::Message { direction: crate::ws::Direction::Sent, text, at: chrono::Utc::now() });
+                                }
+                            }
+                            (Ok(_), None) => emit(StreamEvent::Error("the stream was already ended".into())),
+                            (Err(e), _) => emit(StreamEvent::Error(e)),
+                        }
+                        true
+                    }
+                    Some(StreamCommand::End) => {
+                        *msg_tx = None;
+                        true
+                    }
+                    Some(StreamCommand::Cancel) | None => false,
+                }
+            };
+            let codec = DynamicCodec(method.output());
+            if method.is_server_streaming() {
+                let call = grpc.streaming(req, path, codec);
+                tokio::pin!(call);
+                let resp = loop {
+                    tokio::select! {
+                        r = &mut call => break r,
+                        cmd = cmd_rx.recv() => if !handle_cmd(cmd, &mut msg_tx) { emit(cancelled()); return; },
+                    }
+                };
+                let mut stream = match resp {
+                    Ok(r) => {
+                        emit(StreamEvent::Opened { headers: metadata_pairs(r.metadata()) });
+                        r.into_inner()
+                    }
+                    Err(s) => {
+                        emit(closed(&s));
+                        return;
+                    }
+                };
+                loop {
+                    tokio::select! {
+                        m = stream.message() => match m {
+                            Ok(Some(m)) => emit(StreamEvent::Message { direction: crate::ws::Direction::Received, text: to_json(&m), at: chrono::Utc::now() }),
+                            Ok(None) => {
+                                let trailers = stream.trailers().await.ok().flatten().map(|t| metadata_pairs(&t)).unwrap_or_default();
+                                emit(StreamEvent::Closed { code: 0, code_name: "Ok".into(), message: String::new(), trailers });
+                                return;
+                            }
+                            Err(s) => { emit(closed(&s)); return; }
+                        },
+                        cmd = cmd_rx.recv() => if !handle_cmd(cmd, &mut msg_tx) { emit(cancelled()); return; },
+                    }
+                }
+            } else {
+                let call = grpc.client_streaming(req, path, codec);
+                tokio::pin!(call);
+                let resp = loop {
+                    tokio::select! {
+                        r = &mut call => break r,
+                        cmd = cmd_rx.recv() => if !handle_cmd(cmd, &mut msg_tx) { emit(cancelled()); return; },
+                    }
+                };
+                match resp {
+                    Ok(r) => {
+                        emit(StreamEvent::Opened { headers: metadata_pairs(r.metadata()) });
+                        emit(StreamEvent::Message { direction: crate::ws::Direction::Received, text: to_json(r.get_ref()), at: chrono::Utc::now() });
+                        emit(StreamEvent::Closed { code: 0, code_name: "Ok".into(), message: String::new(), trailers: Vec::new() });
+                    }
+                    Err(s) => emit(closed(&s)),
+                }
+            }
+        });
+    });
+    Ok(StreamHandle { tx: cmd_tx, rx: ev_rx })
 }
 
 #[cfg(test)]

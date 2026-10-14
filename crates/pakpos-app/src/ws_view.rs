@@ -26,7 +26,7 @@ pub struct WsState {
 }
 
 impl WsState {
-    fn system(&mut self, text: impl Into<String>, error: bool) {
+    pub(crate) fn system(&mut self, text: impl Into<String>, error: bool) {
         self.log.push(LogEntry { direction: None, text: text.into(), at: chrono::Utc::now(), error });
     }
 }

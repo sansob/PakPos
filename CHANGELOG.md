@@ -23,6 +23,9 @@ All notable changes to this project are documented here. The format follows
 - Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
   view (copy a value or its test path), image preview and a simplified HTML
   preview with *Open in browser*; *Save* picks the extension from the content type.
+- Interactive gRPC streams: open a client-streaming or bidirectional call,
+  send messages one by one, see answers live, end or cancel it. The demo
+  server gains `pakpos.demo.Chat` (`Talk`, `Sum`).
 - `pm.sendRequest` in scripts, behind a per-collection network permission
   (trusted collections only, stored in settings); `pakpos-cli run --allow-network`;
   host allow-list, request cap and cookie jar apply.

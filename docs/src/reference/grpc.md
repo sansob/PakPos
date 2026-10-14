@@ -63,13 +63,31 @@ Exit code is `1` when the status is not OK.
 cargo run -p pakpos-core --example grpc_demo_server   # grpc://127.0.0.1:50051
 ```
 
-It serves the standard health service with reflection. The demo collection's
+It serves the standard health service and `pakpos.demo.Chat`, with reflection. The demo collection's
 **Realtime → Health check (gRPC)** request calls it. `Health/Watch` on the
 service `pakpos.demo` streams a status change every 2 seconds.
 
+## Interactive streams
+
+For client-streaming and bidirectional methods, **▶ Open stream** keeps the
+call open. Each **Send message** sends the editor's JSON (an array sends each
+element), and answers appear in the message log as they arrive, like a
+WebSocket. **End stream** half-closes the call (the server sees the end of
+your messages and finishes); **Cancel** aborts it. The final status and
+trailers are logged. Invalid JSON for the message type is reported without
+closing the stream.
+
+**Send** still works for these methods too: it sends a JSON array of messages
+at once and waits for the result, which is also how the runner calls them.
+
+The demo server has `pakpos.demo.Chat/Talk` (bidirectional, answers every
+message) and `pakpos.demo.Chat/Sum` (client streaming); the demo collection's
+**Chat (gRPC stream)** request uses `Talk`.
+
+![Bidirectional stream](https://raw.githubusercontent.com/sansob/PakPos/main/docs/screenshots/grpc-stream.png)
+
 ## Limitations
 
-- No interactive bidirectional streaming: inputs are sent up front.
 - TLS uses the system's root certificates plus the CA of a matching client
   certificate entry ([mTLS](auth.md#client-certificates-mtls)); the *verify
   TLS* switch is not applied to gRPC.

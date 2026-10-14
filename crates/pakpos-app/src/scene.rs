@@ -127,6 +127,11 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.git.open = true;
             app.git.message = "Document collection owner".into();
         }
+        "grpc-stream" => {
+            open_by_name(app, "Chat (gRPC stream)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.grpc_load(app.active, ctx);
+        }
         "grpc" => {
             open_by_name(app, "Health check (gRPC)");
             app.tabs[app.active].section = ReqSection::Body;
@@ -241,6 +246,9 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
             t.grpc.job.is_none() && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))
         }),
         "mock" => app.mock.as_ref().is_some_and(|m| m.hits.len() >= 4),
+        "grpc-stream" => app.tabs.get(app.active).is_some_and(|t| {
+            t.grpc.live.log.iter().filter(|e| e.direction == Some(pakpos_core::ws::Direction::Received)).count() >= 2
+        }),
         "websocket" => app.tabs.get(app.active).is_some_and(|t| t.ws.log.iter().any(|e| e.text.contains("\"tick\""))),
         "graphql" => {
             app.graphql.job.is_none()
@@ -266,6 +274,18 @@ pub fn tick(app: &mut PakPosApp, ctx: &egui::Context) {
         setup(app, &name, ctx);
         ctx.request_repaint();
         return;
+    }
+    if state.name == "grpc-stream" {
+        let idx = app.active;
+        let loaded = app.tabs.get(idx).is_some_and(|t| t.grpc.pool.is_some() && t.grpc.job.is_none());
+        if loaded && !state.sent {
+            state.sent = true;
+            app.grpc_open_stream(idx, ctx);
+            for text in ["paket saya sudah sampai mana?", "terima kasih!"] {
+                let msg = format!("{{\"user\": \"budi\", \"text\": \"{text}\"}}");
+                app.handle_grpc_action(idx, crate::grpc_view::GrpcAction::StreamSend(msg), ctx);
+            }
+        }
     }
     if state.name == "websocket" {
         let idx = app.active;

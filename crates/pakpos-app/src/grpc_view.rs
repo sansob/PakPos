@@ -19,12 +19,21 @@ pub struct GrpcState {
     pub source_key: String,
     pub job: Option<Receiver<Result<DescriptorPool, String>>>,
     pub error: Option<String>,
+    /// Open interactive stream (client / bidirectional methods).
+    pub stream: Option<grpc::StreamHandle>,
+    /// Its message log, shown instead of the response while it is the last thing used.
+    pub live: crate::ws_view::WsState,
+    pub live_view: bool,
 }
 
 pub enum GrpcAction {
     Load,
     Template,
     AddProto,
+    OpenStream,
+    StreamSend(String),
+    StreamEnd,
+    StreamCancel,
 }
 
 fn source_key(url: &str, cfg: &GrpcConfig) -> String {
@@ -139,11 +148,39 @@ pub fn editor(
         if ui.button("Generate example").clicked() {
             *action = Some(GrpcAction::Template);
         }
-        let streaming = state.methods.iter().find(|m| m.full_name == cfg.method).is_some_and(|m| m.client_streaming);
-        if streaming {
-            ui.label(RichText::new("client streaming: send a JSON array of messages").small().color(p.text_weak));
-        }
     });
+    let streaming = state.methods.iter().find(|m| m.full_name == cfg.method).is_some_and(|m| m.client_streaming);
+    if streaming {
+        ui.horizontal(|ui| {
+            if state.stream.is_some() {
+                if widgets::primary_button(ui, "Send message")
+                    .on_hover_text("Send the message below (an array sends each element)")
+                    .clicked()
+                {
+                    *action = Some(GrpcAction::StreamSend(content.clone()));
+                }
+                if ui
+                    .button("End stream")
+                    .on_hover_text("Half-close: the server sees the end of your messages")
+                    .clicked()
+                {
+                    *action = Some(GrpcAction::StreamEnd);
+                }
+                if ui.button("Cancel").clicked() {
+                    *action = Some(GrpcAction::StreamCancel);
+                }
+                widgets::pill(ui, "stream open", crate::theme::GREEN, crate::theme::GREEN.gamma_multiply(0.16));
+            } else {
+                if ui.button("▶ Open stream").on_hover_text("Keep the call open and send messages one by one").clicked()
+                {
+                    *action = Some(GrpcAction::OpenStream);
+                }
+                ui.label(
+                    RichText::new("or press Send to send a JSON array of messages at once").small().color(p.text_weak),
+                );
+            }
+        });
+    }
     let theme_ = egui_extras::syntax_highlighting::CodeTheme::from_style(ui.style());
     let mut layouter = |ui: &Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
         let mut job = egui_extras::syntax_highlighting::highlight(ui.ctx(), ui.style(), &theme_, buf.as_str(), "json");
@@ -179,6 +216,30 @@ impl PakPosApp {
                     }
                     tab.dirty = true;
                     self.grpc_load(idx, ctx);
+                }
+            }
+            GrpcAction::OpenStream => self.grpc_open_stream(idx, ctx),
+            GrpcAction::StreamSend(text) => {
+                let scope = self.scope_for(&self.tabs[idx]);
+                let text = scope.resolve(&text);
+                let tab = &mut self.tabs[idx];
+                tab.grpc.live_view = true;
+                if let Some(h) = &tab.grpc.stream {
+                    match serde_json::from_str::<serde_json::Value>(&text) {
+                        Ok(serde_json::Value::Array(items)) => items.iter().for_each(|m| h.send(m.to_string())),
+                        _ => h.send(text),
+                    }
+                }
+            }
+            GrpcAction::StreamEnd => {
+                if let Some(h) = &self.tabs[idx].grpc.stream {
+                    h.end();
+                    self.tabs[idx].grpc.live.system("You ended the stream", false);
+                }
+            }
+            GrpcAction::StreamCancel => {
+                if let Some(h) = &self.tabs[idx].grpc.stream {
+                    h.cancel();
                 }
             }
             GrpcAction::Template => {
@@ -243,8 +304,97 @@ impl PakPosApp {
         }
     }
 
+    /// Opens an interactive stream for a client-streaming / bidirectional method.
+    pub fn grpc_open_stream(&mut self, idx: usize, ctx: &egui::Context) {
+        let Some(tab) = self.tabs.get(idx) else { return };
+        let mut scope = self.scope_for(tab);
+        let fallback = self.inherited_auth(tab);
+        let mut req = tab.request.clone();
+        crate::app::clean_request(&mut req);
+        let cfg = req.grpc.clone().unwrap_or_default();
+        let key = source_key(&scope.resolve(&req.url), &cfg);
+        let pool = tab.grpc.pool.clone().filter(|_| tab.grpc.source_key == key);
+        let effective = match &req.auth {
+            Auth::Inherit => fallback.clone().unwrap_or(Auth::None),
+            a => a.clone(),
+        };
+        let mut tokens = self.ws.tokens.clone();
+        let settings = self.ws.settings.http.clone();
+        let result = (|| -> Result<grpc::StreamHandle, String> {
+            let pool = pool.ok_or("Load the methods first (⟳ Load methods).")?;
+            pakpos_core::oauth2::ensure_token(&effective, &mut scope, &mut tokens, &settings)
+                .map_err(|e| e.to_string())?;
+            let mut meta = req.clone();
+            meta.body = Body::None;
+            let prepared = http::prepare(&meta, &scope, fallback.as_ref()).map_err(|e| e.to_string())?;
+            let ctx = ctx.clone();
+            grpc::open_stream(&prepared.url, &pool, &cfg.method, &prepared.headers, &settings, move || {
+                ctx.request_repaint()
+            })
+            .map_err(|e| e.to_string())
+        })();
+        if tokens != self.ws.tokens {
+            self.ws.tokens = tokens;
+            let _ = self.ws.save_tokens();
+        }
+        let st = &mut self.tabs[idx].grpc;
+        st.live_view = true;
+        st.live.log.clear();
+        match result {
+            Ok(h) => {
+                st.live.system(format!("Opening {}", cfg.method), false);
+                st.live.connecting = true;
+                st.stream = Some(h);
+            }
+            Err(e) => st.live.system(e, true),
+        }
+    }
+
+    /// Moves stream events into the tabs' logs.
+    pub fn poll_grpc_streams(&mut self) {
+        use crate::ws_view::LogEntry;
+        for tab in &mut self.tabs {
+            let st = &mut tab.grpc;
+            let Some(h) = &st.stream else { continue };
+            let events: Vec<_> = h.rx.try_iter().collect();
+            for e in events {
+                match e {
+                    grpc::StreamEvent::Opened { .. } => {
+                        st.live.connecting = false;
+                        st.live.connected = true;
+                        st.live.system("Stream open", false);
+                    }
+                    grpc::StreamEvent::Message { direction, text, at } => {
+                        st.live.connecting = false;
+                        st.live.connected = true;
+                        st.live.log.push(LogEntry { direction: Some(direction), text, at, error: false });
+                    }
+                    grpc::StreamEvent::Error(e) => st.live.system(e, true),
+                    grpc::StreamEvent::Closed { code, code_name, message, trailers } => {
+                        st.live.connected = false;
+                        st.live.connecting = false;
+                        let mut text = format!("Closed: {code} {code_name}");
+                        if !message.is_empty() {
+                            text.push_str(&format!(" — {message}"));
+                        }
+                        if !trailers.is_empty() {
+                            let t: Vec<String> = trailers.iter().map(|(k, v)| format!("{k}: {v}")).collect();
+                            text.push_str(&format!("  ({})", t.join(", ")));
+                        }
+                        st.live.system(text, code != 0 && code != 1);
+                        st.stream = None;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     /// Sends a gRPC request (loading descriptors first if needed).
     pub fn grpc_send(&mut self, idx: usize, ctx: &egui::Context) {
+        if let Some(tab) = self.tabs.get_mut(idx) {
+            tab.grpc.live_view = false;
+        }
         let Some(tab) = self.tabs.get(idx) else { return };
         let mut scope = self.scope_for(tab);
         let fallback = self.inherited_auth(tab);

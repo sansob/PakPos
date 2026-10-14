@@ -1055,6 +1055,7 @@ impl eframe::App for PakPosApp {
         self.poll_oauth();
         self.poll_graphql();
         self.poll_ws();
+        self.poll_grpc_streams();
         self.poll_mock();
         self.poll_grpc();
         if let Some(t) = self.env_dirty {

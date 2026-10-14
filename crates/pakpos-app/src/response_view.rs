@@ -15,6 +15,10 @@ impl PakPosApp {
             crate::ws_view::log_view(ui, &mut tab.ws, tab.uid, &p);
             return;
         }
+        if tab.request.kind == pakpos_core::model::RequestKind::Grpc && tab.grpc.live_view {
+            crate::ws_view::log_view(ui, &mut tab.grpc.live, tab.uid, &p);
+            return;
+        }
         let mut copy: Option<String> = None;
         let mut cancel = false;
         let mut save_to_file: Option<Vec<u8>> = None;
