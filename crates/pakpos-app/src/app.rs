@@ -23,6 +23,8 @@ pub enum ReqSection {
     Body,
     Tests,
     Extract,
+    Scripts,
+    Examples,
     Docs,
 }
 
@@ -31,6 +33,7 @@ pub enum RespSection {
     Body,
     Headers,
     Tests,
+    Console,
     Request,
 }
 
@@ -48,6 +51,12 @@ pub struct Outcome {
     pub pretty: String,
     pub tests: Vec<AssertionResult>,
     pub extracted: Vec<(String, String)>,
+    /// OAuth 2.0 token obtained or refreshed for this send, to store.
+    pub new_token: Option<(String, pakpos_core::oauth2::OAuthToken)>,
+    /// Script console output.
+    pub logs: Vec<String>,
+    /// Variables set by scripts, to persist.
+    pub script_changes: pakpos_core::scripts::VarChanges,
 }
 
 pub enum ResponseState {
@@ -70,6 +79,8 @@ pub struct Tab {
     pub raw_view: bool,
     /// Text of the URL bar (base URL + query), kept in sync with params.
     pub url_edit: String,
+    pub ws: crate::ws_view::WsState,
+    pub grpc: crate::grpc_view::GrpcState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -100,7 +111,15 @@ pub enum DeleteTarget {
     Environment(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollectionTab {
+    General,
+    Variables,
+    Scripts,
+}
+
 pub enum Dialog {
+    CollectionSettings { id: String, tab: CollectionTab },
     ImportCurl { text: String, error: Option<String> },
     SaveRequest { tab: usize, collection: Option<String>, new_collection: String, name: String },
     Rename { target: RenameTarget, name: String },
@@ -151,6 +170,9 @@ pub enum Action {
     EditEnvironment(Option<String>),
     NewEnvironment,
     ClearHistory,
+    StartMock(String),
+    StopMock,
+    ShowMock,
     Dialog(Dialog),
 }
 
@@ -165,7 +187,13 @@ pub struct PakPosApp {
     pub dialog: Option<Dialog>,
     pub toasts: Vec<Toast>,
     pub env_dirty: Option<Instant>,
+    /// Collection edited in the settings dialog, saved after a short pause.
+    pub collection_dirty: Option<(String, Instant)>,
     pub runner: Option<RunnerState>,
+    pub oauth_job: Option<crate::oauth_view::OAuthJob>,
+    pub graphql: crate::graphql_view::GqlState,
+    pub mock: Option<crate::mock_view::MockState>,
+    pub git: crate::git_view::GitState,
     applied_theme: Option<(Theme, u32)>,
     next_uid: u64,
     pub actions: Vec<Action>,
@@ -185,7 +213,12 @@ impl PakPosApp {
             dialog: None,
             toasts: Vec::new(),
             env_dirty: None,
+            collection_dirty: None,
             runner: None,
+            oauth_job: None,
+            graphql: Default::default(),
+            mock: None,
+            git: Default::default(),
             applied_theme: None,
             next_uid: 1,
             actions: Vec::new(),
@@ -221,6 +254,8 @@ impl PakPosApp {
         let url_edit = crate::request_view::compose_url(&request);
         self.tabs.push(Tab {
             url_edit,
+            ws: Default::default(),
+            grpc: Default::default(),
             uid: self.next_uid,
             request,
             source,
@@ -298,10 +333,12 @@ impl PakPosApp {
     pub fn scope_for(&self, tab: &Tab) -> VarScope {
         let collection_vars =
             tab.source.as_ref().and_then(|(c, _)| self.collection(c)).map(|c| c.variables.clone()).unwrap_or_default();
-        VarScope::new()
+        let mut scope = VarScope::new()
             .with_environment(self.ws.active_environment())
             .with_collection_vars(&collection_vars)
-            .with_globals(&self.ws.globals)
+            .with_globals(&self.ws.globals);
+        pakpos_core::oauth2::load_into_scope(&self.ws.tokens, &mut scope);
+        scope
     }
 
     /// Auth a request would inherit from its folder / collection.
@@ -316,15 +353,64 @@ impl PakPosApp {
 
     pub fn send(&mut self, idx: usize, ctx: &egui::Context) {
         let Some(tab) = self.tabs.get(idx) else { return };
+        if tab.request.kind == pakpos_core::model::RequestKind::WebSocket {
+            self.ws_connect(idx, ctx);
+            return;
+        }
+        if tab.request.kind == pakpos_core::model::RequestKind::Grpc {
+            self.grpc_send(idx, ctx);
+            return;
+        }
         let mut req = tab.request.clone();
         widgets::trim_blank_rows(&mut req.params);
         widgets::trim_blank_rows(&mut req.headers);
-        let scope = self.scope_for(tab);
+        let mut scope = self.scope_for(tab);
         let fallback = self.inherited_auth(tab);
         let settings = self.ws.settings.http.clone();
+        let mut tokens = self.ws.tokens.clone();
+        let collection = tab.source.as_ref().and_then(|(c, _)| self.collection(c));
+        let chain = pakpos_core::scripts::chain_for(collection, &req);
+        // Unsaved requests are the user's own; saved ones follow collection trust.
+        let trusted = tab.source.as_ref().is_none_or(|(c, _)| self.ws.is_trusted(c));
+        let run_scripts = trusted && !chain.is_empty();
+        let skipped = !trusted && !chain.is_empty();
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
+            let limits = pakpos_core::scripts::Limits::default();
+            let mut logs = Vec::new();
+            let mut script_tests = Vec::new();
+            let mut changes = pakpos_core::scripts::VarChanges::default();
+            if skipped {
+                logs.push(
+                    "Scripts were not run: this collection is not trusted (see the banner in the Scripts tab).".into(),
+                );
+            }
+            if run_scripts {
+                let pre = pakpos_core::scripts::run_pre_request(&chain, &mut req, &mut scope, limits);
+                script_tests.extend(pre.error_results());
+                logs.extend(pre.logs);
+                changes.merge(pre.changes);
+            }
+            let effective = match &req.auth {
+                Auth::Inherit => fallback.clone().unwrap_or(Auth::None),
+                a => a.clone(),
+            };
+            let new_token = match pakpos_core::oauth2::ensure_token(&effective, &mut scope, &mut tokens, &settings) {
+                Ok(t) => t,
+                Err(pakpos_core::oauth2::OAuthError::NeedsInteractive) => {
+                    let _ = tx.send(Err(
+                        "No OAuth 2.0 token yet: open the Auth tab and click “Get new access token”.".into()
+                    ));
+                    ctx.request_repaint();
+                    return;
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(e.to_string()));
+                    ctx.request_repaint();
+                    return;
+                }
+            };
             let result = http::prepare(&req, &scope, fallback.as_ref())
                 .and_then(|p| {
                     let client = http::build_client(&settings)?;
@@ -332,9 +418,17 @@ impl PakPosApp {
                 })
                 .map(|(prepared, response)| {
                     let pretty = if response.body.len() > 2_000_000 { response.text() } else { response.pretty_body() };
-                    let tests = assertions::run_all(&response, &req.assertions, |s| scope.resolve(s));
+                    let mut tests = assertions::run_all(&response, &req.assertions, |s| scope.resolve(s));
                     let extracted = assertions::extract_all(&response, &req.extractions);
-                    Outcome { prepared, response, pretty, tests, extracted }
+                    if run_scripts {
+                        let t = pakpos_core::scripts::run_tests(&chain, &req, &response, &mut scope, limits);
+                        tests.extend(t.tests.iter().cloned());
+                        script_tests.extend(t.error_results());
+                        logs.extend(t.logs.iter().cloned());
+                        changes.merge(t.changes);
+                    }
+                    tests.extend(script_tests);
+                    Outcome { prepared, response, pretty, tests, extracted, new_token, logs, script_changes: changes }
                 })
                 .map_err(|e| e.to_string());
             let _ = tx.send(result);
@@ -361,6 +455,12 @@ impl PakPosApp {
             match result {
                 Ok(outcome) => {
                     self.ws.push_history(req, Some(outcome.response.status), Some(outcome.response.elapsed_ms));
+                    if let Some((key, token)) = outcome.new_token.clone() {
+                        self.ws.tokens.insert(key, token);
+                        let _ = self.ws.save_tokens();
+                    }
+                    let source = self.tabs[i].source.clone();
+                    self.apply_script_changes(&outcome.script_changes, source.as_ref().map(|(c, _)| c.as_str()));
                     if !outcome.extracted.is_empty() {
                         let names: Vec<String> =
                             outcome.extracted.iter().map(|(k, _)| format!("{{{{{k}}}}}")).collect();
@@ -397,6 +497,39 @@ impl PakPosApp {
                 }
             }
             let _ = self.ws.save_history();
+        }
+    }
+
+    pub fn trust_collection(&mut self, id: &str) {
+        if !self.ws.is_trusted(id) {
+            self.ws.settings.trusted_collections.push(id.to_string());
+            self.persist_settings();
+            self.toast("Collection trusted: its scripts will run");
+        }
+    }
+
+    /// Persists variables set by scripts (environment, collection, globals).
+    pub fn apply_script_changes(&mut self, changes: &pakpos_core::scripts::VarChanges, collection: Option<&str>) {
+        use pakpos_core::scripts::VarChanges;
+        if changes.is_empty() {
+            return;
+        }
+        if !changes.environment.is_empty() {
+            match self.ws.active_environment_mut() {
+                Some(env) => VarChanges::apply_to_list(&mut env.variables, &changes.environment),
+                None => VarChanges::apply_to_list(&mut self.ws.globals, &changes.environment),
+            }
+            self.env_dirty = Some(Instant::now());
+        }
+        if !changes.globals.is_empty() {
+            VarChanges::apply_to_list(&mut self.ws.globals, &changes.globals);
+            self.env_dirty = Some(Instant::now());
+        }
+        if let (false, Some(cid)) = (changes.collection.is_empty(), collection) {
+            if let Some(c) = self.collection_mut(cid) {
+                VarChanges::apply_to_list(&mut c.variables, &changes.collection);
+            }
+            self.persist_collection(cid);
         }
     }
 
@@ -437,6 +570,26 @@ impl PakPosApp {
                 self.toast_error(e.to_string());
             }
         }
+        self.reload_mock(id);
+    }
+
+    /// Stores the tab's current response as an example of its saved request.
+    pub fn save_example(&mut self, idx: usize) {
+        let Some(tab) = self.tabs.get(idx) else { return };
+        let ResponseState::Done(outcome) = &tab.response else { return };
+        let Some((cid, rid)) = tab.source.clone() else {
+            self.toast_error("Save the request to a collection first, then save examples.");
+            return;
+        };
+        let r = &outcome.response;
+        let example =
+            pakpos_core::model::Example::from_response(format!("{} {}", r.status, r.status_text).trim().to_string(), r);
+        self.tabs[idx].request.examples.push(example.clone());
+        if let Some(saved) = self.collection_mut(&cid).and_then(|c| c.find_request_mut(&rid)) {
+            saved.examples.push(example);
+        }
+        self.persist_collection(&cid);
+        self.toast("Saved as example (served by the mock server)");
     }
 
     pub fn persist_environments(&mut self) {
@@ -585,13 +738,28 @@ impl PakPosApp {
                         self.environment_picker(ui);
                         ui.label(RichText::new("Environment").color(white.gamma_multiply(0.7)).small());
                         ui.add_space(12.0);
+                        let changes = self.git.change_count();
+                        let sync_label =
+                            if changes > 0 { format!("⇅ Sync ({changes})") } else { "⇅ Sync".to_string() };
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new(sync_label).color(white))
+                                    .fill(theme::NAVY_600)
+                                    .stroke(egui::Stroke::NONE),
+                            )
+                            .on_hover_text("Share this workspace with git")
+                            .clicked()
+                        {
+                            self.git.open = true;
+                            self.git.last_refresh = None;
+                        }
                         let import = ui.add(
                             egui::Button::new(RichText::new("Import").color(white))
                                 .fill(theme::NAVY_600)
                                 .stroke(egui::Stroke::NONE),
                         );
                         egui::Popup::menu(&import).show(|ui| {
-                            if ui.button("Postman / PakPos collection…").clicked() {
+                            if ui.button("Collection file (PakPos / v2.1)…").clicked() {
                                 self.actions.push(Action::ImportPostmanCollection);
                             }
                             if ui.button("Environment…").clicked() {
@@ -651,6 +819,18 @@ impl PakPosApp {
                     ui.label(
                         RichText::new(format!("Workspace: {}", self.ws.root.display())).small().color(p.text_weak),
                     );
+                    if let Some(m) = &self.mock {
+                        ui.separator();
+                        let label =
+                            RichText::new(format!("● Mock http://{}", m.server.addr)).small().color(theme::GREEN);
+                        if ui
+                            .add(egui::Label::new(label).sense(egui::Sense::click()))
+                            .on_hover_text("Show mock server")
+                            .clicked()
+                        {
+                            self.actions.push(Action::ShowMock);
+                        }
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .add(
@@ -731,12 +911,24 @@ pub fn clean_items(items: &mut [Item]) {
 }
 
 impl eframe::App for PakPosApp {
-    fn logic(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_git(ctx);
         self.poll_responses();
         self.poll_runner();
+        self.poll_oauth();
+        self.poll_graphql();
+        self.poll_ws();
+        self.poll_mock();
+        self.poll_grpc();
         if let Some(t) = self.env_dirty {
             if t.elapsed() > Duration::from_millis(600) {
                 self.persist_environments();
+            }
+        }
+        if let Some((id, t)) = self.collection_dirty.clone() {
+            if t.elapsed() > Duration::from_millis(600) {
+                self.persist_collection(&id);
+                self.collection_dirty = None;
             }
         }
     }
@@ -760,10 +952,15 @@ impl eframe::App for PakPosApp {
 
         self.dialogs(&ctx);
         self.runner_window(&ctx);
+        self.mock_window(&ctx);
+        self.git_window(&ctx);
         self.show_toasts(&ctx);
         self.apply_actions(&ctx);
 
-        if self.tabs.iter().any(|t| matches!(t.response, ResponseState::Loading { .. })) {
+        if self.oauth_job.is_some()
+            || self.graphql.job.is_some()
+            || self.tabs.iter().any(|t| matches!(t.response, ResponseState::Loading { .. }))
+        {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         if self.env_dirty.is_some() {

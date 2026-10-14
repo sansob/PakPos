@@ -84,20 +84,32 @@ jobs:
 
   windows:
     needs: meta
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.meta.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: ilammy/setup-nasm@v1
+        with:
+          key: release-windows-${{ matrix.arch }}
+      - name: Install NASM (x64 only, for aws-lc)
+        if: matrix.arch == 'x64'
+        uses: ilammy/setup-nasm@v1
       - run: cargo build --release --locked --workspace
       - name: Package zip
         shell: pwsh
         run: |
           $v = "${{ needs.meta.outputs.version }}"
-          $name = "pakpos-$v-windows-x64"
+          $name = "pakpos-$v-windows-${{ matrix.arch }}"
           New-Item -ItemType Directory -Force -Path "dist\$name" | Out-Null
           Copy-Item target\release\pakpos.exe, target\release\pakpos-cli.exe, README.md, LICENSE-MIT, LICENSE-APACHE "dist\$name\"
           Compress-Archive -Path "dist\$name\*" -DestinationPath "dist\$name.zip"
@@ -105,11 +117,13 @@ jobs:
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |
-          choco install innosetup -y --no-progress
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ needs.meta.outputs.version }}" "/DSourceDir=..\..\target\release" packaging\windows\pakpos.iss
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ needs.meta.outputs.version }}" "/DArch=${{ matrix.arch }}" "/DSourceDir=..\..\target\release" packaging\windows\pakpos.iss
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-x64
+          name: windows-${{ matrix.arch }}
           path: dist/*
 
   macos:
@@ -158,7 +172,8 @@ jobs:
           ### Downloads
           | Platform | File |
           |---|---|
-          | Windows 10/11 (x64) | `PakPos-*-windows-x64-setup.exe` (installer) or `pakpos-*-windows-x64.zip` (portable) |
+          | Windows 10/11 x64 | `PakPos-*-windows-x64-setup.exe` (installer) or `pakpos-*-windows-x64.zip` (portable) |
+          | Windows 11 ARM64 | `PakPos-*-windows-arm64-setup.exe` or `pakpos-*-windows-arm64.zip` |
           | macOS 11+ (Apple Silicon & Intel) | `PakPos-*-macos-universal.dmg` |
           | Linux x86_64 / arm64 | `.deb` (Debian/Ubuntu) or `.tar.gz` |
 

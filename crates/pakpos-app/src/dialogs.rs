@@ -75,7 +75,12 @@ impl PakPosApp {
                     ui.set_width(440.0);
                     title(ui, "Save request");
                     ui.label("Name");
-                    ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
+                    ui.add(
+                        egui::TextEdit::singleline(name)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(f32::INFINITY),
+                    );
                     ui.add_space(8.0);
                     ui.label("Collection");
                     egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
@@ -87,6 +92,8 @@ impl PakPosApp {
                     if collection.is_none() {
                         ui.add(
                             egui::TextEdit::singleline(new_collection)
+                                .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                .vertical_align(egui::Align::Center)
                                 .hint_text("Collection name")
                                 .desired_width(f32::INFINITY),
                         );
@@ -114,6 +121,9 @@ impl PakPosApp {
                             let id = c.id.clone();
                             self.open_nodes.insert(id.clone());
                             self.ws.collections.push(c);
+                            // Created here, so its scripts are the user's own.
+                            self.ws.settings.trusted_collections.push(id.clone());
+                            self.persist_settings();
                             id
                         }
                     };
@@ -139,7 +149,11 @@ impl PakPosApp {
                     ui.set_width(380.0);
                     title(ui, "New collection");
                     let resp = ui.add(
-                        egui::TextEdit::singleline(name).hint_text("e.g. Payments API").desired_width(f32::INFINITY),
+                        egui::TextEdit::singleline(name)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .hint_text("e.g. Payments API")
+                            .desired_width(f32::INFINITY),
                     );
                     resp.request_focus();
                     ui.add_space(10.0);
@@ -161,6 +175,8 @@ impl PakPosApp {
                     let id = c.id.clone();
                     self.ws.collections.push(c);
                     self.persist_collection(&id);
+                    self.ws.settings.trusted_collections.push(id.clone());
+                    self.persist_settings();
                     keep = false;
                 }
             }
@@ -168,7 +184,12 @@ impl PakPosApp {
                 let r = egui::Modal::new(Id::new("rename")).frame(modal_frame(&p)).show(ctx, |ui| {
                     ui.set_width(380.0);
                     title(ui, "Rename");
-                    let resp = ui.add(egui::TextEdit::singleline(name).desired_width(f32::INFINITY));
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(name)
+                            .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                            .vertical_align(egui::Align::Center)
+                            .desired_width(f32::INFINITY),
+                    );
                     resp.request_focus();
                     ui.add_space(10.0);
                     let mut ok = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
@@ -216,6 +237,9 @@ impl PakPosApp {
                     keep = false;
                 }
             }
+            Dialog::CollectionSettings { id, tab } => {
+                keep = self.collection_window(ctx, id, tab);
+            }
             Dialog::Environments { selected } => {
                 keep = self.environments_window(ctx, selected);
             }
@@ -258,14 +282,22 @@ impl PakPosApp {
                         changed |= ui
                             .add(
                                 egui::TextEdit::singleline(&mut s.http.proxy)
+                                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                    .vertical_align(egui::Align::Center)
                                     .hint_text("http://127.0.0.1:8080")
                                     .desired_width(260.0),
                             )
                             .changed();
                         ui.end_row();
                         ui.label("User-Agent");
-                        changed |=
-                            ui.add(egui::TextEdit::singleline(&mut s.http.user_agent).desired_width(260.0)).changed();
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(&mut s.http.user_agent)
+                                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                    .vertical_align(egui::Align::Center)
+                                    .desired_width(260.0),
+                            )
+                            .changed();
                         ui.end_row();
                     });
                     if !s.http.verify_tls {
@@ -441,6 +473,8 @@ impl PakPosApp {
                                         changed |= ui
                                             .add(
                                                 egui::TextEdit::singleline(&mut env.name)
+                                                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                                    .vertical_align(egui::Align::Center)
                                                     .font(egui::TextStyle::Heading)
                                                     .desired_width(260.0),
                                             )
@@ -480,6 +514,90 @@ impl PakPosApp {
             }
             widgets::trim_blank_rows(&mut self.ws.globals);
             self.persist_environments();
+        }
+        open
+    }
+
+    /// Collection description, variables and scripts. Returns false when closed.
+    fn collection_window(&mut self, ctx: &egui::Context, id: &str, tab: &mut crate::app::CollectionTab) -> bool {
+        use crate::app::CollectionTab;
+        let p = self.palette;
+        let trusted = self.ws.is_trusted(id);
+        let Some(idx) = self.ws.collections.iter().position(|c| c.id == id) else { return false };
+        let mut open = true;
+        let mut changed = false;
+        let mut trust = None;
+        let title = format!("Collection — {}", self.ws.collections[idx].name);
+        egui::Window::new(title)
+            .id(Id::new("collection_window"))
+            .open(&mut open)
+            .default_size([720.0, 520.0])
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.content_rect().center())
+            .collapsible(false)
+            .frame(modal_frame(&p))
+            .show(ctx, |ui| {
+                let c = &mut self.ws.collections[idx];
+                widgets::tab_bar(
+                    ui,
+                    tab,
+                    &[
+                        (CollectionTab::General, "General".into()),
+                        (CollectionTab::Variables, widgets::counted("Variables", c.variables.iter().filter(|v| !v.is_blank()).count())),
+                        (CollectionTab::Scripts, if c.scripts.is_empty() { "Scripts".into() } else { "Scripts ●".into() }),
+                    ],
+                );
+                egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| match tab {
+                    CollectionTab::General => {
+                        ui.label("Name");
+                        changed |= ui.add(egui::TextEdit::singleline(&mut c.name).min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT)).vertical_align(egui::Align::Center).desired_width(f32::INFINITY)).changed();
+                        ui.add_space(6.0);
+                        ui.label("Description (Markdown)");
+                        changed |= ui
+                            .add(egui::TextEdit::multiline(&mut c.description).desired_rows(8).desired_width(f32::INFINITY))
+                            .changed();
+                        ui.add_space(6.0);
+                        ui.label(RichText::new(format!("{} requests · id {}", c.request_count(), c.id)).small().color(p.text_weak));
+                    }
+                    CollectionTab::Variables => {
+                        ui.label(
+                            RichText::new("Collection variables are shared by every request here and overridden by the active environment.")
+                                .small()
+                                .color(p.text_weak),
+                        );
+                        ui.add_space(4.0);
+                        changed |= widgets::kv_table(ui, "coll_vars", &mut c.variables, &pakpos_core::vars::VarScope::new(), "Variable");
+                    }
+                    CollectionTab::Scripts => {
+                        ui.label(RichText::new("These run around every request in the collection, before the request's own scripts.").small().color(p.text_weak));
+                        ui.add_space(4.0);
+                        let mut action = None;
+                        let trust_state = Some(trusted || !c.has_scripts());
+                        changed |= crate::scripts_view::scripts_editor(
+                            ui,
+                            &mut c.scripts,
+                            0,
+                            trust_state,
+                            0,
+                            &p,
+                            &mut action,
+                        );
+                        if action.is_some() {
+                            trust = Some(c.id.clone());
+                        }
+                    }
+                });
+            });
+        if let Some(cid) = trust {
+            self.trust_collection(&cid);
+        }
+        if changed {
+            self.collection_dirty = Some((id.to_string(), std::time::Instant::now()));
+        }
+        if !open {
+            widgets::trim_blank_rows(&mut self.ws.collections[idx].variables);
+            self.persist_collection(id);
+            self.collection_dirty = None;
         }
         open
     }

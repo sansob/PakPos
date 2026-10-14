@@ -1,7 +1,7 @@
 # 5. Running collections in CI
 
 `pakpos-cli run` executes a collection without the GUI. It accepts PakPos or
-Postman collection files, or the *name* of a collection in your workspace.
+Collection v2.1 files, or the *name* of a collection in your workspace.
 
 ```sh
 pakpos-cli run examples/pakpos-demo.collection.json -e examples/httpbin.environment.json
@@ -25,7 +25,7 @@ or file error. So a failing API check fails the pipeline.
 
 | Option | Meaning |
 |---|---|
-| `-e, --environment <file or name>` | Environment file (PakPos or Postman format) or workspace environment name |
+| `-e, --environment <file or name>` | Environment file (PakPos or v2.1 format) or workspace environment name |
 | `--var key=value` | Override a variable (repeatable), e.g. secrets from CI |
 | `--filter text` | Only requests whose folder/name contains `text` |
 | `--bail` | Stop at the first failure |
@@ -33,6 +33,7 @@ or file error. So a failing API check fails the pipeline.
 | `--timeout <s>` / `-k, --insecure` | Timeout / skip TLS verification |
 | `-r, --reporter cli\|json\|junit` and `-o, --out <file>` | Report format and destination |
 | `--save-env` | Write extracted variables back to the environment file |
+| `--allow-scripts` | Run the collection's JavaScript scripts (sandboxed) |
 
 ## GitHub Actions
 
@@ -78,8 +79,8 @@ api-tests:
 
 ```sh
 pakpos-cli send POST '{{base_url}}/post' -e staging -H 'X-Trace: 1' -d '{"a":1}' -i
-pakpos-cli import exported.postman_collection.json --workspace   # add to the desktop app
-pakpos-cli export collection.json -o collection.postman_collection.json
+pakpos-cli import exported-collection.json --workspace            # add to the desktop app
+pakpos-cli export collection.json -o collection.v21.json
 pakpos-cli curl "curl https://api.example.com -H 'Accept: application/json'" --to python
 pakpos-cli workspace                                             # where is my data?
 ```

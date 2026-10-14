@@ -5,12 +5,19 @@
 mod actions;
 mod app;
 mod dialogs;
+mod git_view;
+mod graphql_view;
+mod grpc_view;
+mod mock_view;
+mod oauth_view;
 mod request_view;
 mod response_view;
 mod scene;
+mod scripts_view;
 mod sidebar;
 mod theme;
 mod widgets;
+mod ws_view;
 
 use pakpos_core::storage::{self, Workspace};
 
@@ -31,7 +38,9 @@ fn load_workspace() -> (Workspace, Vec<String>) {
         let env = pakpos_core::samples::demo_environment(&base);
         ws.settings.active_environment = Some(env.id.clone());
         ws.environments.push(env);
-        ws.collections.push(pakpos_core::samples::demo_collection());
+        let demo = pakpos_core::samples::demo_collection();
+        ws.settings.trusted_collections.push(demo.id.clone());
+        ws.collections.push(demo);
         if let Err(e) = ws.save_all() {
             errors.push(e.to_string());
         }

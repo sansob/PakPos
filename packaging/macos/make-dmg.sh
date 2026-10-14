@@ -16,7 +16,8 @@ for bin in pakpos pakpos-cli; do
     "$ROOT/target/x86_64-apple-darwin/release/$bin" \
     -output "$APP/Contents/MacOS/$bin"
 done
-sed "s/__VERSION__/$VERSION/g" "$ROOT/packaging/macos/Info.plist" > "$APP/Contents/Info.plist"
+# Apple requires numeric versions (x.y.z) in Info.plist: drop "-rc.1" etc.
+sed "s/__VERSION__/${VERSION%%-*}/g" "$ROOT/packaging/macos/Info.plist" > "$APP/Contents/Info.plist"
 cp "$ROOT/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
 
 # Ad-hoc signature so Apple Silicon runs it; users still see the

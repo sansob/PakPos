@@ -22,6 +22,7 @@ pub const YELLOW: Color32 = Color32::from_rgb(0xF2, 0xC1, 0x4E);
 pub const BLUE: Color32 = Color32::from_rgb(0x5B, 0x9B, 0xF8);
 pub const PURPLE: Color32 = Color32::from_rgb(0xA7, 0x8B, 0xFA);
 pub const TEAL: Color32 = Color32::from_rgb(0x2B, 0xB3, 0xC0);
+pub const LIME: Color32 = Color32::from_rgb(0x9B, 0xD8, 0x5C);
 pub const PINK: Color32 = Color32::from_rgb(0xE3, 0x6D, 0xB8);
 
 /// Colours derived from the current theme, used by custom widgets.
@@ -92,6 +93,15 @@ pub fn status_color(status: u16) -> Color32 {
     }
 }
 
+/// Short coloured badge for a request (method, or protocol for non-HTTP).
+pub fn badge(r: &pakpos_core::Request) -> (&'static str, Color32) {
+    match r.kind {
+        pakpos_core::model::RequestKind::Http => (method_short(r.method), method_color(r.method)),
+        pakpos_core::model::RequestKind::WebSocket => ("WS", TEAL),
+        pakpos_core::model::RequestKind::Grpc => ("gRPC", LIME),
+    }
+}
+
 /// Short method label used in the sidebar and tabs.
 pub fn method_short(m: HttpMethod) -> &'static str {
     match m {
@@ -104,6 +114,9 @@ pub fn method_short(m: HttpMethod) -> &'static str {
         HttpMethod::Options => "OPT",
     }
 }
+
+/// Height of every button, combo box and single-line input.
+pub const CONTROL_HEIGHT: f32 = 28.0;
 
 /// Applies the PakPos style to the egui context.
 pub fn apply(ctx: &egui::Context, theme: Theme, font_scale_percent: u32) {
@@ -187,8 +200,9 @@ pub fn apply(ctx: &egui::Context, theme: Theme, font_scale_percent: u32) {
         ]
         .into();
         style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-        style.spacing.button_padding = egui::vec2(10.0, 5.0);
-        style.spacing.interact_size.y = 26.0;
+        // One control height everywhere: buttons, combo boxes and single-line inputs.
+        style.spacing.button_padding = egui::vec2(12.0, 5.0);
+        style.spacing.interact_size.y = CONTROL_HEIGHT;
         style.spacing.window_margin = Margin::same(14);
         style.spacing.menu_margin = Margin::same(6);
         style.spacing.combo_width = 120.0;

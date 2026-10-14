@@ -5,16 +5,12 @@ use egui::text::{LayoutJob, TextFormat};
 use egui::{Color32, CornerRadius, FontId, Margin, RichText, Sense, Stroke, Ui, Vec2};
 use pakpos_core::model::{FormField, KeyValue};
 use pakpos_core::vars::VarScope;
-use pakpos_core::HttpMethod;
 use std::sync::Arc;
 
 /// Coloured method label, e.g. `GET` in green.
-pub fn method_label(ui: &mut Ui, m: HttpMethod, short: bool) -> egui::Response {
-    let text = if short { theme::method_short(m) } else { m.as_str() };
-    ui.add(
-        egui::Label::new(RichText::new(text).color(theme::method_color(m)).strong().monospace().size(11.5))
-            .selectable(false),
-    )
+pub fn method_label(ui: &mut Ui, r: &pakpos_core::Request) -> egui::Response {
+    let (text, color) = theme::badge(r);
+    ui.add(egui::Label::new(RichText::new(text).color(color).strong().monospace().size(11.5)).selectable(false))
 }
 
 /// A filled rounded "pill" with text.
@@ -35,7 +31,7 @@ pub fn primary_button(ui: &mut Ui, text: &str) -> egui::Response {
         .fill(theme::ORANGE)
         .stroke(Stroke::NONE)
         .corner_radius(CornerRadius::same(6))
-        .min_size(Vec2::new(84.0, 32.0));
+        .min_size(Vec2::new(84.0, theme::CONTROL_HEIGHT));
     let resp = ui.add(btn);
     if resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -139,7 +135,14 @@ pub fn var_text_edit(ui: &mut Ui, value: &mut String, scope: &VarScope, hint: &s
         job.wrap.max_width = f32::INFINITY;
         ui.ctx().fonts_mut(|f| f.layout_job(job))
     };
-    ui.add(egui::TextEdit::singleline(value).hint_text(hint).desired_width(width).layouter(&mut layouter))
+    ui.add(
+        egui::TextEdit::singleline(value)
+            .hint_text(hint)
+            .desired_width(width)
+            .min_size(Vec2::new(0.0, theme::CONTROL_HEIGHT))
+            .vertical_align(egui::Align::Center)
+            .layouter(&mut layouter),
+    )
 }
 
 fn header_row(ui: &mut Ui, cols: &[(&str, f32)]) {
@@ -231,7 +234,13 @@ pub fn form_table(ui: &mut Ui, rows: &mut Vec<FormField>, scope: &VarScope) -> b
                     if row.is_file {
                         let w = (val_w - 80.0).max(80.0);
                         changed |= ui
-                            .add(egui::TextEdit::singleline(&mut row.value).hint_text("path/to/file").desired_width(w))
+                            .add(
+                                egui::TextEdit::singleline(&mut row.value)
+                                    .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
+                                    .vertical_align(egui::Align::Center)
+                                    .hint_text("path/to/file")
+                                    .desired_width(w),
+                            )
                             .changed();
                         if ui.button("Browse…").clicked() {
                             if let Some(path) = rfd::FileDialog::new().pick_file() {

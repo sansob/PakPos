@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-BIN=target/release/pakpos
+BIN=${BIN:-target/release/pakpos}
 [ -x "$BIN" ] || BIN=target/debug/pakpos
 OUT=docs/screenshots
 PORT=${PORT:-8787}
@@ -17,11 +17,16 @@ mkdir -p "$OUT"
 
 python3 scripts/mock_httpbin.py "$PORT" >/dev/null 2>&1 &
 MOCK=$!
-trap 'kill $MOCK 2>/dev/null || true' EXIT
+# gRPC demo server (health + reflection) for the gRPC scene.
+cargo build -q -p pakpos-core --example grpc_demo_server 2>/dev/null || true
+GRPC_BIN=target/debug/examples/grpc_demo_server
+GRPC=""
+if [ -x "$GRPC_BIN" ]; then "$GRPC_BIN" 50051 >/dev/null 2>&1 & GRPC=$!; fi
+trap 'kill $MOCK $GRPC 2>/dev/null || true' EXIT
 sleep 1
 
 SCENES=("$@")
-[ ${#SCENES[@]} -eq 0 ] && SCENES=(overview tests runner history environments curl snippet settings light)
+[ ${#SCENES[@]} -eq 0 ] && SCENES=(overview tests runner history oauth graphql websocket scripts mock grpc git environments curl snippet settings light)
 
 for scene in "${SCENES[@]}"; do
   HOME_DIR=$(mktemp -d)

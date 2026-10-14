@@ -1,29 +1,35 @@
-# 4. Moving from Postman or cURL
+# 4. Importing collections and cURL
 
-## Postman collections
+## Collection files (v2.0 / v2.1)
 
-1. In Postman: collection **⋯ → Export → Collection v2.1**.
-2. In PakPos: **Import → Postman / PakPos collection…** and pick the file
+PakPos reads collections in the widely used Collection v2.0 / v2.1 JSON format.
+
+1. Export the collection from the tool you used before. In Postman, for
+   example: collection **⋯ → Export → Collection v2.1**.
+2. In PakPos: **Import → Collection file (PakPos / v2.1)…** and pick the file
    (you can select several).
 
 What is converted:
 
-| Postman | PakPos |
+| In the file | In PakPos |
 |---|---|
 | folders, requests, methods, URLs, query params (incl. disabled) | ✅ |
 | headers, descriptions | ✅ |
 | raw / urlencoded / form-data / file bodies | ✅ |
-| GraphQL body | converted to a raw JSON `{query, variables}` body |
+| GraphQL body | ✅ GraphQL body (query + variables) |
 | auth: noauth, basic, bearer, apikey (at any level) | ✅ |
 | collection variables | ✅ |
-| pre-request & test **scripts** | ❌ skipped, with a warning; rewrite as [tests](../reference/tests.md) / extractions |
-| OAuth 2, AWS, Digest… auth | ❌ skipped, with a warning |
+| saved responses (examples) | ✅ served by the [mock server](../reference/mock.md) |
+| pre-request & test **scripts** (collection, folder, request) | ✅ imported; they run after you [trust the collection](../reference/scripts.md#trust). `pm.sendRequest` and `require` are not available |
+| OAuth 2.0 (client credentials, password, authorization code) | ✅ (implicit is imported as authorization code) |
+| AWS, Digest, NTLM… auth | ❌ skipped, with a warning |
 
-Export back with right-click → **Export (Postman v2.1)**.
+Export back with right-click → **Export (Collection v2.1)…**.
 
-## Postman environments
+## Environments
 
-Postman: **Environments → ⋯ → Export**. PakPos: **Import → Environment…**.
+Export the environment as JSON from your previous tool (in Postman:
+**Environments → ⋯ → Export**), then in PakPos: **Import → Environment…**.
 
 ## cURL
 

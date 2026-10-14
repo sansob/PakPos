@@ -49,6 +49,10 @@ pub struct Settings {
     pub active_environment: Option<String>,
     #[serde(default = "default_font_scale")]
     pub font_scale_percent: u32,
+    /// Collections whose JavaScript scripts may run. Stored here, not in the
+    /// collection file, so a shared or imported collection cannot trust itself.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trusted_collections: Vec<String>,
 }
 
 fn default_theme() -> Theme {
@@ -61,7 +65,13 @@ fn default_font_scale() -> u32 {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { http: HttpSettings::default(), theme: Theme::Dark, active_environment: None, font_scale_percent: 100 }
+        Self {
+            http: HttpSettings::default(),
+            theme: Theme::Dark,
+            active_environment: None,
+            font_scale_percent: 100,
+            trusted_collections: Vec::new(),
+        }
     }
 }
 
@@ -82,6 +92,8 @@ pub struct Workspace {
     pub globals: Vec<KeyValue>,
     pub history: Vec<HistoryEntry>,
     pub settings: Settings,
+    /// OAuth 2.0 tokens (`tokens.json`, keep it out of git).
+    pub tokens: crate::oauth2::TokenStore,
 }
 
 /// Default workspace location (overridable with `PAKPOS_HOME`).
@@ -157,7 +169,8 @@ impl Workspace {
         let globals = take(read_json(&root.join("globals.json")), &mut errors).unwrap_or_default();
         let history = take(read_json(&root.join("history.json")), &mut errors).unwrap_or_default();
         let settings = take(read_json(&root.join("settings.json")), &mut errors).unwrap_or_default();
-        (Workspace { root, collections, environments, globals, history, settings }, errors)
+        let tokens = take(read_json(&root.join("tokens.json")), &mut errors).unwrap_or_default();
+        (Workspace { root, collections, environments, globals, history, settings, tokens }, errors)
     }
 
     pub fn collections_dir(&self) -> PathBuf {
@@ -192,6 +205,10 @@ impl Workspace {
         write_json(&self.root.join("history.json"), &self.history)
     }
 
+    pub fn save_tokens(&self) -> Result<(), StorageError> {
+        write_json(&self.root.join("tokens.json"), &self.tokens)
+    }
+
     pub fn save_settings(&self) -> Result<(), StorageError> {
         write_json(&self.root.join("settings.json"), &self.settings)
     }
@@ -216,6 +233,10 @@ impl Workspace {
             HistoryEntry { id: crate::model::new_id(), timestamp: chrono::Utc::now(), request, status, elapsed_ms },
         );
         self.history.truncate(HISTORY_LIMIT);
+    }
+
+    pub fn is_trusted(&self, collection_id: &str) -> bool {
+        self.settings.trusted_collections.iter().any(|c| c == collection_id)
     }
 
     pub fn active_environment(&self) -> Option<&Environment> {

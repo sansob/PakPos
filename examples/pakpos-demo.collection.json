@@ -5,12 +5,12 @@
   "items": [
     {
       "kind": "folder",
-      "id": "6de6aa83-9f3e-4f0e-b91a-2ee0ea7ed9f1",
+      "id": "3b2da6d4-8ce2-44ee-a19e-9061b6b0a15a",
       "name": "Basics",
       "items": [
         {
           "kind": "request",
-          "id": "c9e717a1-8724-4399-a63c-d1bd3f994622",
+          "id": "7ccff33d-e314-4f79-b3b7-a41f23a4c75f",
           "name": "Get with query params",
           "method": "GET",
           "url": "{{base_url}}/get",
@@ -63,7 +63,7 @@
         },
         {
           "kind": "request",
-          "id": "30fdb55c-b138-47ac-9f4e-8d7e2f3dcbe2",
+          "id": "8fa59ff8-1e72-4a59-918e-c8b2ef2da8b4",
           "name": "Create user (JSON)",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -94,11 +94,39 @@
               "op": "contains",
               "expected": "json"
             }
+          ],
+          "examples": [
+            {
+              "id": "1f8f8392-8f19-4dbf-b508-1b0b744f6f1e",
+              "name": "Created",
+              "status": 201,
+              "headers": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "enabled": true
+                }
+              ],
+              "body": "{\n  \"id\": \"usr_1001\",\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\"\n}"
+            },
+            {
+              "id": "eb872c80-22c0-4662-a8f8-691b115e167b",
+              "name": "Validation error",
+              "status": 422,
+              "headers": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "enabled": true
+                }
+              ],
+              "body": "{\n  \"error\": \"name is required\"\n}"
+            }
           ]
         },
         {
           "kind": "request",
-          "id": "acf4656e-94b6-49e9-b872-86278966bb1a",
+          "id": "10c0a6a3-610d-4a40-aa69-e7d01cf75365",
           "name": "Submit form",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -131,7 +159,7 @@
         },
         {
           "kind": "request",
-          "id": "6f7835cf-1c86-4bba-b579-a8c36aab38c8",
+          "id": "2c8a3be1-8996-47f3-a682-702a906c68bc",
           "name": "Update user",
           "method": "PUT",
           "url": "{{base_url}}/put",
@@ -146,7 +174,7 @@
         },
         {
           "kind": "request",
-          "id": "3ad0480e-1498-45e0-a5f2-0908d1bafd99",
+          "id": "28dd2f5c-b037-4e0b-b80d-9e30f62b6832",
           "name": "Patch user",
           "method": "PATCH",
           "url": "{{base_url}}/patch",
@@ -161,7 +189,7 @@
         },
         {
           "kind": "request",
-          "id": "0c980c76-08f4-4ad5-80d4-558dd34c0b97",
+          "id": "69e0367d-180d-48fe-b109-5c4c3c2eb3e0",
           "name": "Delete user",
           "method": "DELETE",
           "url": "{{base_url}}/delete",
@@ -187,12 +215,12 @@
     },
     {
       "kind": "folder",
-      "id": "8c5e0936-6399-4e91-83bf-332bc83e81c1",
+      "id": "5de9ffa4-d433-41b8-978a-df7ac6033270",
       "name": "Auth",
       "items": [
         {
           "kind": "request",
-          "id": "3911aa60-1831-4e23-b53d-ba4084114622",
+          "id": "3f89c0d4-cacb-4754-8725-35ef0f147e8c",
           "name": "Bearer token",
           "method": "GET",
           "url": "{{base_url}}/bearer",
@@ -214,7 +242,7 @@
         },
         {
           "kind": "request",
-          "id": "e8f52d78-6830-49d2-9f77-e94dd9c1c5cb",
+          "id": "07ff5412-f246-457d-83ac-5a00055c5cd6",
           "name": "Basic auth",
           "method": "GET",
           "url": "{{base_url}}/basic-auth/pakpos/rahasia",
@@ -234,6 +262,44 @@
               "expected": "200"
             }
           ]
+        },
+        {
+          "kind": "request",
+          "id": "f45bee18-da9e-40c2-b5d9-11b813c49619",
+          "name": "Profile (OAuth 2.0)",
+          "method": "GET",
+          "url": "{{base_url}}/oauth/me",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "oauth2",
+            "grant": "client_credentials",
+            "token_url": "{{base_url}}/oauth/token",
+            "auth_url": "{{base_url}}/oauth/authorize",
+            "client_id": "pakpos-demo",
+            "client_secret": "demo-secret",
+            "scope": "read",
+            "redirect_uri": "http://127.0.0.1:7777/callback",
+            "use_pkce": true,
+            "client_auth": "header",
+            "header_prefix": "Bearer"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "200"
+            },
+            {
+              "enabled": true,
+              "target": "json.user",
+              "op": "equals",
+              "expected": "budi"
+            }
+          ],
+          "description": "The token is fetched automatically (client credentials). Switch the grant to Authorization code to try the browser login against the mock API."
         }
       ],
       "auth": {
@@ -242,12 +308,114 @@
     },
     {
       "kind": "folder",
-      "id": "bad1e518-e126-4391-8036-81249478806f",
+      "id": "aed99466-7262-41a8-9921-1ce6e4ac591b",
+      "name": "GraphQL",
+      "items": [
+        {
+          "kind": "request",
+          "id": "740237bc-c4d4-4aa1-994d-89c07ce6f74f",
+          "name": "Users by city (GraphQL)",
+          "method": "POST",
+          "url": "{{base_url}}/graphql",
+          "body": {
+            "mode": "graphql",
+            "query": "query Users($city: String) {\n  users(city: $city) {\n    id\n    name\n    city\n  }\n}\n",
+            "variables": "{ \"city\": \"Jakarta\" }"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "json.errors",
+              "op": "not_exists",
+              "expected": ""
+            },
+            {
+              "enabled": true,
+              "target": "json.data.users[0].city",
+              "op": "equals",
+              "expected": "Jakarta"
+            }
+          ],
+          "description": "Click “Fetch schema” in the Body tab to browse the API."
+        }
+      ],
+      "auth": {
+        "type": "inherit"
+      }
+    },
+    {
+      "kind": "folder",
+      "id": "7872a5d7-4b53-4c0c-bc57-a58dec2374a0",
+      "name": "Realtime",
+      "items": [
+        {
+          "kind": "request",
+          "id": "6ef43536-d097-4ae6-8300-785508eb5962",
+          "name": "Live prices (WebSocket)",
+          "protocol": "websocket",
+          "method": "GET",
+          "url": "{{ws_url}}/ws",
+          "body": {
+            "mode": "raw",
+            "content": "{\n  \"type\": \"subscribe\",\n  \"symbol\": \"IDR\"\n}",
+            "language": "json"
+          },
+          "auth": {
+            "type": "bearer",
+            "token": "{{token}}"
+          },
+          "description": "Works with the offline mock API (`python3 scripts/mock_httpbin.py`, environment “Local mock”): connect, then send the message from the Message tab. The server echoes it and pushes a tick every 2 seconds."
+        },
+        {
+          "kind": "request",
+          "id": "7857a668-2626-4689-8f08-bb7868fa70a3",
+          "name": "Health check (gRPC)",
+          "protocol": "grpc",
+          "method": "POST",
+          "url": "{{grpc_url}}",
+          "body": {
+            "mode": "raw",
+            "content": "{\n  \"service\": \"pakpos.demo\"\n}",
+            "language": "json"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "0"
+            },
+            {
+              "enabled": true,
+              "target": "json.status",
+              "op": "exists",
+              "expected": ""
+            }
+          ],
+          "grpc": {
+            "method": "grpc.health.v1.Health/Check"
+          },
+          "description": "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send."
+        }
+      ],
+      "auth": {
+        "type": "inherit"
+      }
+    },
+    {
+      "kind": "folder",
+      "id": "50161352-ad08-468a-ba93-22a5822f1780",
       "name": "Responses",
       "items": [
         {
           "kind": "request",
-          "id": "b8c6a00b-213b-4a29-b3c9-fb3b3e1a13e5",
+          "id": "0b0cbcf3-11fb-4be5-a64c-d634f2b67056",
           "name": "Get UUID (extract)",
           "method": "GET",
           "url": "{{base_url}}/uuid",
@@ -271,11 +439,26 @@
               "variable": "last_uuid",
               "source": "json.uuid"
             }
+          ],
+          "examples": [
+            {
+              "id": "2050d2a2-8f99-4b2a-886d-2e47ddcd1d0d",
+              "name": "Random UUID",
+              "status": 200,
+              "headers": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "enabled": true
+                }
+              ],
+              "body": "{ \"uuid\": \"0f8e6a7c-2b1d-4c3e-9f5a-8d7b6c5e4f3a\" }"
+            }
           ]
         },
         {
           "kind": "request",
-          "id": "f21cfb4b-fc01-4ac5-8346-69f2b3a5f104",
+          "id": "641a0333-1cbb-4c35-8ed5-cdcb8334168a",
           "name": "JSON document",
           "method": "GET",
           "url": "{{base_url}}/json",
@@ -296,7 +479,7 @@
         },
         {
           "kind": "request",
-          "id": "dab159dc-bd17-4d3a-850d-ab04403f7188",
+          "id": "a0eb87a3-6bc0-432b-9162-7bd995f3093e",
           "name": "Expect 404",
           "method": "GET",
           "url": "{{base_url}}/status/404",
@@ -314,6 +497,24 @@
               "expected": "404"
             }
           ]
+        },
+        {
+          "kind": "request",
+          "id": "787e02bf-c350-45b0-8202-46d482988421",
+          "name": "Scripted checks (JavaScript)",
+          "method": "GET",
+          "url": "{{base_url}}/json",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "scripts": {
+            "pre_request": "// Runs before sending: add a trace header.\npm.request.headers.upsert({ key: \"X-Trace-Id\", value: pm.variables.replaceIn(\"{{$guid}}\") });\n",
+            "test": "pm.test(\"Status code is 200\", () => {\n  pm.response.to.have.status(200);\n});\n\npm.test(\"Slideshow has slides\", () => {\n  const json = pm.response.json();\n  pm.expect(json.slideshow.slides).to.be.an(\"array\").that.is.not.empty;\n  pm.expect(json.slideshow.author).to.eql(\"PakPos\");\n});\n\npm.environment.set(\"slide_count\", pm.response.json().slideshow.slides.length);\nconsole.log(\"slides:\", pm.environment.get(\"slide_count\"));\n"
+          },
+          "description": "Postman-style pm.* scripts, run in a sandbox. Collections you import must be trusted before their scripts run."
         }
       ],
       "auth": {

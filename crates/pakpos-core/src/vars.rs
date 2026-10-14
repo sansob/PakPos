@@ -20,6 +20,8 @@ pub struct VarScope {
     pub environment: HashMap<String, String>,
     pub collection: HashMap<String, String>,
     pub globals: HashMap<String, String>,
+    /// OAuth 2.0 access tokens by [`crate::model::OAuth2Config::cache_key`].
+    pub oauth_tokens: HashMap<String, String>,
 }
 
 fn to_map(vars: &[KeyValue]) -> HashMap<String, String> {

@@ -23,7 +23,7 @@ minta akun, sync collection ke cloud orang lain, dan butuh beberapa detik cuma
 buat kebuka.
 
 PakPos balik ke dasar dan berusaha ngerjain itu dengan baik. Aplikasinya native
-(satu binary ~20 MB, tanpa Electron), kebukanya cepat, dan semua yang kamu bikin
+(satu binary ~26 MB, tanpa Electron), kebukanya cepat, dan semua yang kamu bikin
 disimpan sebagai file JSON biasa di folder pilihan kamu. Bagian terakhir ini
 penting: taruh foldernya di repo git project kamu, dan satu tim langsung pakai
 collection yang sama, perubahan di-review lewat pull request seperti kode biasa.
@@ -34,26 +34,42 @@ cuma itu tugasnya.
 ## Bisa apa saja sekarang
 
 Kirim request dengan method apa pun, lengkap dengan query params, header, dan
-body JSON, form, multipart, atau file. Auth Basic, Bearer, dan API key sudah ada,
-dan request bisa "mewarisi" auth dari folder atau collection, jadi token cukup
-diset sekali, bukan empat puluh kali.
+body JSON, form, multipart, file, atau GraphQL. Auth Basic, Bearer, API key, dan
+OAuth 2.0 sudah ada (client credentials, password, dan login lewat browser dengan
+PKCE). Request bisa "mewarisi" auth dari folder atau collection, jadi token cukup
+diset sekali. Token OAuth diambil dan diperbarui otomatis, dan disimpan di file
+lokal, bukan di collection yang kamu bagikan.
+
+Bukan cuma HTTP. Request bisa berupa **WebSocket** (connect, kirim pesan, lihat
+log langsung) atau panggilan **gRPC**: PakPos membaca service dari server
+reflection atau file `.proto` kamu, kasih template JSON untuk pesannya, lalu
+menampilkan balasannya, termasuk streaming. GraphQL punya schema explorer, jadi
+tinggal klik untuk dapat query awal.
 
 Request disusun dalam collection dan folder. Environment menyimpan variabel
 seperti `{{base_url}}` dan `{{token}}`: ganti dari Staging ke Production di
-header, semua request ikut. Variabel yang ketemu warnanya hijau, yang nggak ketemu
-merah, jadi typo langsung kelihatan.
+header, semua request ikut. Variabel yang ketemu warnanya hijau, yang nggak
+ketemu merah, jadi typo langsung kelihatan.
 
-Untuk test, PakPos nggak pakai script JavaScript, tapi pengecekan sederhana
-seperti `status equals 200`, `json.data.id exists`, atau `time less than 500`.
-Nilai dari response (misalnya `json.token`) juga bisa disimpan ke variabel buat
-request berikutnya, dan itu sudah cukup untuk kebanyakan alur login. Karena test-nya
-berupa data, bukan kode, menjalankan collection teman nggak akan menjalankan kode
-mereka di laptop kamu.
+Untuk mengecek response ada dua cara. Pengecekan sederhana seperti `status
+equals 200` atau `json.data.id exists` sudah cukup untuk kebanyakan kebutuhan
+dan gampang di-review. Kalau butuh lebih, tulis JavaScript dengan API `pm.*`
+(`pm.test`, `pm.expect`, `pm.environment.set`…). Script jalan di sandbox tanpa
+akses file dan jaringan, dan script dari collection hasil import baru jalan
+setelah kamu menyatakan percaya.
 
-Pindahan dari Postman? Export collection (v2.1) dan environment-nya, lalu import
-di sini; sebagian besar langsung jalan. Bisa juga paste perintah `curl` langsung
-ke kolom URL, atau sebaliknya pakai tombol `</>` untuk dapat snippet cURL,
-Python, JavaScript, atau HTTPie.
+Response bisa disimpan sebagai **example**, lalu PakPos bisa menyajikannya sebagai
+mock API. Cocok kalau frontend sudah siap duluan sebelum backend.
+
+Punya collection dari tool lain? File berformat Collection v2.1 JSON beserta
+environment-nya bisa [langsung diimport](docs/src/tutorial/import.md): folder, auth (termasuk OAuth 2.0), body GraphQL, script, dan example ikut
+terbawa. Bisa juga paste perintah `curl` langsung ke kolom URL, atau sebaliknya
+pakai tombol `</>` untuk dapat snippet cURL, Python, JavaScript, atau HTTPie.
+
+Sengaja nggak pakai cloud. Kalau mau berbagi dengan tim, tombol **⇅ Sync** menjadikan
+workspace sebuah repo git, lalu commit, pull, dan push memakai git yang sudah
+terpasang di komputer kamu. Riwayat dan hak akses tetap di GitHub/GitLab/tempat
+kode kamu berada.
 
 Ada mode terang juga:
 
@@ -70,7 +86,7 @@ pakpos-cli run api/collection.json -e api/staging.json --var token=$API_TOKEN \
 ```
 
 Exit code-nya bukan nol kalau ada test yang gagal, bisa output JUnit untuk GitHub
-Actions/GitLab/Jenkins, dan bisa baca file Postman juga.
+Actions/GitLab/Jenkins, dan bisa baca file Collection v2.1 juga.
 
 ## Dipakai AI agent
 
@@ -83,8 +99,8 @@ dengan `--allow-host` dan sebutkan hanya API yang boleh disentuh.
 ## Cara pasang
 
 Ambil build untuk OS kamu di [halaman releases](https://github.com/sansob/PakPos/releases):
-installer atau zip portable untuk Windows, `.dmg` untuk macOS (Apple Silicon dan
-Intel jadi satu), dan `.deb` atau tarball untuk Linux.
+installer atau zip portable untuk Windows (x64 dan ARM64), `.dmg` untuk macOS
+(Apple Silicon dan Intel jadi satu), dan `.deb` atau tarball untuk Linux (x86_64 dan arm64).
 
 Build-nya belum di-code-sign, jadi OS kamu akan protes saat pertama dibuka. Di
 macOS klik kanan aplikasi lalu pilih **Open**; di Windows klik **More info → Run anyway**.
@@ -101,10 +117,12 @@ tekan **Send** (`Ctrl/⌘ + Enter`).
 
 ## Yang belum bisa
 
-Proyek ini masih muda. Dibanding Postman, belum ada script JavaScript (yang dari
-hasil import dilewati dengan peringatan), OAuth 2.0, request GraphQL/WebSocket/gRPC,
-dan mock server. Sync cloud juga nggak ada, dan itu memang disengaja: pakai git saja.
-Lihat [roadmap](docs/src/roadmap.md); semuanya boleh diambil kalau mau bantu.
+Proyek ini masih muda. Supaya jujur soal kekurangannya: script
+belum bisa melakukan panggilan jaringan (`pm.sendRequest`) atau memuat library
+npm, streaming gRPC dua arah belum interaktif (input dikirim di awal), belum ada
+Socket.IO/MQTT, runner koleksi hanya menjalankan request HTTP, dan belum ada
+data-driven run dari CSV. Build-nya juga belum di-sign. Lihat
+[roadmap](docs/src/roadmap.md); semuanya boleh diambil kalau mau bantu.
 
 ## Mau bantu?
 
