@@ -7,7 +7,7 @@
 use crate::http::HttpSettings;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
@@ -146,7 +146,7 @@ impl McpClient {
             let Some((program, args)) = argv.split_first() else {
                 return Err(McpError::Spawn(target.into(), "empty command".into()));
             };
-            let mut cmd = Command::new(program);
+            let mut cmd = crate::process::command(program);
             cmd.args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
             for (k, v) in env {
                 cmd.env(k, v);
