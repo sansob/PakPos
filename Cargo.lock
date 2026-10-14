@@ -2801,6 +2801,7 @@ dependencies = [
  "clap",
  "pakpos-core",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

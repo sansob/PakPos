@@ -23,6 +23,7 @@ pub mod git;
 pub mod graphql;
 pub mod grpc;
 pub mod http;
+pub mod mcp_client;
 pub mod mock;
 pub mod model;
 pub mod mqtt;

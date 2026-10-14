@@ -28,6 +28,7 @@
 - [Mock server](reference/mock.md)
 - [Command-line interface](reference/cli.md)
 - [MCP server](reference/mcp.md)
+- [Testing MCP servers](reference/mcp-client.md)
 - [Workspace file format](reference/workspace.md)
 - [Git sync](reference/git.md)
 - [Keyboard shortcuts](reference/shortcuts.md)

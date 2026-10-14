@@ -619,6 +619,47 @@ pub enum RequestKind {
     /// MQTT: the URL is the broker, `realtime` holds topics; Basic auth gives
     /// the user name and password.
     Mqtt,
+    /// MCP server: the URL is an http(s) endpoint or a command line; `mcp`
+    /// says what to call, the raw body holds the JSON arguments.
+    Mcp,
+}
+
+/// What an MCP request does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum McpOperation {
+    #[default]
+    CallTool,
+    ReadResource,
+    GetPrompt,
+    ListTools,
+}
+
+impl McpOperation {
+    pub const ALL: [McpOperation; 4] =
+        [McpOperation::CallTool, McpOperation::ReadResource, McpOperation::GetPrompt, McpOperation::ListTools];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            McpOperation::CallTool => "Call tool",
+            McpOperation::ReadResource => "Read resource",
+            McpOperation::GetPrompt => "Get prompt",
+            McpOperation::ListTools => "List tools",
+        }
+    }
+}
+
+/// Settings of an MCP request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct McpConfig {
+    #[serde(default)]
+    pub operation: McpOperation,
+    /// Tool name, resource URI or prompt name.
+    #[serde(default)]
+    pub target: String,
+    /// Environment variables for a stdio server.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env: Vec<KeyValue>,
 }
 
 /// Settings of Socket.IO and MQTT requests.
@@ -715,6 +756,7 @@ impl RequestKind {
             RequestKind::Sse => "SSE",
             RequestKind::SocketIo => "Socket.IO",
             RequestKind::Mqtt => "MQTT",
+            RequestKind::Mcp => "MCP",
         }
     }
 }
@@ -752,6 +794,8 @@ pub struct Request {
     pub grpc: Option<GrpcConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub realtime: Option<RealtimeConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<McpConfig>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
@@ -774,6 +818,7 @@ impl Default for Request {
             examples: Vec::new(),
             grpc: None,
             realtime: None,
+            mcp: None,
             description: String::new(),
         }
     }

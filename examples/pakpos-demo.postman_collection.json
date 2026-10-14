@@ -480,6 +480,27 @@
             },
             "description": "A bidirectional stream: Open stream, then Send message as often as you like; End stream when done."
           }
+        },
+        {
+          "name": "Weather tool (MCP)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/mcp",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"Jakarta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Calls the `weather` tool of an MCP server like any request; the result is the response, so tests work. Load lists the tools."
+          }
         }
       ]
     },

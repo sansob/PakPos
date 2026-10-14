@@ -23,6 +23,10 @@ All notable changes to this project are documented here. The format follows
 - Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
   view (copy a value or its test path), image preview and a simplified HTML
   preview with *Open in browser*; *Save* picks the extension from the content type.
+- MCP client request type: test MCP servers over Streamable HTTP or stdio
+  like REST requests (call tools, read resources, get prompts, list tools),
+  with tests, the runner and `pakpos-cli mcp-client`; stdio servers need a
+  trusted collection. The mock API gains a small `/mcp` server.
 - Server-Sent Events, Socket.IO (v5 / Engine.IO v4) and MQTT 3.1.1 (QoS 0-2,
   retained messages, TLS and client certificates) as request kinds with the
   live message log; `pakpos-cli sse`, `socketio` and `mqtt`; an offline

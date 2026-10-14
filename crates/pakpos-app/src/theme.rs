@@ -102,6 +102,7 @@ pub fn badge(r: &pakpos_core::Request) -> (&'static str, Color32) {
         pakpos_core::model::RequestKind::Sse => ("SSE", PURPLE),
         pakpos_core::model::RequestKind::SocketIo => ("SIO", PINK),
         pakpos_core::model::RequestKind::Mqtt => ("MQTT", YELLOW),
+        pakpos_core::model::RequestKind::Mcp => ("MCP", ORANGE),
     }
 }
 

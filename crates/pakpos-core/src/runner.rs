@@ -245,6 +245,9 @@ pub fn run_collection(
             if req.kind == crate::model::RequestKind::Grpc {
                 entry.method = "gRPC".into();
             }
+            if req.kind == crate::model::RequestKind::Mcp {
+                entry.method = "MCP".into();
+            }
             let chain = crate::scripts::chain_for(Some(collection), &req);
             let run_scripts = !chain.is_empty() && options.allow_scripts;
             if !chain.is_empty() && !options.allow_scripts {
@@ -272,6 +275,22 @@ pub fn run_collection(
             };
             let outcome = match token {
                 Err(e) => Err(http::HttpError::Transport(e)),
+                Ok(_) if req.kind == crate::model::RequestKind::Mcp => {
+                    let target = scope.resolve(req.url.trim());
+                    if !crate::mcp_client::is_http(&target) && !options.allow_scripts {
+                        // A stdio server is a program the collection would start.
+                        Err(http::HttpError::Transport(
+                            "stdio MCP servers run a command: trust the collection (pakpos-cli run --allow-scripts)"
+                                .into(),
+                        ))
+                    } else if crate::mcp_client::is_http(&target)
+                        && !http::host_allowed(&target, &options.allowed_hosts)
+                    {
+                        Err(http::HttpError::Transport(format!("host of `{target}` is not in the allow-list")))
+                    } else {
+                        Ok(crate::mcp_client::execute(&req, &scope, None, &options.settings))
+                    }
+                }
                 Ok(_) if req.kind == crate::model::RequestKind::Grpc => {
                     run_grpc(&req, &scope, options, &mut grpc_pools).map_err(http::HttpError::Transport)
                 }

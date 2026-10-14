@@ -161,6 +161,12 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].resp_section = RespSection::Tests;
             app.send(app.active, ctx);
         }
+        "mcp" => {
+            open_by_name(app, "Weather tool (MCP)");
+            app.tabs[app.active].section = ReqSection::Body;
+            app.mcp_load(app.active, ctx);
+            app.send(app.active, ctx);
+        }
         "sse" | "socketio" | "mqtt" => {
             let name = match name {
                 "sse" => "Price stream (SSE)",
@@ -256,6 +262,11 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
             t.grpc.job.is_none() && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))
         }),
         "mock" => app.mock.as_ref().is_some_and(|m| m.hits.len() >= 4),
+        "mcp" => app.tabs.get(app.active).is_some_and(|t| {
+            t.mcp.job.is_none()
+                && !t.mcp.items.is_empty()
+                && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))
+        }),
         "grpc-stream" => app.tabs.get(app.active).is_some_and(|t| {
             t.grpc.live.log.iter().filter(|e| e.direction == Some(pakpos_core::ws::Direction::Received)).count() >= 2
         }),

@@ -130,6 +130,7 @@ impl PakPosApp {
         let gql_loading = self.graphql.job.as_ref().is_some_and(|(k, _)| k == &gql_key);
         let mut gql_action = None;
         let mut ws_action = None;
+        let mut mcp_action = None;
         let mut script_action = None;
         let mut grpc_action = None;
         let (script_trust, inherited_scripts, source_collection) = {
@@ -215,6 +216,31 @@ impl PakPosApp {
                                 }
                                 if tab.request.url.is_empty() {
                                     tab.request.url = "grpc://localhost:50051".into();
+                                    tab.url_edit = tab.request.url.clone();
+                                }
+                                changed = true;
+                            }
+                            let m = tab.request.kind == RequestKind::Mcp;
+                            if ui
+                                .selectable_label(m, RichText::new("MCP").strong().monospace().color(theme::ORANGE))
+                                .on_hover_text("Test an MCP server: call tools, read resources, get prompts")
+                                .clicked()
+                                && !m
+                            {
+                                tab.request.kind = RequestKind::Mcp;
+                                tab.request.mcp.get_or_insert_with(Default::default);
+                                if !matches!(
+                                    tab.section,
+                                    ReqSection::Auth
+                                        | ReqSection::Headers
+                                        | ReqSection::Tests
+                                        | ReqSection::Extract
+                                        | ReqSection::Docs
+                                ) {
+                                    tab.section = ReqSection::Body;
+                                }
+                                if tab.request.url.is_empty() {
+                                    tab.request.url = "npx -y @modelcontextprotocol/server-everything".into();
                                     tab.url_edit = tab.request.url.clone();
                                 }
                                 changed = true;
@@ -360,6 +386,17 @@ impl PakPosApp {
                 tab.section = ReqSection::Body;
             }
         }
+        if r.kind == RequestKind::Mcp {
+            items.retain(|(s, _)| !matches!(s, ReqSection::Params | ReqSection::Scripts | ReqSection::Examples));
+            for (s, label) in items.iter_mut() {
+                if *s == ReqSection::Body {
+                    *label = "Call".into();
+                }
+            }
+            if tab.section == ReqSection::Params {
+                tab.section = ReqSection::Body;
+            }
+        }
         if r.kind.is_realtime() {
             items.retain(|(s, _)| {
                 !matches!(s, ReqSection::Tests | ReqSection::Extract | ReqSection::Scripts | ReqSection::Examples)
@@ -428,6 +465,20 @@ impl PakPosApp {
                         &mut grpc_action,
                     );
                 }
+                ReqSection::Body if tab.request.kind == RequestKind::Mcp => {
+                    let cfg = tab.request.mcp.get_or_insert_with(Default::default);
+                    changed |= crate::mcp_view::editor(
+                        ui,
+                        cfg,
+                        &mut tab.request.body,
+                        &tab.request.url,
+                        &scope,
+                        &tab.mcp,
+                        tab.uid,
+                        &p,
+                        &mut mcp_action,
+                    );
+                }
                 ReqSection::Body if tab.request.kind.is_realtime() => {
                     changed |= crate::ws_view::realtime_composer(
                         ui,
@@ -491,6 +542,9 @@ impl PakPosApp {
         if let Some(a) = grpc_action {
             let ctx = ui.ctx().clone();
             self.handle_grpc_action(idx, a, &ctx);
+        }
+        if let Some(crate::mcp_view::McpAction::Load) = mcp_action {
+            self.mcp_load(idx, &ui.ctx().clone());
         }
         if let Some(a) = ws_action {
             let ctx = ui.ctx().clone();

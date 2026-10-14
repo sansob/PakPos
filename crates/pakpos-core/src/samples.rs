@@ -175,6 +175,20 @@ pub fn demo_collection() -> Collection {
     });
     mqtt.body = Body::Raw { content: "{ \"on\": true }".into(), language: RawLanguage::Json };
     mqtt.description = "Start the demo broker with `python3 scripts/mock_mqtt.py`, then Connect.".into();
+    let mut mcp = req("Weather tool (MCP)", HttpMethod::Post, "{{base_url}}/mcp");
+    mcp.kind = crate::model::RequestKind::Mcp;
+    mcp.mcp = Some(crate::model::McpConfig {
+        operation: crate::model::McpOperation::CallTool,
+        target: "weather".into(),
+        env: Vec::new(),
+    });
+    mcp.body = Body::Raw { content: "{\n  \"city\": \"Jakarta\"\n}".into(), language: RawLanguage::Json };
+    mcp.assertions = vec![
+        test("status", Operator::Equals, "200"),
+        test("json.structuredContent.celsius", Operator::Exists, ""),
+        test("json.content[0].text", Operator::Contains, "Jakarta"),
+    ];
+    mcp.description = "Calls the `weather` tool of an MCP server like any request; the result is the response, so tests work. Load lists the tools.".into();
     realtime.items = vec![
         Item::Request(ws),
         Item::Request(sse),
@@ -182,6 +196,7 @@ pub fn demo_collection() -> Collection {
         Item::Request(mqtt),
         Item::Request(grpc_req),
         Item::Request(chat),
+        Item::Request(mcp),
     ];
 
     let mut c = Collection::new("PakPos Demo");
@@ -214,7 +229,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 22);
+        assert_eq!(c.request_count(), 23);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

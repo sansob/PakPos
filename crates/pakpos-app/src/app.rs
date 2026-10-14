@@ -89,6 +89,7 @@ pub struct Tab {
     pub url_edit: String,
     pub ws: crate::ws_view::WsState,
     pub grpc: crate::grpc_view::GrpcState,
+    pub mcp: crate::mcp_view::McpState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -315,6 +316,7 @@ impl PakPosApp {
             url_edit,
             ws: Default::default(),
             grpc: Default::default(),
+            mcp: Default::default(),
             uid: self.next_uid,
             request,
             source,
@@ -419,6 +421,10 @@ impl PakPosApp {
         }
         if tab.request.kind == pakpos_core::model::RequestKind::Grpc {
             self.grpc_send(idx, ctx);
+            return;
+        }
+        if tab.request.kind == pakpos_core::model::RequestKind::Mcp {
+            self.mcp_send(idx, ctx);
             return;
         }
         let mut req = tab.request.clone();
@@ -1055,6 +1061,7 @@ impl eframe::App for PakPosApp {
         self.poll_graphql();
         self.poll_ws();
         self.poll_grpc_streams();
+        self.poll_mcp();
         self.poll_mock();
         self.poll_grpc();
         if let Some(t) = self.env_dirty {

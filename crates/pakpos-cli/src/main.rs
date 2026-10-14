@@ -11,6 +11,7 @@ use pakpos_core::{postman, Body, HttpMethod, KeyValue, Request};
 use std::io::IsTerminal;
 
 mod mcp;
+mod mcp_client_cmd;
 mod realtime;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -79,6 +80,8 @@ enum Command {
         #[arg(long)]
         timeout: Option<u64>,
     },
+    /// Test an MCP server: list and call tools, read resources, get prompts.
+    McpClient(mcp_client_cmd::McpClientArgs),
     /// Listen to Server-Sent Events (text/event-stream).
     Sse(realtime::SseArgs),
     /// Connect to a Socket.IO server: print events, emit with --emit or stdin.
@@ -386,6 +389,7 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
         Command::Ws { url, headers, environment, vars, send, timeout } => {
             cmd_ws(url, headers, environment, vars, send, timeout, style)
         }
+        Command::McpClient(a) => mcp_client_cmd::run(a, style),
         Command::Sse(a) => realtime::sse(a, style),
         Command::Socketio(a) => realtime::socketio(a, style),
         Command::Mqtt(a) => realtime::mqtt(a, style),

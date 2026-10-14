@@ -241,6 +241,45 @@ class Handler(BaseHTTPRequestHandler):
             expected = "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
             ok = self.headers.get("Authorization") == expected
             return self._send(200 if ok else 401, {"authenticated": ok, "user": user})
+        if path == "/mcp" and self.command == "POST":
+            # Minimal MCP server (Streamable HTTP, JSON answers): two tools.
+            try:
+                msg = json.loads(data.get("data") or "{}")
+            except ValueError:
+                return self._send(400, {"error": "not JSON"})
+            mid, method, params = msg.get("id"), msg.get("method", ""), msg.get("params") or {}
+            if mid is None:
+                return self._send(202, b"", "text/plain")
+            tools = [
+                {"name": "weather", "description": "Current weather in a city (demo data).",
+                 "inputSchema": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}},
+                {"name": "echo", "description": "Returns the message.",
+                 "inputSchema": {"type": "object", "properties": {"message": {"type": "string"}}}},
+            ]
+            if method == "initialize":
+                result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
+                          "serverInfo": {"name": "pakpos-mock-mcp", "version": "1.0"}}
+            elif method == "tools/list":
+                result = {"tools": tools}
+            elif method == "tools/call":
+                args = params.get("arguments") or {}
+                if params.get("name") == "weather":
+                    city = args.get("city", "")
+                    temps = {"jakarta": 31, "bandung": 24, "medan": 30, "surabaya": 33}
+                    if city.lower() in temps:
+                        result = {"content": [{"type": "text", "text": f"{city}: {temps[city.lower()]}°C, cerah berawan"}],
+                                  "structuredContent": {"city": city, "celsius": temps[city.lower()]}}
+                    else:
+                        result = {"isError": True, "content": [{"type": "text", "text": f"unknown city {city!r}"}]}
+                elif params.get("name") == "echo":
+                    result = {"content": [{"type": "text", "text": str(args.get("message", ""))}]}
+                else:
+                    return self._send(200, {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": "unknown tool"}})
+            elif method == "ping":
+                result = {}
+            else:
+                return self._send(200, {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": "method not found"}})
+            return self._send(200, {"jsonrpc": "2.0", "id": mid, "result": result})
         if path == "/sse":
             # Server-Sent Events: a few price updates, then the stream ends.
             q = dict(parse_qsl(urlsplit(self.path).query))

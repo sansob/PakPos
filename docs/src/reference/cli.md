@@ -17,6 +17,7 @@ Commands:
   mock       Serve the saved examples of a collection as a mock API
   workspace  Print the workspace location and its contents
   mcp        Start a Model Context Protocol (MCP) server on stdio
+  mcp-client Test an MCP server: list and call tools, read resources, get prompts
 ```
 
 `pakpos-cli <command> --help` shows every option. `--cert`, `--key` and
