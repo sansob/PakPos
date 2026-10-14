@@ -51,6 +51,10 @@ All notable changes to this project are documented here. The format follows
 - Drag & drop in the sidebar: reorder requests and folders, move them into
   folders or to another collection; open tabs follow moved requests.
 
+### Changed
+- Dark theme: neutral near-black surfaces instead of navy (the light theme keeps
+  its navy header).
+
 ### Fixed
 - Windows installer: "Add pakpos-cli to PATH" failed for all-users installs
   (`RegCreateKeyEx failed; code 87` on `HKLM\Environment`). It now writes the
