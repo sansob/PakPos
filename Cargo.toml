@@ -29,7 +29,7 @@ base64 = "0.22"
 url = "2"
 sha2 = "0.10"
 hmac = "0.12"
-md-5 = "0.10"
+md-5 = "0.11"
 md4 = "0.10"
 cookie = "0.18"
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12", "logging"] }
