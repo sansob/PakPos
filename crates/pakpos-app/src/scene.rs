@@ -64,6 +64,12 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].resp_section = RespSection::Tests;
             app.send(app.active, ctx);
         }
+        "workspaces" => {
+            let team = app.ws.root.with_file_name("payments-team");
+            app.registry.add("Payments team", &team);
+            app.dialog =
+                Some(crate::app::Dialog::NewWorkspace { name: "Mobile app".into(), path: String::new(), error: None });
+        }
         "close-tabs" => {
             open_by_name(app, "Create user (JSON)");
             open_by_name(app, "Get with query params");

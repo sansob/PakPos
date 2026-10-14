@@ -26,6 +26,7 @@ egui = "0.36"
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "wayland", "x11", "persistence"] }
 egui_extras = { version = "0.36", features = ["syntect", "image"] }
 rfd = "0.17"
+directories.workspace = true
 webbrowser = "1"
 reqwest.workspace = true
 prost-reflect.workspace = true

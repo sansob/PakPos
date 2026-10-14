@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format follows
   close tabs to the right, close all, force close all; middle-click closes a tab.
   Closing tabs with unsaved changes now asks (save and close, close without
   saving or cancel) instead of dropping the changes.
+- Several workspaces: a workspace menu in the header switches between them,
+  creates a new one (name + folder) or opens any folder as a workspace. Open
+  tabs are remembered per workspace; `pakpos-cli` uses the active workspace
+  (`PAKPOS_HOME` still overrides). The list lives in the config folder
+  (`PAKPOS_CONFIG` to move it), never in a workspace.
 - The UI in Bahasa Indonesia (Settings → Language; follows the system locale
   by default), with a test that fails on untranslated UI text.
 - Digest (RFC 7616: MD5, SHA-256, -sess, qop auth/auth-int), NTLMv2 and
