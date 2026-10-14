@@ -7,6 +7,7 @@
 ├── globals.json              global variables
 ├── history.json              last 200 sent requests
 ├── tokens.json               OAuth 2.0 tokens (keep out of git)
+├── cookies.json              cookie jar (keep out of git)
 └── settings.json             theme, HTTP settings, active environment
 ```
 
@@ -82,4 +83,4 @@ export PAKPOS_HOME=~/code/my-api/.pakpos   # point the app and CLI at a repo fol
 ```
 
 Commit `collections/` and the environments without secrets; add `history.json`,
-`settings.json`, `tokens.json` and secret environments to `.gitignore`.
+`settings.json`, `tokens.json`, `cookies.json` and secret environments to `.gitignore`.

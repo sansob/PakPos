@@ -26,7 +26,7 @@ your other uncommitted project changes are never swept into a PakPos commit.
 
 | Shared (committed) | Local only (`.gitignore`) |
 |---|---|
-| `collections/*.json`, `environments/*.json`, `globals.json`, `.gitignore` | `history.json`, `settings.json` (theme, trusted collections), `tokens.json` (OAuth tokens), `ui-state.ron` |
+| `collections/*.json`, `environments/*.json`, `globals.json`, `.gitignore` | `history.json`, `settings.json` (theme, trusted collections), `tokens.json` (OAuth tokens), `cookies.json`, `ui-state.ron` |
 
 Keep real secrets out of shared environments: use `{{variables}}` and give each
 person a local environment, or pass values with `--var` in CI.

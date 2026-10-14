@@ -155,6 +155,17 @@
               "query": []
             }
           }
+        },
+        {
+          "name": "Set a cookie",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cookies/set?flavour=kopi-susu",
+              "query": []
+            }
+          }
         }
       ]
     },
@@ -194,6 +205,32 @@
             "auth": {
               "type": "basic",
               "basic": [
+                {
+                  "key": "username",
+                  "value": "pakpos",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "rahasia",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Digest auth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/digest-auth/auth/pakpos/rahasia",
+              "query": []
+            },
+            "auth": {
+              "type": "digest",
+              "digest": [
                 {
                   "key": "username",
                   "value": "pakpos",
@@ -351,6 +388,58 @@
           }
         },
         {
+          "name": "Price stream (SSE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sse",
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "Parcel events (Socket.IO)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"resi\": \"PP-2026-0042\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Office sensors (MQTT)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mqtt_url}}",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"on\": true }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Start the demo broker with `python3 scripts/mock_mqtt.py`, then Connect."
+          }
+        },
+        {
           "name": "Health check (gRPC)",
           "request": {
             "method": "POST",
@@ -369,6 +458,48 @@
               }
             },
             "description": "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send."
+          }
+        },
+        {
+          "name": "Chat (gRPC stream)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{grpc_url}}",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user\": \"budi\",\n  \"text\": \"paket saya sudah sampai mana?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "A bidirectional stream: Open stream, then Send message as often as you like; End stream when done."
+          }
+        },
+        {
+          "name": "Weather tool (MCP)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/mcp",
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"Jakarta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Calls the `weather` tool of an MCP server like any request; the result is the response, so tests work. Load lists the tools."
           }
         }
       ]

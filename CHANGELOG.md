@@ -6,6 +6,49 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- The UI in Bahasa Indonesia (Settings → Language; follows the system locale
+  by default), with a test that fails on untranslated UI text.
+- Digest (RFC 7616: MD5, SHA-256, -sess, qop auth/auth-int), NTLMv2 and
+  AWS Signature v4 auth, in the app, runner, CLI, MCP server, code snippets
+  and Collection v2.1 import/export.
+- Client certificates (mTLS) per host, with an optional private CA, for HTTPS
+  and gRPC; `--cert`, `--key` and `--cacert` on `run`, `send` and `grpc`.
+- Data-driven runs: CSV or JSON data files, one iteration per row, with
+  `{{column}}` variables, `pm.iterationData` and `pm.info.iteration`;
+  `pakpos-cli run --data / --iterations`, a run options dialog in the app and a
+  `data` argument for the MCP `run_collection` tool.
+- gRPC requests run in the collection runner (app, CLI and MCP).
+- Persistent cookie jar (`cookies.json`, git-ignored) with RFC 6265 matching,
+  cookies from redirects included, and a viewer/editor (**Cookies** in the top
+  bar). Runs share the jar between requests.
+- Response viewer: search with highlighted matches (`Ctrl/⌘ + F`), a JSON tree
+  view (copy a value or its test path), image preview and a simplified HTML
+  preview with *Open in browser*; *Save* picks the extension from the content type.
+- OpenAPI 3.0 / 3.1 and Swagger 2.0 import (JSON or YAML): folders by tag,
+  `{{baseUrl}}`, path variables, example bodies, auth from security schemes and
+  response examples ready for the mock server; export to OpenAPI 3.0.3 YAML or
+  JSON (app and `pakpos-cli export -f openapi|openapi-yaml`).
+- Package manager manifests on every release (Homebrew cask and formula,
+  winget, AUR `pakpos-bin`, Flatpak with metainfo), generated from the release
+  checksums; release notes no longer include the changelog's link lines.
+- MCP client request type: test MCP servers over Streamable HTTP or stdio
+  like REST requests (call tools, read resources, get prompts, list tools),
+  with tests, the runner and `pakpos-cli mcp-client`; stdio servers need a
+  trusted collection. The mock API gains a small `/mcp` server.
+- Server-Sent Events, Socket.IO (v5 / Engine.IO v4) and MQTT 3.1.1 (QoS 0-2,
+  retained messages, TLS and client certificates) as request kinds with the
+  live message log; `pakpos-cli sse`, `socketio` and `mqtt`; an offline
+  Socket.IO server in the mock API and `scripts/mock_mqtt.py`.
+- Interactive gRPC streams: open a client-streaming or bidirectional call,
+  send messages one by one, see answers live, end or cancel it. The demo
+  server gains `pakpos.demo.Chat` (`Talk`, `Sum`).
+- `pm.sendRequest` in scripts, behind a per-collection network permission
+  (trusted collections only, stored in settings); `pakpos-cli run --allow-network`;
+  host allow-list, request cap and cookie jar apply.
+- Drag & drop in the sidebar: reorder requests and folders, move them into
+  folders or to another collection; open tabs follow moved requests.
+
 ## [0.2.0-rc.1] - 2026-10-14
 
 Release candidate for the first public release.

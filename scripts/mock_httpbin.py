@@ -72,10 +72,12 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):  # quiet
         pass
 
-    def _send(self, status, payload, content_type="application/json"):
+    def _send(self, status, payload, content_type="application/json", extra_headers=None):
         body = payload if isinstance(payload, bytes) else json.dumps(payload, indent=2).encode()
         self.send_response(status)
         self.send_header("Content-Type", content_type)
+        for k, v in (extra_headers or {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
@@ -130,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
         data = bytes(b ^ mask[i % 4] for i, b in enumerate(self.rfile.read(n)))
         return opcode, data
 
-    def websocket(self):
+    def _ws_handshake(self):
         key = self.headers.get("Sec-WebSocket-Key", "")
         accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
         self.protocol_version = "HTTP/1.1"  # 101 Switching Protocols requires HTTP/1.1
@@ -141,6 +143,52 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.flush()
         self._ws_lock = threading.Lock()
+
+    def socketio(self):
+        """Minimal Socket.IO v5 / Engine.IO v4 server: namespace "/", a
+        "tick" event every 2 s, "echo" for every event received."""
+        self._ws_handshake()
+        alive = {"on": False}
+        sid = uuid.uuid4().hex[:12]
+        self._ws_send("0" + json.dumps({"sid": sid, "upgrades": [], "pingInterval": 25000, "pingTimeout": 20000, "maxPayload": 1000000}))
+
+        def ticker():
+            i = 0
+            while alive["on"]:
+                time.sleep(2)
+                i += 1
+                try:
+                    self._ws_send("42" + json.dumps(["tick", {"n": i, "parcels_in_transit": 120 + i}]))
+                except OSError:
+                    break
+
+        while True:
+            frame = self._ws_recv()
+            if frame is None or frame[0] == 0x8:
+                break
+            text = frame[1].decode("utf-8", "replace")
+            if text.startswith("40"):
+                auth = text[2:] or "null"
+                self._ws_send("40" + json.dumps({"sid": sid}))
+                self._ws_send("42" + json.dumps(["welcome", {"server": "PakPos mock", "auth": json.loads(auth)}]))
+                if not alive["on"]:
+                    alive["on"] = True
+                    threading.Thread(target=ticker, daemon=True).start()
+            elif text.startswith("42"):
+                try:
+                    event, *args = json.loads(text[2:])
+                except ValueError:
+                    continue
+                self._ws_send("42" + json.dumps(["echo", {"event": event, "args": args}]))
+            elif text.startswith("41"):
+                break
+            elif text == "3":
+                pass  # pong
+        alive["on"] = False
+        self.close_connection = True
+
+    def websocket(self):
+        self._ws_handshake()
         alive = {"on": True}
         self._ws_send(json.dumps({"type": "welcome", "server": "PakPos mock", "auth": self.headers.get("Authorization")}))
 
@@ -171,8 +219,11 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
 
     def handle_any(self):
-        if urlsplit(self.path).path == "/ws" and self.headers.get("Upgrade", "").lower() == "websocket":
+        upgrade = self.headers.get("Upgrade", "").lower() == "websocket"
+        if urlsplit(self.path).path == "/ws" and upgrade:
             return self.websocket()
+        if urlsplit(self.path).path == "/socket.io/" and upgrade:
+            return self.socketio()
         path, data = self._echo()
         method = self.command.lower()
         if path == f"/{method}" or path == "/anything":
@@ -190,6 +241,102 @@ class Handler(BaseHTTPRequestHandler):
             expected = "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
             ok = self.headers.get("Authorization") == expected
             return self._send(200 if ok else 401, {"authenticated": ok, "user": user})
+        if path == "/mcp" and self.command == "POST":
+            # Minimal MCP server (Streamable HTTP, JSON answers): two tools.
+            try:
+                msg = json.loads(data.get("data") or "{}")
+            except ValueError:
+                return self._send(400, {"error": "not JSON"})
+            mid, method, params = msg.get("id"), msg.get("method", ""), msg.get("params") or {}
+            if mid is None:
+                return self._send(202, b"", "text/plain")
+            tools = [
+                {"name": "weather", "description": "Current weather in a city (demo data).",
+                 "inputSchema": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}},
+                {"name": "echo", "description": "Returns the message.",
+                 "inputSchema": {"type": "object", "properties": {"message": {"type": "string"}}}},
+            ]
+            if method == "initialize":
+                result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
+                          "serverInfo": {"name": "pakpos-mock-mcp", "version": "1.0"}}
+            elif method == "tools/list":
+                result = {"tools": tools}
+            elif method == "tools/call":
+                args = params.get("arguments") or {}
+                if params.get("name") == "weather":
+                    city = args.get("city", "")
+                    temps = {"jakarta": 31, "bandung": 24, "medan": 30, "surabaya": 33}
+                    if city.lower() in temps:
+                        result = {"content": [{"type": "text", "text": f"{city}: {temps[city.lower()]}°C, cerah berawan"}],
+                                  "structuredContent": {"city": city, "celsius": temps[city.lower()]}}
+                    else:
+                        result = {"isError": True, "content": [{"type": "text", "text": f"unknown city {city!r}"}]}
+                elif params.get("name") == "echo":
+                    result = {"content": [{"type": "text", "text": str(args.get("message", ""))}]}
+                else:
+                    return self._send(200, {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": "unknown tool"}})
+            elif method == "ping":
+                result = {}
+            else:
+                return self._send(200, {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": "method not found"}})
+            return self._send(200, {"jsonrpc": "2.0", "id": mid, "result": result})
+        if path == "/sse":
+            # Server-Sent Events: a few price updates, then the stream ends.
+            q = dict(parse_qsl(urlsplit(self.path).query))
+            count = int(q.get("count", "5"))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            try:
+                self.wfile.write(b": PakPos demo stream\n\n")
+                for i in range(count):
+                    price = 15000 + i * 25
+                    msg = f"id: {i + 1}\nevent: price\ndata: {{\"symbol\": \"PPOS\", \"price\": {price}}}\n\n"
+                    self.wfile.write(msg.encode())
+                    self.wfile.flush()
+                    time.sleep(float(q.get("interval", "0.4")))
+                self.wfile.write(b"event: done\ndata: bye\n\n")
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return None
+        if path == "/cookies/set":
+            # httpbin-compatible: set every query parameter as a cookie, then redirect.
+            self.send_response(302)
+            for k, v in parse_qsl(urlsplit(self.path).query):
+                self.send_header("Set-Cookie", f"{k}={v}; Path=/")
+            self.send_header("Location", "/cookies")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if path == "/cookies":
+            jar = {}
+            for part in self.headers.get("Cookie", "").split(";"):
+                if "=" in part:
+                    k, v = part.strip().split("=", 1)
+                    jar[k] = v
+            return self._send(200, {"cookies": jar})
+        if path.startswith("/digest-auth/"):
+            # httpbin-compatible: /digest-auth/<qop>/<user>/<password>
+            _, _, qop, user, pw = path.split("/", 4)
+            realm, nonce = "pakpos", "5f2c-demo-nonce"
+            auth = self.headers.get("Authorization", "")
+            if auth.startswith("Digest "):
+                fields = dict(
+                    (k.strip(), v.strip().strip('"'))
+                    for k, v in (p.split("=", 1) for p in auth[7:].split(",") if "=" in p)
+                )
+                md5 = lambda x: hashlib.md5(x.encode()).hexdigest()
+                ha1 = md5(f"{user}:{realm}:{pw}")
+                ha2 = md5(f"{self.command}:{fields.get('uri', '')}")
+                expected = md5(f"{ha1}:{nonce}:{fields.get('nc')}:{fields.get('cnonce')}:{fields.get('qop')}:{ha2}")
+                if fields.get("username") == user and fields.get("response") == expected:
+                    return self._send(200, {"authenticated": True, "user": user})
+            challenge = f'Digest realm="{realm}", qop="{qop}", nonce="{nonce}", opaque="demo"'
+            return self._send(401, {"authenticated": False}, extra_headers={"WWW-Authenticate": challenge})
         # --- OAuth 2.0 demo (auto-approves everything) -------------------
         if path == "/oauth/authorize":
             q = dict(parse_qsl(urlsplit(self.path).query))
@@ -226,7 +373,21 @@ class Handler(BaseHTTPRequestHandler):
                 {"title": "Halo", "type": "all"},
                 {"title": "Overview", "type": "all", "items": ["Fast", "Native", "Open source"]}]}})
         if path == "/html":
-            return self._send(200, b"<html><body><h1>PakPos</h1></body></html>", "text/html")
+            page = (
+                "<!doctype html><html><head><title>Kantor Pos</title><style>body{font-family:sans-serif}</style></head>"
+                "<body><h1>Selamat datang di PakPos</h1>"
+                "<p>Status pengiriman untuk resi <b>PP-2026-0042</b>: <em>sedang diantar</em>.</p>"
+                "<h2>Riwayat</h2><ul><li>08:10 &mdash; diterima di gudang Jakarta</li>"
+                "<li>11:45 &mdash; berangkat ke Bandung</li><li>15:20 &mdash; tiba di kantor cabang</li></ul>"
+                "<p>Pertanyaan? Hubungi <a href='mailto:halo@example.com'>halo@example.com</a> atau lihat "
+                "<code>GET /v1/shipments/PP-2026-0042</code>.</p><script>console.log('not rendered')</script>"
+                "</body></html>"
+            )
+            return self._send(200, page.encode(), "text/html; charset=utf-8")
+        if path == "/image/png":
+            here = __file__.rsplit("/", 2)[0] if "/" in __file__ else "."
+            with open(f"{here}/assets/icon-256.png", "rb") as f:
+                return self._send(200, f.read(), "image/png")
         return self._send(404, {"error": "not found", "path": path})
 
     do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_HEAD = do_OPTIONS = handle_any

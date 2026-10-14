@@ -4,10 +4,15 @@
 
 mod actions;
 mod app;
+mod body_view;
+mod cookies_view;
 mod dialogs;
 mod git_view;
 mod graphql_view;
 mod grpc_view;
+mod i18n;
+mod i18n_id;
+mod mcp_view;
 mod mock_view;
 mod oauth_view;
 mod request_view;

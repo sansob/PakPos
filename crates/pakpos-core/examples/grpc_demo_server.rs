@@ -1,7 +1,11 @@
-//! Tiny gRPC server for trying PakPos offline: the standard health service
-//! plus server reflection.
+//! Tiny gRPC server for trying PakPos offline: the standard health service,
+//! `pakpos.demo.Chat` (bidirectional `Talk`, client-streaming `Sum`) and
+//! server reflection.
 //!
 //! `cargo run -p pakpos-core --example grpc_demo_server -- [port]` (default 50051)
+
+#[path = "../tests/common/chat.rs"]
+mod chat;
 
 fn main() {
     let port: u16 = std::env::args().nth(1).and_then(|p| p.parse().ok()).unwrap_or(50051);
@@ -20,12 +24,16 @@ fn main() {
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
         });
+        let pool = chat::pool();
+        let chat_set = pool.encode_to_vec();
         let reflection = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
+            .register_encoded_file_descriptor_set(&chat_set)
             .build_v1()
             .expect("reflection");
-        println!("gRPC demo server on grpc://{addr} (grpc.health.v1.Health + reflection)");
+        println!("gRPC demo server on grpc://{addr} (grpc.health.v1.Health, pakpos.demo.Chat + reflection)");
         tonic::transport::Server::builder()
+            .add_service(chat::ChatServer::new(pool))
             .add_service(health)
             .add_service(reflection)
             .serve(addr)

@@ -1,0 +1,232 @@
+openapi: 3.0.3
+info:
+  title: PakPos Demo
+  version: 1.0.0
+  description: Sample requests against an httpbin-compatible API. Select the “Demo (httpbin)” environment and press Send.
+paths:
+  /get:
+    get:
+      summary: Get with query params
+      description: Sends query parameters and checks they are echoed back.
+      operationId: getGetwithqueryparams
+      tags:
+        - Basics
+      parameters:
+        - name: lang
+          in: query
+          required: true
+          schema:
+            type: string
+          example: id
+        - name: app
+          in: query
+          required: true
+          schema:
+            type: string
+          example: pakpos
+      responses:
+        "200":
+          description: OK
+      security: []
+  /post:
+    post:
+      summary: Submit form
+      operationId: postSubmitform
+      tags:
+        - Basics
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: budi
+                remember:
+                  type: string
+                  example: "true"
+      responses:
+        "200":
+          description: OK
+      security: []
+  /put:
+    put:
+      summary: Update user
+      operationId: putUpdateuser
+      tags:
+        - Basics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                city:
+                  type: string
+            example:
+              city: Bandung
+      responses:
+        "200":
+          description: OK
+      security: []
+  /patch:
+    patch:
+      summary: Patch user
+      operationId: patchPatchuser
+      tags:
+        - Basics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                active:
+                  type: boolean
+            example:
+              active: true
+      responses:
+        "200":
+          description: OK
+      security: []
+  /delete:
+    delete:
+      summary: Delete user
+      operationId: deleteDeleteuser
+      tags:
+        - Basics
+      responses:
+        "200":
+          description: OK
+      security: []
+  /cookies/set:
+    get:
+      summary: Set a cookie
+      operationId: getSetacookie
+      tags:
+        - Basics
+      responses:
+        "200":
+          description: OK
+      security: []
+  /bearer:
+    get:
+      summary: Bearer token
+      operationId: getBearertoken
+      tags:
+        - Auth
+      responses:
+        "200":
+          description: OK
+      security:
+        - bearerAuth: []
+  /basic-auth/pakpos/rahasia:
+    get:
+      summary: Basic auth
+      operationId: getBasicauth
+      tags:
+        - Auth
+      responses:
+        "200":
+          description: OK
+      security:
+        - basicAuth: []
+  /digest-auth/auth/pakpos/rahasia:
+    get:
+      summary: Digest auth
+      operationId: getDigestauth
+      tags:
+        - Auth
+      responses:
+        "200":
+          description: OK
+      security:
+        - digestAuth: []
+  /oauth/me:
+    get:
+      summary: Profile (OAuth 2.0)
+      description: The token is fetched automatically (client credentials). Switch the grant to Authorization code to try the browser login against the mock API.
+      operationId: getProfileOAuth20
+      tags:
+        - Auth
+      responses:
+        "200":
+          description: OK
+      security:
+        - oauth2: []
+  /graphql:
+    post:
+      summary: Users by city (GraphQL)
+      description: Click “Fetch schema” in the Body tab to browse the API.
+      operationId: postUsersbycityGraphQL
+      tags:
+        - GraphQL
+      requestBody:
+        content:
+          application/json:
+            example:
+              query: "query Users($city: String) {\n  users(city: $city) {\n    id\n    name\n    city\n  }\n}\n"
+      responses:
+        "200":
+          description: OK
+      security: []
+  /uuid:
+    get:
+      summary: Get UUID (extract)
+      operationId: getGetUUIDextract
+      tags:
+        - Responses
+      responses:
+        "200":
+          description: Random UUID
+          content:
+            application/json:
+              example:
+                uuid: 0f8e6a7c-2b1d-4c3e-9f5a-8d7b6c5e4f3a
+      security: []
+  /json:
+    get:
+      summary: Scripted checks (JavaScript)
+      description: "Postman-style pm.* scripts, run in a sandbox. Collections you import must be trusted before their scripts run."
+      operationId: getScriptedchecksJavaScript
+      tags:
+        - Responses
+      responses:
+        "200":
+          description: OK
+      security: []
+  /status/404:
+    get:
+      summary: Expect 404
+      operationId: getExpect404
+      tags:
+        - Responses
+      responses:
+        "200":
+          description: OK
+      security: []
+servers:
+  - url: "{{base_url}}"
+tags:
+  - name: Basics
+  - name: Auth
+  - name: GraphQL
+  - name: Responses
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    basicAuth:
+      type: http
+      scheme: basic
+    digestAuth:
+      type: http
+      scheme: digest
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: "{{base_url}}/oauth/token"
+          scopes: {}

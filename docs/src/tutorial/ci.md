@@ -34,6 +34,38 @@ or file error. So a failing API check fails the pipeline.
 | `-r, --reporter cli\|json\|junit` and `-o, --out <file>` | Report format and destination |
 | `--save-env` | Write extracted variables back to the environment file |
 | `--allow-scripts` | Run the collection's JavaScript scripts (sandboxed) |
+| `--allow-network` | Also let scripts call `pm.sendRequest` |
+| `-d, --data <file>` | Data-driven run: once per CSV row / JSON object |
+| `-n, --iterations <n>` | Run the collection `n` times (default: one per data row) |
+| `--cert` / `--key` / `--cacert` | Client certificate and private CA (mTLS) |
+
+## Data-driven runs
+
+Give `--data` a CSV file with a header row, or a JSON array of objects. The
+collection runs once per row, and each column is a `{{variable}}` for that
+iteration (it wins over environment, collection and global variables).
+
+```csv
+user,expected_city
+budi,Jakarta
+siti,Bandung
+```
+
+```sh
+pakpos-cli run users.collection.json -e staging --data users.csv
+```
+
+Assertions can use the row too, e.g. `json.city` *equals* `{{expected_city}}`.
+In scripts, `pm.iterationData.get("user")` and `pm.info.iteration` are
+available. JUnit test names get a `#2`, `#3`… suffix per iteration. In the
+desktop app, **Run** on a collection opens the same options (data file with a
+preview, iterations, delay, stop on failure).
+
+![Run options with a data file](https://raw.githubusercontent.com/sansob/PakPos/main/docs/screenshots/runner-data.png)
+
+gRPC requests run in the runner as well (their status code is the `status`
+target, see [gRPC](../reference/grpc.md)); WebSocket requests are skipped
+because they are interactive.
 
 ## GitHub Actions
 

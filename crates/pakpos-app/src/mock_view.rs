@@ -19,13 +19,13 @@ pub struct MockState {
 pub fn examples_editor(ui: &mut Ui, examples: &mut Vec<Example>, uid: u64, p: &Palette) -> bool {
     let mut changed = false;
     ui.label(
-        RichText::new("Saved responses. Use “Save as example” in the response panel, then serve them with the collection's mock server.")
+        RichText::new(crate::i18n::tr("Saved responses. Use “Save as example” in the response panel, then serve them with the collection's mock server."))
             .small()
             .color(p.text_weak),
     );
     ui.add_space(6.0);
     if examples.is_empty() {
-        ui.label(RichText::new("No examples yet.").color(p.text_weak));
+        ui.label(RichText::new(crate::i18n::tr("No examples yet.")).color(p.text_weak));
     }
     let mut remove = None;
     for (i, ex) in examples.iter_mut().enumerate() {
@@ -42,17 +42,17 @@ pub fn examples_editor(ui: &mut Ui, examples: &mut Vec<Example>, uid: u64, p: &P
                             .desired_width(260.0),
                     )
                     .changed();
-                ui.label(RichText::new("status").small().color(p.text_weak));
+                ui.label(RichText::new(crate::i18n::tr("status")).small().color(p.text_weak));
                 changed |= ui.add(egui::DragValue::new(&mut ex.status).range(100..=599)).changed();
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if widgets::ghost_button(ui, "🗑", "Delete example").clicked() {
+                    if widgets::ghost_button(ui, "🗑", crate::i18n::tr("Delete example")).clicked() {
                         remove = Some(i);
                     }
                 });
             });
-            egui::CollapsingHeader::new(RichText::new("Body & headers").small()).id_salt(("ex", uid, i)).show(
-                ui,
-                |ui| {
+            egui::CollapsingHeader::new(RichText::new(crate::i18n::tr("Body & headers")).small())
+                .id_salt(("ex", uid, i))
+                .show(ui, |ui| {
                     changed |= widgets::kv_table(
                         ui,
                         &format!("exh{uid}{i}"),
@@ -69,8 +69,7 @@ pub fn examples_editor(ui: &mut Ui, examples: &mut Vec<Example>, uid: u64, p: &P
                                 .desired_width(f32::INFINITY),
                         )
                         .changed();
-                },
-            );
+                });
         });
         ui.add_space(4.0);
     }
@@ -90,17 +89,20 @@ impl PakPosApp {
         match server {
             Ok(server) => {
                 let n = server.routes().len();
-                self.toast(format!("Mock server for “{}” on http://{} ({n} routes)", c.name, server.addr));
+                self.toast(crate::i18n::trf(
+                    "Mock server for “{name}” on http://{addr} ({n} routes)",
+                    &[("name", &c.name), ("addr", &server.addr.to_string()), ("n", &n.to_string())],
+                ));
                 self.mock = Some(MockState { collection: c.id.clone(), server, hits: Vec::new(), open: true });
             }
-            Err(e) => self.toast_error(format!("Cannot start mock server: {e}")),
+            Err(e) => self.toast_error(crate::i18n::trf("Cannot start mock server: {e}", &[("e", &e.to_string())])),
         }
     }
 
     pub fn stop_mock(&mut self) {
         if let Some(m) = self.mock.take() {
             m.server.stop();
-            self.toast("Mock server stopped");
+            self.toast(crate::i18n::tr("Mock server stopped"));
         }
     }
 
@@ -129,7 +131,7 @@ impl PakPosApp {
         let Some(m) = &mut self.mock else { return };
         let mut open = m.open;
         let mut stop = false;
-        egui::Window::new(format!("Mock server — {name}"))
+        egui::Window::new(crate::i18n::trf("Mock server — {name}", &[("name", &name)]))
             .id(Id::new("mock_window"))
             .open(&mut open)
             .default_size([620.0, 460.0])
@@ -146,23 +148,24 @@ impl PakPosApp {
             .show(ctx, |ui| {
                 let url = format!("http://{}", m.server.addr);
                 ui.horizontal(|ui| {
-                    widgets::pill(ui, "Running", theme::GREEN, theme::GREEN.gamma_multiply(0.16));
+                    widgets::pill(ui, crate::i18n::tr("Running"), theme::GREEN, theme::GREEN.gamma_multiply(0.16));
                     ui.label(RichText::new(&url).monospace().strong());
-                    if ui.button("Copy URL").clicked() {
+                    if ui.button(crate::i18n::tr("Copy URL")).clicked() {
                         ui.ctx().copy_text(url.clone());
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(RichText::new("Stop").color(theme::RED)).clicked() {
+                        if ui.button(RichText::new(crate::i18n::tr("Stop")).color(theme::RED)).clicked() {
                             stop = true;
                         }
                     });
                 });
                 ui.add_space(6.0);
-                widgets::section_title(ui, "Routes");
+                widgets::section_title(ui, crate::i18n::tr("Routes"));
                 let routes = m.server.routes();
                 if routes.is_empty() {
                     ui.label(
-                        RichText::new("No examples yet. Send a request, then “Save as example”.").color(p.text_weak),
+                        RichText::new(crate::i18n::tr("No examples yet. Send a request, then “Save as example”."))
+                            .color(p.text_weak),
                     );
                 }
                 for r in &routes {
@@ -173,14 +176,14 @@ impl PakPosApp {
                     });
                 }
                 ui.label(
-                    RichText::new(
+                    RichText::new(crate::i18n::tr(
                         "Choose another example with the x-mock-response-name or x-mock-response-code request header.",
-                    )
+                    ))
                     .small()
                     .color(p.text_weak),
                 );
                 ui.add_space(6.0);
-                widgets::section_title(ui, &format!("Requests ({})", m.hits.len()));
+                widgets::section_title(ui, &crate::i18n::trf("Requests ({n})", &[("n", &m.hits.len().to_string())]));
                 egui::ScrollArea::vertical().auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
                     for h in &m.hits {
                         ui.horizontal(|ui| {
@@ -193,7 +196,7 @@ impl PakPosApp {
                             ui.label(RichText::new(h.status.to_string()).color(theme::status_color(h.status)).strong());
                             ui.label(RichText::new(format!("{} {}", h.method, h.path)).monospace());
                             ui.label(
-                                RichText::new(h.matched.clone().unwrap_or_else(|| "no match".into()))
+                                RichText::new(h.matched.clone().unwrap_or_else(|| crate::i18n::tr("no match").into()))
                                     .small()
                                     .color(p.text_weak),
                             );

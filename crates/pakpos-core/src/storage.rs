@@ -53,6 +53,12 @@ pub struct Settings {
     /// collection file, so a shared or imported collection cannot trust itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub trusted_collections: Vec<String>,
+    /// Trusted collections whose scripts may also call `pm.sendRequest`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub network_collections: Vec<String>,
+    /// UI language code ("en", "id"); `None` follows the system locale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 fn default_theme() -> Theme {
@@ -71,6 +77,8 @@ impl Default for Settings {
             active_environment: None,
             font_scale_percent: 100,
             trusted_collections: Vec::new(),
+            network_collections: Vec::new(),
+            language: None,
         }
     }
 }
@@ -94,6 +102,8 @@ pub struct Workspace {
     pub settings: Settings,
     /// OAuth 2.0 tokens (`tokens.json`, keep it out of git).
     pub tokens: crate::oauth2::TokenStore,
+    /// Cookie jar (`cookies.json`, kept out of git).
+    pub cookies: crate::cookies::CookieJar,
 }
 
 /// Default workspace location (overridable with `PAKPOS_HOME`).
@@ -170,7 +180,8 @@ impl Workspace {
         let history = take(read_json(&root.join("history.json")), &mut errors).unwrap_or_default();
         let settings = take(read_json(&root.join("settings.json")), &mut errors).unwrap_or_default();
         let tokens = take(read_json(&root.join("tokens.json")), &mut errors).unwrap_or_default();
-        (Workspace { root, collections, environments, globals, history, settings, tokens }, errors)
+        let cookies = take(read_json(&root.join("cookies.json")), &mut errors).unwrap_or_default();
+        (Workspace { root, collections, environments, globals, history, settings, tokens, cookies }, errors)
     }
 
     pub fn collections_dir(&self) -> PathBuf {
@@ -205,6 +216,10 @@ impl Workspace {
         write_json(&self.root.join("history.json"), &self.history)
     }
 
+    pub fn save_cookies(&self) -> Result<(), StorageError> {
+        write_json(&self.root.join("cookies.json"), &self.cookies)
+    }
+
     pub fn save_tokens(&self) -> Result<(), StorageError> {
         write_json(&self.root.join("tokens.json"), &self.tokens)
     }
@@ -237,6 +252,11 @@ impl Workspace {
 
     pub fn is_trusted(&self, collection_id: &str) -> bool {
         self.settings.trusted_collections.iter().any(|c| c == collection_id)
+    }
+
+    /// May this collection's scripts send requests (`pm.sendRequest`)? Only trusted ones can.
+    pub fn has_network(&self, collection_id: &str) -> bool {
+        self.is_trusted(collection_id) && self.settings.network_collections.iter().any(|c| c == collection_id)
     }
 
     pub fn active_environment(&self) -> Option<&Environment> {
@@ -274,9 +294,22 @@ pub fn load_collection_file(path: &Path) -> Result<(Collection, Vec<String>), St
     parse_collection(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Parses collection JSON in either PakPos or Postman format.
+/// Parses a collection: PakPos or Collection v2.x JSON, or an OpenAPI /
+/// Swagger document (JSON or YAML).
 pub fn parse_collection(text: &str) -> Result<(Collection, Vec<String>), String> {
-    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    let value: serde_json::Value = match serde_json::from_str(text) {
+        Ok(v) => v,
+        // Not JSON: maybe an OpenAPI document in YAML.
+        Err(e) => match crate::openapi::import(text) {
+            Ok(i) => return Ok((i.collection, i.warnings)),
+            Err(crate::openapi::OpenApiError::NotOpenApi) => return Err(e.to_string()),
+            Err(oe) => return Err(format!("{e} (and not YAML OpenAPI: {oe})")),
+        },
+    };
+    if value.get("openapi").is_some() || value.get("swagger").is_some() {
+        let i = crate::openapi::import(text).map_err(|e| e.to_string())?;
+        return Ok((i.collection, i.warnings));
+    }
     if value.get("info").is_some() {
         let imported = crate::postman::import_collection(text).map_err(|e| e.to_string())?;
         Ok((imported.value, imported.warnings))

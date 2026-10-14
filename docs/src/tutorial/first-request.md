@@ -30,7 +30,17 @@ response, and save it into a collection.
 
 The response panel shows a green **200 OK** pill, the time in milliseconds and
 the size. The body is pretty-printed and highlighted because it is JSON; switch
-to **Raw** to see it exactly as received.
+to **Raw** to see it exactly as received, or to **Tree** to fold and unfold
+objects. In the tree, right-click a value to copy it or to copy its path
+(`json.args.city`), which is the syntax tests and extractions use.
+
+`Ctrl/⌘ + F` searches the body: every match is highlighted and counted, and
+in the tree only the branches that match stay open. Images (PNG, JPEG, GIF,
+WebP, BMP) are shown as images, and HTML pages get a simplified **Preview**
+(headings, text, lists, links) plus **Open in browser** for the real thing.
+**Save** suggests a file name with the right extension.
+
+![JSON tree with search](https://raw.githubusercontent.com/sansob/PakPos/main/docs/screenshots/tree.png)
 
 > **No internet?** Run the bundled mock API: `python3 scripts/mock_httpbin.py`
 > and use `http://127.0.0.1:8787/get?city=Jakarta` instead.

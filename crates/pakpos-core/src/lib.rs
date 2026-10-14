@@ -15,18 +15,26 @@
 //! ```
 
 pub mod assertions;
+pub mod auth;
 pub mod codegen;
+pub mod cookies;
+pub mod data;
 pub mod git;
 pub mod graphql;
 pub mod grpc;
 pub mod http;
+pub mod mcp_client;
 pub mod mock;
 pub mod model;
+pub mod mqtt;
 pub mod oauth2;
+pub mod openapi;
 pub mod postman;
 pub mod runner;
 pub mod samples;
 pub mod scripts;
+pub mod socketio;
+pub mod sse;
 pub mod storage;
 pub mod vars;
 pub mod ws;

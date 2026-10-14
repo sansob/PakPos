@@ -57,6 +57,13 @@ pub struct Outcome {
     pub logs: Vec<String>,
     /// Variables set by scripts, to persist.
     pub script_changes: pakpos_core::scripts::VarChanges,
+    /// Parsed JSON body for the tree view (bodies up to 8 MB).
+    pub json: Option<serde_json::Value>,
+}
+
+/// The body as JSON, parsed once when the response arrives.
+pub fn json_of(response: &Response) -> Option<serde_json::Value> {
+    (response.body.len() <= 8_000_000).then(|| response.json()).flatten()
 }
 
 pub enum ResponseState {
@@ -76,11 +83,13 @@ pub struct Tab {
     pub section: ReqSection,
     pub resp_section: RespSection,
     pub response: ResponseState,
-    pub raw_view: bool,
+    pub body_view: crate::body_view::BodyView,
+    pub body_search: String,
     /// Text of the URL bar (base URL + query), kept in sync with params.
     pub url_edit: String,
     pub ws: crate::ws_view::WsState,
     pub grpc: crate::grpc_view::GrpcState,
+    pub mcp: crate::mcp_view::McpState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -127,6 +136,7 @@ pub enum Dialog {
     NewCollection { name: String },
     Environments { selected: Option<String> },
     Settings,
+    Cookies(crate::cookies_view::CookiesDialog),
     Snippet { lang: SnippetLang },
     About,
 }
@@ -142,7 +152,50 @@ pub enum RunnerMsg {
     Done(RunReport, Option<Environment>),
 }
 
+/// Runner options picked before a run starts.
+#[derive(Clone)]
+pub struct RunnerSetup {
+    pub collection_id: String,
+    pub collection: String,
+    pub iterations: usize,
+    pub delay_ms: u64,
+    pub stop_on_failure: bool,
+    pub data_path: Option<String>,
+    pub data: Vec<pakpos_core::data::Row>,
+    pub data_error: Option<String>,
+}
+
+impl RunnerSetup {
+    pub fn new(collection_id: &str, collection: &str) -> Self {
+        Self {
+            collection_id: collection_id.to_string(),
+            collection: collection.to_string(),
+            iterations: 0,
+            delay_ms: 0,
+            stop_on_failure: false,
+            data_path: None,
+            data: Vec::new(),
+            data_error: None,
+        }
+    }
+
+    pub fn load_data(&mut self, path: String) {
+        match pakpos_core::data::load(&path) {
+            Ok(rows) => {
+                self.data = rows;
+                self.data_error = None;
+            }
+            Err(e) => {
+                self.data.clear();
+                self.data_error = Some(e.to_string());
+            }
+        }
+        self.data_path = Some(path);
+    }
+}
+
 pub struct RunnerState {
+    pub setup: RunnerSetup,
     pub collection: String,
     pub environment: Option<String>,
     pub rx: Receiver<RunnerMsg>,
@@ -155,6 +208,7 @@ pub struct RunnerState {
 /// Things the UI asks for; applied after drawing to keep borrows simple.
 pub enum Action {
     OpenRequest { collection: String, request: String },
+    MoveItem { from: String, item: String, to: String, at: pakpos_core::model::DropTarget },
     NewTab(Box<Request>),
     NewRequestIn { collection: String, folder: Option<String> },
     NewFolderIn { collection: String, folder: Option<String> },
@@ -162,6 +216,7 @@ pub enum Action {
     Rename(RenameTarget, String),
     Delete(DeleteTarget, String),
     ExportCollection(String),
+    ExportOpenApi(String),
     RunCollection(String),
     ImportPostmanCollection,
     ImportEnvironment,
@@ -190,6 +245,9 @@ pub struct PakPosApp {
     /// Collection edited in the settings dialog, saved after a short pause.
     pub collection_dirty: Option<(String, Instant)>,
     pub runner: Option<RunnerState>,
+    pub runner_setup: Option<RunnerSetup>,
+    /// Cookie jar shared by every request (mirrored into `ws.cookies` to save it).
+    pub cookie_jar: std::sync::Arc<pakpos_core::cookies::SharedJar>,
     pub oauth_job: Option<crate::oauth_view::OAuthJob>,
     pub graphql: crate::graphql_view::GqlState,
     pub mock: Option<crate::mock_view::MockState>,
@@ -202,7 +260,13 @@ pub struct PakPosApp {
 impl PakPosApp {
     pub fn new(cc: &eframe::CreationContext<'_>, ws: Workspace, load_errors: Vec<String>) -> Self {
         let palette = Palette::of(ws.settings.theme);
+        crate::i18n::set(match &ws.settings.language {
+            Some(code) => crate::i18n::Lang::from_code(code),
+            None => crate::i18n::Lang::from_system(),
+        });
+        let cookie_jar = pakpos_core::cookies::SharedJar::new(ws.cookies.clone());
         let mut app = PakPosApp {
+            cookie_jar,
             ws,
             palette,
             tabs: Vec::new(),
@@ -215,6 +279,7 @@ impl PakPosApp {
             env_dirty: None,
             collection_dirty: None,
             runner: None,
+            runner_setup: None,
             oauth_job: None,
             graphql: Default::default(),
             mock: None,
@@ -256,6 +321,7 @@ impl PakPosApp {
             url_edit,
             ws: Default::default(),
             grpc: Default::default(),
+            mcp: Default::default(),
             uid: self.next_uid,
             request,
             source,
@@ -263,7 +329,8 @@ impl PakPosApp {
             section: ReqSection::Params,
             resp_section: RespSection::Body,
             response: ResponseState::Empty,
-            raw_view: false,
+            body_view: Default::default(),
+            body_search: String::new(),
         });
         self.next_uid += 1;
         self.tabs.len() - 1
@@ -353,12 +420,16 @@ impl PakPosApp {
 
     pub fn send(&mut self, idx: usize, ctx: &egui::Context) {
         let Some(tab) = self.tabs.get(idx) else { return };
-        if tab.request.kind == pakpos_core::model::RequestKind::WebSocket {
+        if tab.request.kind.is_realtime() {
             self.ws_connect(idx, ctx);
             return;
         }
         if tab.request.kind == pakpos_core::model::RequestKind::Grpc {
             self.grpc_send(idx, ctx);
+            return;
+        }
+        if tab.request.kind == pakpos_core::model::RequestKind::Mcp {
+            self.mcp_send(idx, ctx);
             return;
         }
         let mut req = tab.request.clone();
@@ -368,26 +439,41 @@ impl PakPosApp {
         let fallback = self.inherited_auth(tab);
         let settings = self.ws.settings.http.clone();
         let mut tokens = self.ws.tokens.clone();
+        let jar = self.cookie_jar.clone();
         let collection = tab.source.as_ref().and_then(|(c, _)| self.collection(c));
         let chain = pakpos_core::scripts::chain_for(collection, &req);
         // Unsaved requests are the user's own; saved ones follow collection trust.
         let trusted = tab.source.as_ref().is_none_or(|(c, _)| self.ws.is_trusted(c));
+        // Unsaved requests may use pm.sendRequest; saved ones need the collection's permission.
+        let network = tab.source.as_ref().is_none_or(|(c, _)| self.ws.has_network(c));
+        let script_network = pakpos_core::scripts::Network {
+            settings: self.ws.settings.http.clone(),
+            cookies: Some(self.cookie_jar.clone()),
+            ..Default::default()
+        };
         let run_scripts = trusted && !chain.is_empty();
         let skipped = !trusted && !chain.is_empty();
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let limits = pakpos_core::scripts::Limits::default();
+            let limits = if network {
+                pakpos_core::scripts::Limits::with_network(script_network)
+            } else {
+                pakpos_core::scripts::Limits::default()
+            };
             let mut logs = Vec::new();
             let mut script_tests = Vec::new();
             let mut changes = pakpos_core::scripts::VarChanges::default();
             if skipped {
                 logs.push(
-                    "Scripts were not run: this collection is not trusted (see the banner in the Scripts tab).".into(),
+                    crate::i18n::tr(
+                        "Scripts were not run: this collection is not trusted (see the banner in the Scripts tab).",
+                    )
+                    .into(),
                 );
             }
             if run_scripts {
-                let pre = pakpos_core::scripts::run_pre_request(&chain, &mut req, &mut scope, limits);
+                let pre = pakpos_core::scripts::run_pre_request(&chain, &mut req, &mut scope, limits.clone());
                 script_tests.extend(pre.error_results());
                 logs.extend(pre.logs);
                 changes.merge(pre.changes);
@@ -399,9 +485,10 @@ impl PakPosApp {
             let new_token = match pakpos_core::oauth2::ensure_token(&effective, &mut scope, &mut tokens, &settings) {
                 Ok(t) => t,
                 Err(pakpos_core::oauth2::OAuthError::NeedsInteractive) => {
-                    let _ = tx.send(Err(
-                        "No OAuth 2.0 token yet: open the Auth tab and click “Get new access token”.".into()
-                    ));
+                    let _ = tx.send(Err(crate::i18n::tr(
+                        "No OAuth 2.0 token yet: open the Auth tab and click “Get new access token”.",
+                    )
+                    .into()));
                     ctx.request_repaint();
                     return;
                 }
@@ -412,8 +499,9 @@ impl PakPosApp {
                 }
             };
             let result = http::prepare(&req, &scope, fallback.as_ref())
-                .and_then(|p| {
-                    let client = http::build_client(&settings)?;
+                .and_then(|mut p| {
+                    jar.with(|j| j.merge_into_manual(&mut p));
+                    let client = http::client_with_jar(&settings, &p.url, &jar)?;
                     http::send(&client, &p).map(|r| (p, r))
                 })
                 .map(|(prepared, response)| {
@@ -428,7 +516,18 @@ impl PakPosApp {
                         changes.merge(t.changes);
                     }
                     tests.extend(script_tests);
-                    Outcome { prepared, response, pretty, tests, extracted, new_token, logs, script_changes: changes }
+                    let json = json_of(&response);
+                    Outcome {
+                        prepared,
+                        response,
+                        pretty,
+                        tests,
+                        extracted,
+                        new_token,
+                        logs,
+                        script_changes: changes,
+                        json,
+                    }
                 })
                 .map_err(|e| e.to_string());
             let _ = tx.send(result);
@@ -455,6 +554,7 @@ impl PakPosApp {
             match result {
                 Ok(outcome) => {
                     self.ws.push_history(req, Some(outcome.response.status), Some(outcome.response.elapsed_ms));
+                    self.sync_cookies();
                     if let Some((key, token)) = outcome.new_token.clone() {
                         self.ws.tokens.insert(key, token);
                         let _ = self.ws.save_tokens();
@@ -469,7 +569,10 @@ impl PakPosApp {
                                 env.set(k, v.clone());
                             }
                             self.env_dirty = Some(Instant::now());
-                            self.toast(format!("Saved {} to environment", names.join(", ")));
+                            self.toast(crate::i18n::trf(
+                                "Saved {names} to environment",
+                                &[("names", &names.join(", "))],
+                            ));
                         } else {
                             for (k, v) in &outcome.extracted {
                                 if let Some(g) = self.ws.globals.iter_mut().find(|g| &g.key == k) {
@@ -479,7 +582,7 @@ impl PakPosApp {
                                 }
                             }
                             let _ = self.ws.save_globals();
-                            self.toast(format!("Saved {} to globals", names.join(", ")));
+                            self.toast(crate::i18n::trf("Saved {names} to globals", &[("names", &names.join(", "))]));
                         }
                     }
                     let tab = &mut self.tabs[i];
@@ -504,7 +607,7 @@ impl PakPosApp {
         if !self.ws.is_trusted(id) {
             self.ws.settings.trusted_collections.push(id.to_string());
             self.persist_settings();
-            self.toast("Collection trusted: its scripts will run");
+            self.toast(crate::i18n::tr("Collection trusted: its scripts will run"));
         }
     }
 
@@ -556,7 +659,7 @@ impl PakPosApp {
         if saved {
             self.persist_collection(&cid);
             self.tabs[idx].dirty = false;
-            self.toast("Saved");
+            self.toast(crate::i18n::tr("Saved"));
         } else {
             // The saved request was deleted meanwhile: save as new.
             self.tabs[idx].source = None;
@@ -578,7 +681,7 @@ impl PakPosApp {
         let Some(tab) = self.tabs.get(idx) else { return };
         let ResponseState::Done(outcome) = &tab.response else { return };
         let Some((cid, rid)) = tab.source.clone() else {
-            self.toast_error("Save the request to a collection first, then save examples.");
+            self.toast_error(crate::i18n::tr("Save the request to a collection first, then save examples."));
             return;
         };
         let r = &outcome.response;
@@ -589,7 +692,7 @@ impl PakPosApp {
             saved.examples.push(example);
         }
         self.persist_collection(&cid);
-        self.toast("Saved as example (served by the mock server)");
+        self.toast(crate::i18n::tr("Saved as example (served by the mock server)"));
     }
 
     pub fn persist_environments(&mut self) {
@@ -616,23 +719,49 @@ impl PakPosApp {
 
     // ----- runner -------------------------------------------------------------
 
+    /// Saves the shared cookie jar when it changed.
+    pub fn sync_cookies(&mut self) {
+        let snapshot = self.cookie_jar.snapshot();
+        if snapshot != self.ws.cookies {
+            self.ws.cookies = snapshot;
+            let _ = self.ws.save_cookies();
+        }
+    }
+
+    /// Runs a collection with default options.
     pub fn start_runner(&mut self, collection_id: &str, ctx: &egui::Context) {
-        let Some(collection) = self.collection(collection_id).cloned() else { return };
+        let Some(name) = self.collection(collection_id).map(|c| c.name.clone()) else { return };
+        self.start_runner_with(RunnerSetup::new(collection_id, &name), ctx);
+    }
+
+    pub fn start_runner_with(&mut self, setup: RunnerSetup, ctx: &egui::Context) {
+        let Some(collection) = self.collection(&setup.collection_id).cloned() else { return };
         let env = self.ws.active_environment().cloned();
         let options = RunOptions {
             settings: self.ws.settings.http.clone(),
             globals: self.ws.globals.clone(),
+            tokens: self.ws.tokens.clone(),
+            cookies: self.cookie_jar.snapshot(),
+            allow_scripts: self.ws.is_trusted(&collection.id),
+            allow_network: self.ws.has_network(&collection.id),
+            data: setup.data.clone(),
+            iterations: setup.iterations,
+            delay_ms: setup.delay_ms,
+            stop_on_failure: setup.stop_on_failure,
             ..Default::default()
         };
+        let runnable = collection.flatten().iter().filter(|(_, r)| !r.kind.is_realtime()).count();
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
+        let total = runnable * options.iteration_count();
         self.runner = Some(RunnerState {
+            setup,
             collection: collection.name.clone(),
             environment: env.as_ref().map(|e| e.name.clone()),
             rx,
             progress: Vec::new(),
             report: None,
-            total: collection.request_count(),
+            total,
             open: true,
         });
         std::thread::spawn(move || {
@@ -650,16 +779,27 @@ impl PakPosApp {
 
     fn poll_runner(&mut self) {
         let mut done_env = None;
+        let mut done_cookies = false;
         if let Some(r) = &mut self.runner {
             while let Ok(msg) = r.rx.try_recv() {
                 match msg {
                     RunnerMsg::Progress(p) => r.progress.push(p),
                     RunnerMsg::Done(report, env) => {
+                        if report.tokens != self.ws.tokens {
+                            self.ws.tokens = report.tokens.clone();
+                            let _ = self.ws.save_tokens();
+                        }
+                        let cookies = report.cookies.clone();
+                        self.cookie_jar.with(|j| *j = cookies);
+                        done_cookies = true;
                         r.report = Some(report);
                         done_env = env;
                     }
                 }
             }
+        }
+        if done_cookies {
+            self.sync_cookies();
         }
         if let Some(env) = done_env {
             if let Some(slot) = self.ws.environments.iter_mut().find(|e| e.id == env.id) {
@@ -720,7 +860,7 @@ impl PakPosApp {
                         let white = p.header_text;
                         if ui
                             .add(egui::Button::new(RichText::new("⚙").size(16.0).color(white)).frame(false))
-                            .on_hover_text("Settings")
+                            .on_hover_text(crate::i18n::tr("Settings"))
                             .clicked()
                         {
                             self.dialog = Some(Dialog::Settings);
@@ -728,7 +868,7 @@ impl PakPosApp {
                         let theme_icon = if p.dark { "☀" } else { "🌙" };
                         if ui
                             .add(egui::Button::new(RichText::new(theme_icon).size(15.0).color(white)).frame(false))
-                            .on_hover_text("Toggle light / dark")
+                            .on_hover_text(crate::i18n::tr("Toggle light / dark"))
                             .clicked()
                         {
                             self.ws.settings.theme = if p.dark { Theme::Light } else { Theme::Dark };
@@ -736,43 +876,65 @@ impl PakPosApp {
                         }
                         ui.add_space(8.0);
                         self.environment_picker(ui);
-                        ui.label(RichText::new("Environment").color(white.gamma_multiply(0.7)).small());
+                        ui.label(
+                            RichText::new(crate::i18n::tr("Environment")).color(white.gamma_multiply(0.7)).small(),
+                        );
                         ui.add_space(12.0);
                         let changes = self.git.change_count();
-                        let sync_label =
-                            if changes > 0 { format!("⇅ Sync ({changes})") } else { "⇅ Sync".to_string() };
+                        let sync_label = if changes > 0 {
+                            crate::i18n::trf("⇅ Sync ({n})", &[("n", &changes.to_string())])
+                        } else {
+                            crate::i18n::tr("⇅ Sync").to_string()
+                        };
                         if ui
                             .add(
                                 egui::Button::new(RichText::new(sync_label).color(white))
                                     .fill(theme::NAVY_600)
                                     .stroke(egui::Stroke::NONE),
                             )
-                            .on_hover_text("Share this workspace with git")
+                            .on_hover_text(crate::i18n::tr("Share this workspace with git"))
                             .clicked()
                         {
                             self.git.open = true;
                             self.git.last_refresh = None;
                         }
+                        let cookie_count = self.ws.cookies.cookies.len();
+                        let cookies_label = if cookie_count > 0 {
+                            format!("{} ({cookie_count})", crate::i18n::tr("Cookies"))
+                        } else {
+                            crate::i18n::tr("Cookies").to_string()
+                        };
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new(cookies_label).color(white))
+                                    .fill(theme::NAVY_600)
+                                    .stroke(egui::Stroke::NONE),
+                            )
+                            .on_hover_text(crate::i18n::tr("View and edit the cookie jar"))
+                            .clicked()
+                        {
+                            self.dialog = Some(Dialog::Cookies(Default::default()));
+                        }
                         let import = ui.add(
-                            egui::Button::new(RichText::new("Import").color(white))
+                            egui::Button::new(RichText::new(crate::i18n::tr("Import")).color(white))
                                 .fill(theme::NAVY_600)
                                 .stroke(egui::Stroke::NONE),
                         );
                         egui::Popup::menu(&import).show(|ui| {
-                            if ui.button("Collection file (PakPos / v2.1)…").clicked() {
+                            if ui.button(crate::i18n::tr("Collection or OpenAPI file…")).clicked() {
                                 self.actions.push(Action::ImportPostmanCollection);
                             }
-                            if ui.button("Environment…").clicked() {
+                            if ui.button(crate::i18n::tr("Environment…")).clicked() {
                                 self.actions.push(Action::ImportEnvironment);
                             }
-                            if ui.button("cURL command…").clicked() {
+                            if ui.button(crate::i18n::tr("cURL command…")).clicked() {
                                 self.actions
                                     .push(Action::Dialog(Dialog::ImportCurl { text: String::new(), error: None }));
                             }
                         });
                         if ui
                             .add(
-                                egui::Button::new(RichText::new("+ New").color(theme::INK).strong())
+                                egui::Button::new(RichText::new(crate::i18n::tr("+ New")).color(theme::INK).strong())
                                     .fill(theme::ORANGE)
                                     .stroke(egui::Stroke::NONE),
                             )
@@ -786,15 +948,19 @@ impl PakPosApp {
     }
 
     fn environment_picker(&mut self, ui: &mut egui::Ui) {
-        let current = self.ws.active_environment().map(|e| e.name.clone()).unwrap_or_else(|| "No environment".into());
+        let current = self
+            .ws
+            .active_environment()
+            .map(|e| e.name.clone())
+            .unwrap_or_else(|| crate::i18n::tr("No environment").into());
         let mut selected = self.ws.settings.active_environment.clone();
         egui::ComboBox::from_id_salt("env_picker").width(170.0).selected_text(current).show_ui(ui, |ui| {
-            ui.selectable_value(&mut selected, None, "No environment");
+            ui.selectable_value(&mut selected, None, crate::i18n::tr("No environment"));
             for e in &self.ws.environments {
                 ui.selectable_value(&mut selected, Some(e.id.clone()), &e.name);
             }
             ui.separator();
-            if ui.button("Manage environments…").clicked() {
+            if ui.button(crate::i18n::tr("Manage environments…")).clicked() {
                 self.actions.push(Action::EditEnvironment(self.ws.settings.active_environment.clone()));
             }
         });
@@ -817,7 +983,12 @@ impl PakPosApp {
                     ui.label(RichText::new(format!("PakPos {}", pakpos_core::VERSION)).small().color(p.text_weak));
                     ui.separator();
                     ui.label(
-                        RichText::new(format!("Workspace: {}", self.ws.root.display())).small().color(p.text_weak),
+                        RichText::new(crate::i18n::trf(
+                            "Workspace: {path}",
+                            &[("path", &self.ws.root.display().to_string())],
+                        ))
+                        .small()
+                        .color(p.text_weak),
                     );
                     if let Some(m) = &self.mock {
                         ui.separator();
@@ -825,7 +996,7 @@ impl PakPosApp {
                             RichText::new(format!("● Mock http://{}", m.server.addr)).small().color(theme::GREEN);
                         if ui
                             .add(egui::Label::new(label).sense(egui::Sense::click()))
-                            .on_hover_text("Show mock server")
+                            .on_hover_text(crate::i18n::tr("Show mock server"))
                             .clicked()
                         {
                             self.actions.push(Action::ShowMock);
@@ -834,7 +1005,7 @@ impl PakPosApp {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .add(
-                                egui::Label::new(RichText::new("About").small().color(p.text_weak))
+                                egui::Label::new(RichText::new(crate::i18n::tr("About")).small().color(p.text_weak))
                                     .sense(egui::Sense::click()),
                             )
                             .clicked()
@@ -842,9 +1013,11 @@ impl PakPosApp {
                             self.dialog = Some(Dialog::About);
                         }
                         ui.label(
-                            RichText::new("Ctrl+Enter send  ·  Ctrl+S save  ·  Ctrl+T new tab  ·  Ctrl+I import cURL")
-                                .small()
-                                .color(p.text_weak),
+                            RichText::new(crate::i18n::tr(crate::i18n::tr(
+                                "Ctrl+Enter send  ·  Ctrl+S save  ·  Ctrl+T new tab  ·  Ctrl+I import cURL",
+                            )))
+                            .small()
+                            .color(p.text_weak),
                         );
                     });
                 });
@@ -879,10 +1052,10 @@ impl PakPosApp {
         ctx.request_repaint_after(Duration::from_millis(250));
     }
 
-    pub fn apply_actions(&mut self, ctx: &egui::Context) {
+    pub fn apply_actions(&mut self) {
         let actions = std::mem::take(&mut self.actions);
         for action in actions {
-            crate::actions::apply(self, action, ctx);
+            crate::actions::apply(self, action);
         }
     }
 }
@@ -918,6 +1091,8 @@ impl eframe::App for PakPosApp {
         self.poll_oauth();
         self.poll_graphql();
         self.poll_ws();
+        self.poll_grpc_streams();
+        self.poll_mcp();
         self.poll_mock();
         self.poll_grpc();
         if let Some(t) = self.env_dirty {
@@ -951,11 +1126,12 @@ impl eframe::App for PakPosApp {
         self.workbench(ui);
 
         self.dialogs(&ctx);
+        self.runner_setup_window(&ctx);
         self.runner_window(&ctx);
         self.mock_window(&ctx);
         self.git_window(&ctx);
         self.show_toasts(&ctx);
-        self.apply_actions(&ctx);
+        self.apply_actions();
 
         if self.oauth_job.is_some()
             || self.graphql.job.is_some()

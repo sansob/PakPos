@@ -306,6 +306,38 @@ pub enum Auth {
     /// OAuth 2.0; tokens are kept in the workspace token store, not here.
     #[serde(rename = "oauth2")]
     OAuth2(OAuth2Config),
+    /// HTTP Digest (RFC 7616): answered after the server's 401 challenge.
+    Digest {
+        username: String,
+        password: String,
+    },
+    /// AWS Signature Version 4.
+    #[serde(rename = "aws_sigv4")]
+    AwsSigV4(AwsSigV4Config),
+    /// NTLMv2 handshake (Windows / IIS servers).
+    Ntlm {
+        username: String,
+        password: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        domain: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        workstation: String,
+    },
+}
+
+/// AWS Signature Version 4 settings. Every field may contain `{{variables}}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct AwsSigV4Config {
+    #[serde(default)]
+    pub access_key: String,
+    #[serde(default)]
+    pub secret_key: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub session_token: String,
+    #[serde(default)]
+    pub region: String,
+    #[serde(default)]
+    pub service: String,
 }
 
 /// OAuth 2.0 grant types.
@@ -455,6 +487,9 @@ impl Auth {
             Auth::Bearer { .. } => "Bearer Token",
             Auth::ApiKey { .. } => "API Key",
             Auth::OAuth2(_) => "OAuth 2.0",
+            Auth::Digest { .. } => "Digest Auth",
+            Auth::AwsSigV4(_) => "AWS Signature",
+            Auth::Ntlm { .. } => "NTLM",
         }
     }
 
@@ -467,6 +502,18 @@ impl Auth {
             Auth::Bearer { token: String::new() },
             Auth::ApiKey { key: "X-API-Key".into(), value: String::new(), location: ApiKeyLocation::Header },
             Auth::OAuth2(OAuth2Config::default()),
+            Auth::Digest { username: String::new(), password: String::new() },
+            Auth::AwsSigV4(AwsSigV4Config {
+                region: "us-east-1".into(),
+                service: "execute-api".into(),
+                ..Default::default()
+            }),
+            Auth::Ntlm {
+                username: String::new(),
+                password: String::new(),
+                domain: String::new(),
+                workstation: String::new(),
+            },
         ]
     }
 
@@ -564,6 +611,117 @@ pub enum RequestKind {
     /// gRPC call: `grpc` holds the method, the raw body is the JSON message and
     /// headers are sent as metadata.
     Grpc,
+    /// Server-Sent Events: the request opens a `text/event-stream`.
+    Sse,
+    /// Socket.IO: the URL path is the namespace; `realtime.event` is the event
+    /// the composer emits, the raw body its payload.
+    SocketIo,
+    /// MQTT: the URL is the broker, `realtime` holds topics; Basic auth gives
+    /// the user name and password.
+    Mqtt,
+    /// MCP server: the URL is an http(s) endpoint or a command line; `mcp`
+    /// says what to call, the raw body holds the JSON arguments.
+    Mcp,
+}
+
+/// What an MCP request does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum McpOperation {
+    #[default]
+    CallTool,
+    ReadResource,
+    GetPrompt,
+    ListTools,
+}
+
+impl McpOperation {
+    pub const ALL: [McpOperation; 4] =
+        [McpOperation::CallTool, McpOperation::ReadResource, McpOperation::GetPrompt, McpOperation::ListTools];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            McpOperation::CallTool => "Call tool",
+            McpOperation::ReadResource => "Read resource",
+            McpOperation::GetPrompt => "Get prompt",
+            McpOperation::ListTools => "List tools",
+        }
+    }
+}
+
+/// Settings of an MCP request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct McpConfig {
+    #[serde(default)]
+    pub operation: McpOperation,
+    /// Tool name, resource URI or prompt name.
+    #[serde(default)]
+    pub target: String,
+    /// Environment variables for a stdio server.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env: Vec<KeyValue>,
+}
+
+/// Settings of Socket.IO and MQTT requests.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RealtimeConfig {
+    /// Socket.IO: event to emit.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub event: String,
+    /// Socket.IO: server path (default `/socket.io/`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub path: String,
+    /// Socket.IO: JSON auth payload for the namespace connect.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auth: String,
+    /// MQTT: client id (random when empty).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub client_id: String,
+    /// MQTT: topic filters subscribed on connect.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subscriptions: Vec<MqttTopic>,
+    /// MQTT: topic the composer publishes to.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub topic: String,
+    #[serde(default)]
+    pub qos: u8,
+    #[serde(default)]
+    pub retain: bool,
+    #[serde(default = "default_keep_alive")]
+    pub keep_alive_secs: u16,
+    #[serde(default = "default_true")]
+    pub clean_session: bool,
+}
+
+fn default_keep_alive() -> u16 {
+    60
+}
+
+impl Default for RealtimeConfig {
+    fn default() -> Self {
+        Self {
+            event: String::new(),
+            path: String::new(),
+            auth: String::new(),
+            client_id: String::new(),
+            subscriptions: Vec::new(),
+            topic: String::new(),
+            qos: 0,
+            retain: false,
+            keep_alive_secs: default_keep_alive(),
+            clean_session: true,
+        }
+    }
+}
+
+/// An MQTT subscription.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct MqttTopic {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    pub topic: String,
+    #[serde(default)]
+    pub qos: u8,
 }
 
 /// Settings of a gRPC request.
@@ -583,6 +741,23 @@ pub struct GrpcConfig {
 impl RequestKind {
     pub fn is_http(&self) -> bool {
         *self == RequestKind::Http
+    }
+
+    /// Long-lived sessions with a message log (not runnable in the runner).
+    pub fn is_realtime(&self) -> bool {
+        matches!(self, RequestKind::WebSocket | RequestKind::Sse | RequestKind::SocketIo | RequestKind::Mqtt)
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            RequestKind::Http => "HTTP",
+            RequestKind::WebSocket => "WebSocket",
+            RequestKind::Grpc => "gRPC",
+            RequestKind::Sse => "SSE",
+            RequestKind::SocketIo => "Socket.IO",
+            RequestKind::Mqtt => "MQTT",
+            RequestKind::Mcp => "MCP",
+        }
     }
 }
 
@@ -617,6 +792,10 @@ pub struct Request {
     pub examples: Vec<Example>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grpc: Option<GrpcConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realtime: Option<RealtimeConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<McpConfig>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
@@ -638,6 +817,8 @@ impl Default for Request {
             scripts: Scripts::default(),
             examples: Vec::new(),
             grpc: None,
+            realtime: None,
+            mcp: None,
             description: String::new(),
         }
     }
@@ -898,6 +1079,100 @@ impl Collection {
     pub fn request_count(&self) -> usize {
         self.flatten().len()
     }
+
+    /// Is `id` the folder `ancestor` or somewhere inside it?
+    pub fn is_inside(&self, id: &str, ancestor: &str) -> bool {
+        fn contains(items: &[Item], id: &str) -> bool {
+            items.iter().any(|i| i.id() == id || matches!(i, Item::Folder(f) if contains(&f.items, id)))
+        }
+        fn find<'a>(items: &'a [Item], id: &str) -> Option<&'a Folder> {
+            items.iter().find_map(|i| match i {
+                Item::Folder(f) if f.id == id => Some(f),
+                Item::Folder(f) => find(&f.items, id),
+                _ => None,
+            })
+        }
+        id == ancestor || find(&self.items, ancestor).is_some_and(|f| contains(&f.items, id))
+    }
+
+    /// Inserts an item at a drop position. Returns the item back when the
+    /// target does not exist.
+    pub fn insert_item(&mut self, item: Item, at: &DropTarget) -> Result<(), Box<Item>> {
+        fn walk(items: &mut Vec<Item>, item: Item, at: &DropTarget) -> Result<(), Box<Item>> {
+            match at {
+                DropTarget::Before(id) | DropTarget::After(id) => {
+                    if let Some(pos) = items.iter().position(|i| i.id() == id) {
+                        let pos = if matches!(at, DropTarget::After(_)) { pos + 1 } else { pos };
+                        items.insert(pos, item);
+                        return Ok(());
+                    }
+                }
+                DropTarget::Into(Some(id)) => {
+                    if let Some(Item::Folder(f)) = items.iter_mut().find(|i| i.id() == id) {
+                        f.items.push(item);
+                        return Ok(());
+                    }
+                }
+                DropTarget::Into(None) => {
+                    items.push(item);
+                    return Ok(());
+                }
+            }
+            let mut item = item;
+            for child in items.iter_mut() {
+                if let Item::Folder(f) = child {
+                    match walk(&mut f.items, item, at) {
+                        Ok(()) => return Ok(()),
+                        Err(back) => item = *back,
+                    }
+                }
+            }
+            Err(Box::new(item))
+        }
+        walk(&mut self.items, item, at)
+    }
+}
+
+/// Where a dragged item lands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DropTarget {
+    /// Just before the item with this id (same parent).
+    Before(String),
+    /// Just after the item with this id.
+    After(String),
+    /// At the end of a folder, or of the collection itself (`None`).
+    Into(Option<String>),
+}
+
+impl DropTarget {
+    pub fn target_id(&self) -> Option<&str> {
+        match self {
+            DropTarget::Before(id) | DropTarget::After(id) | DropTarget::Into(Some(id)) => Some(id),
+            DropTarget::Into(None) => None,
+        }
+    }
+}
+
+/// Moves an item inside one collection or between two. Refuses to move a
+/// folder into itself. Returns whether anything moved.
+pub fn move_item(collections: &mut [Collection], from: &str, item_id: &str, to: &str, at: &DropTarget) -> bool {
+    if at.target_id() == Some(item_id) {
+        return false;
+    }
+    let Some(src) = collections.iter().position(|c| c.id == from) else { return false };
+    let Some(dst) = collections.iter().position(|c| c.id == to) else { return false };
+    if src == dst && at.target_id().is_some_and(|t| collections[src].is_inside(t, item_id)) {
+        return false;
+    }
+    let Some(item) = collections[src].remove_item(item_id) else { return false };
+    match collections[dst].insert_item(item, at) {
+        Ok(()) => true,
+        Err(item) => {
+            // Target vanished: put it back at the end of the source.
+            collections[src].items.push(*item);
+            false
+        }
+    }
 }
 
 /// A set of variables, e.g. "Local", "Staging", "Production".
@@ -954,6 +1229,39 @@ mod tests {
         f.items.push(Item::Request(r));
         c.items.push(Item::Folder(f));
         assert_eq!(c.effective_auth(&id), Some(Auth::Bearer { token: "abc".into() }));
+    }
+
+    #[test]
+    fn move_items_between_folders_and_collections() {
+        let mut a = Collection::new("A");
+        let mut f = Folder::new("F");
+        let r1 = Request::new(HttpMethod::Get, "/1");
+        let r2 = Request::new(HttpMethod::Get, "/2");
+        let r3 = Request::new(HttpMethod::Get, "/3");
+        let (id1, id2, id3, fid) = (r1.id.clone(), r2.id.clone(), r3.id.clone(), f.id.clone());
+        f.items.push(Item::Request(r3));
+        a.items = vec![Item::Request(r1), Item::Request(r2), Item::Folder(f)];
+        let b = Collection::new("B");
+        let (aid, bid) = (a.id.clone(), b.id.clone());
+        let mut cs = vec![a, b];
+
+        // Reorder: r2 before r1.
+        assert!(move_item(&mut cs, &aid, &id2, &aid, &DropTarget::Before(id1.clone())));
+        let ids: Vec<_> = cs[0].items.iter().map(|i| i.id().to_string()).collect();
+        assert_eq!(ids, [id2.clone(), id1.clone(), fid.clone()]);
+        // Into a folder, after its child.
+        assert!(move_item(&mut cs, &aid, &id1, &aid, &DropTarget::After(id3.clone())));
+        assert_eq!(cs[0].find_folder_mut(&fid).unwrap().items.len(), 2);
+        // A folder cannot go into itself or its children.
+        assert!(!move_item(&mut cs, &aid, &fid, &aid, &DropTarget::Into(Some(fid.clone()))));
+        assert!(!move_item(&mut cs, &aid, &fid, &aid, &DropTarget::Before(id3.clone())));
+        // To another collection's root.
+        assert!(move_item(&mut cs, &aid, &fid, &bid, &DropTarget::Into(None)));
+        assert_eq!(cs[1].request_count(), 2);
+        assert_eq!(cs[0].request_count(), 1);
+        // Missing target: nothing lost.
+        assert!(!move_item(&mut cs, &aid, &id2, &aid, &DropTarget::Before("nope".into())));
+        assert_eq!(cs[0].request_count(), 1);
     }
 
     #[test]

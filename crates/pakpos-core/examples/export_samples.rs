@@ -19,6 +19,10 @@ fn main() -> std::io::Result<()> {
     let write = |name: &str, text: String| std::fs::write(dir.join(name), text + "\n");
     write("pakpos-demo.collection.json", serde_json::to_string_pretty(&collection).unwrap())?;
     write("pakpos-demo.postman_collection.json", postman::export_collection(&collection))?;
+    std::fs::write(
+        dir.join("pakpos-demo.openapi.yaml"),
+        pakpos_core::openapi::to_yaml(&pakpos_core::openapi::export(&collection)),
+    )?;
     write("local.environment.json", serde_json::to_string_pretty(&local).unwrap())?;
     write("httpbin.environment.json", serde_json::to_string_pretty(&httpbin).unwrap())?;
     write("httpbin.postman_environment.json", postman::export_environment(&httpbin))?;

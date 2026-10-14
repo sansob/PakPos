@@ -1,4 +1,4 @@
-# 4. Importing collections and cURL
+# 4. Importing collections, OpenAPI and cURL
 
 ## Collection files (v2.0 / v2.1)
 
@@ -25,6 +25,37 @@ What is converted:
 | AWS, Digest, NTLM… auth | ❌ skipped, with a warning |
 
 Export back with right-click → **Export (Collection v2.1)…**.
+
+## OpenAPI and Swagger
+
+**Import → Collection or OpenAPI file…** also takes OpenAPI 3.0 / 3.1 and
+Swagger 2.0 documents, in JSON or YAML. Every operation becomes a request:
+
+- folders by the operation's first tag;
+- the first server URL becomes the collection variable `{{baseUrl}}` (server
+  variables use their defaults); path parameters become `{{variables}}` with
+  their example values;
+- query and header parameters with examples (required ones enabled), request
+  bodies with an example built from `example`, `examples` or the schema, and
+  `Accept` from the responses;
+- auth from `securitySchemes` (Basic, Bearer, API key, OAuth 2.0), per
+  collection and per operation;
+- response examples as saved **examples**, so **Start mock server** serves the
+  API right after the import.
+
+Local `$ref`s are followed; webhooks, cookie parameters and OpenID Connect are
+reported as warnings. A large spec like GitHub's REST API (1,200+ operations)
+imports in well under a second.
+
+Export works the other way: right-click a collection → **Export as OpenAPI
+3…** writes OpenAPI 3.0.3 YAML (or JSON with a `.json` name), with schemas
+inferred from the example bodies and response examples from saved examples.
+
+```sh
+pakpos-cli import petstore.yaml --workspace        # into the app's workspace
+pakpos-cli run petstore.yaml -e staging            # run a spec directly
+pakpos-cli export my.collection.json -f openapi-yaml -o openapi.yaml
+```
 
 ## Environments
 

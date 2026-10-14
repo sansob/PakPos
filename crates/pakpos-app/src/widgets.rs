@@ -58,7 +58,9 @@ pub fn tab_bar<T: PartialEq + Copy>(ui: &mut Ui, current: &mut T, items: &[(T, S
             let selected = *current == *value;
             let color = if selected { ui.visuals().text_color() } else { ui.visuals().weak_text_color() };
             let resp = ui.add(
-                egui::Label::new(RichText::new(label).color(color).strong()).selectable(false).sense(Sense::click()),
+                egui::Label::new(RichText::new(crate::i18n::tr(label)).color(color).strong())
+                    .selectable(false)
+                    .sense(Sense::click()),
             );
             if resp.hovered() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -82,6 +84,7 @@ pub fn tab_bar<T: PartialEq + Copy>(ui: &mut Ui, current: &mut T, items: &[(T, S
 
 /// Label with a count badge, e.g. "Headers (3)".
 pub fn counted(label: &str, n: usize) -> String {
+    let label = crate::i18n::tr(label);
     if n == 0 {
         label.to_string()
     } else {
@@ -152,7 +155,7 @@ fn header_row(ui: &mut Ui, cols: &[(&str, f32)]) {
             ui.allocate_ui_with_layout(egui::vec2(*w, 16.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.set_min_width(*w);
                 ui.add_space(4.0);
-                ui.label(RichText::new(*label).small().color(color));
+                ui.label(RichText::new(crate::i18n::tr(label)).small().color(color));
             });
         }
     });
@@ -182,11 +185,17 @@ pub fn kv_table(ui: &mut Ui, id: &str, rows: &mut Vec<KeyValue>, scope: &VarScop
                     } else {
                         changed |= ui.add_sized([22.0, 22.0], egui::Checkbox::without_text(&mut row.enabled)).changed();
                     }
-                    changed |=
-                        var_text_edit(ui, &mut row.key, scope, if last { key_hint } else { "" }, key_w).changed();
+                    changed |= var_text_edit(
+                        ui,
+                        &mut row.key,
+                        scope,
+                        if last { crate::i18n::tr(key_hint) } else { "" },
+                        key_w,
+                    )
+                    .changed();
                     changed |=
                         var_text_edit(ui, &mut row.value, scope, if last { "Value" } else { "" }, val_w).changed();
-                    if !last && ghost_button(ui, "×", "Remove").clicked() {
+                    if !last && ghost_button(ui, "×", crate::i18n::tr("Remove")).clicked() {
                         remove = Some(i);
                     }
                 });
@@ -228,8 +237,8 @@ pub fn form_table(ui: &mut Ui, rows: &mut Vec<FormField>, scope: &VarScope) -> b
                         .width(64.0)
                         .selected_text(if row.is_file { "File" } else { "Text" })
                         .show_ui(ui, |ui| {
-                            changed |= ui.selectable_value(&mut row.is_file, false, "Text").changed();
-                            changed |= ui.selectable_value(&mut row.is_file, true, "File").changed();
+                            changed |= ui.selectable_value(&mut row.is_file, false, crate::i18n::tr("Text")).changed();
+                            changed |= ui.selectable_value(&mut row.is_file, true, crate::i18n::tr("File")).changed();
                         });
                     if row.is_file {
                         let w = (val_w - 80.0).max(80.0);
@@ -238,11 +247,11 @@ pub fn form_table(ui: &mut Ui, rows: &mut Vec<FormField>, scope: &VarScope) -> b
                                 egui::TextEdit::singleline(&mut row.value)
                                     .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                                     .vertical_align(egui::Align::Center)
-                                    .hint_text("path/to/file")
+                                    .hint_text(crate::i18n::tr("path/to/file"))
                                     .desired_width(w),
                             )
                             .changed();
-                        if ui.button("Browse…").clicked() {
+                        if ui.button(crate::i18n::tr("Browse…")).clicked() {
                             if let Some(path) = rfd::FileDialog::new().pick_file() {
                                 row.value = path.display().to_string();
                                 changed = true;
@@ -252,7 +261,7 @@ pub fn form_table(ui: &mut Ui, rows: &mut Vec<FormField>, scope: &VarScope) -> b
                         changed |=
                             var_text_edit(ui, &mut row.value, scope, if last { "Value" } else { "" }, val_w).changed();
                     }
-                    if !last && ghost_button(ui, "×", "Remove").clicked() {
+                    if !last && ghost_button(ui, "×", crate::i18n::tr("Remove")).clicked() {
                         remove = Some(i);
                     }
                 });

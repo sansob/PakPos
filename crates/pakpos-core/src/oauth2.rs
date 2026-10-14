@@ -139,7 +139,8 @@ fn token_request(
     if cfg.client_id.trim().is_empty() {
         return Err(OAuthError::Missing("client ID"));
     }
-    let client = crate::http::build_client(settings).map_err(|e| OAuthError::Transport(e.to_string()))?;
+    let client =
+        crate::http::client_for(settings, cfg.token_url.trim()).map_err(|e| OAuthError::Transport(e.to_string()))?;
     if !cfg.scope.trim().is_empty() && !form.iter().any(|(k, _)| *k == "scope") {
         form.push(("scope", cfg.scope.clone()));
     }

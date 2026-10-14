@@ -34,10 +34,10 @@ const __env = __store(__in.environment, __out.env);
 const __coll = __store(__in.collection, __out.coll);
 const __glob = __store(__in.globals, __out.glob);
 const __vars = __store(__in.variables, __out.vars);
-// Local values first, then environment, collection and globals.
+// Local values first, then the data row, environment, collection and globals.
 const __varsGet = __vars.get;
 const __lookup = (k) => {
-  for (const get of [__varsGet, __env.get, __coll.get, __glob.get]) { const v = get(k); if (v !== undefined) return v; }
+  for (const get of [__varsGet, (d) => __in.data[d], __env.get, __coll.get, __glob.get]) { const v = get(k); if (v !== undefined) return v; }
   return undefined;
 };
 const __replaceIn = (text) => String(text).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (m, k) => { const v = __lookup(k); return v === undefined ? m : v; });
@@ -137,11 +137,9 @@ const request = {
   },
 };
 
-let response;
-if (__in.response) {
-  const r = __in.response;
+function __makeResponse(r) {
   const headers = __headerList(r.headers);
-  response = {
+  const response = {
     code: r.code,
     status: r.status,
     headers,
@@ -167,14 +165,56 @@ if (__in.response) {
   for (const [name, pred] of [["ok", (c) => c >= 200 && c < 300], ["success", (c) => c >= 200 && c < 300], ["clientError", (c) => c >= 400 && c < 500], ["serverError", (c) => c >= 500], ["notFound", (c) => c === 404], ["unauthorized", (c) => c === 401], ["forbidden", (c) => c === 403]]) {
     Object.defineProperty(response.to.be, name, { get: () => { if (!pred(r.code)) throw new AssertionError("expected response to be " + name + " but got " + r.code); return true; } });
   }
+  return response;
+}
+
+let response;
+if (__in.response) {
+  const r = __in.response;
+  response = __makeResponse(r);
+  const headers = response.headers;
   globalThis.responseBody = r.body;
   globalThis.responseCode = { code: r.code, name: r.status };
   globalThis.responseTime = r.time;
   globalThis.responseHeaders = headers.toObject();
 }
 
+// pm.sendRequest(url | { url, method, header, body }, (err, res) => …)
+// Synchronous here: the callback runs before sendRequest returns, and the
+// response (or a thrown error without callback) is also returned.
+function __sendRequest(spec, cb) {
+  const done = (err, res) => { if (typeof cb === "function") { cb(err, res); return res; } if (err) throw err; return res; };
+  if (typeof __pakpos_send !== "function") {
+    return done(new Error("pm.sendRequest is disabled: allow network access for this collection (collection settings → Scripts)"), null);
+  }
+  const s = typeof spec === "string" ? { url: spec } : (spec || {});
+  let headers = s.header || s.headers || [];
+  if (!Array.isArray(headers)) headers = Object.entries(headers).map(([key, value]) => ({ key, value }));
+  headers = headers.filter((h) => h && !h.disabled).map((h) => ({ key: String(h.key), value: __str(h.value) }));
+  let body = null;
+  const b = s.body;
+  if (typeof b === "string") body = b;
+  else if (b && b.mode === "raw") body = String(b.raw ?? "");
+  else if (b && b.mode === "urlencoded") {
+    body = (b.urlencoded || []).filter((p) => !p.disabled).map((p) => encodeURIComponent(p.key) + "=" + encodeURIComponent(__str(p.value))).join("&");
+    if (!headers.some((h) => h.key.toLowerCase() === "content-type")) headers.push({ key: "Content-Type", value: "application/x-www-form-urlencoded" });
+  } else if (b && typeof b === "object" && b.mode === undefined) {
+    body = JSON.stringify(b);
+    if (!headers.some((h) => h.key.toLowerCase() === "content-type")) headers.push({ key: "Content-Type", value: "application/json" });
+  }
+  const url = typeof s.url === "object" && s.url ? (s.url.raw || "") : String(s.url || "");
+  const out = JSON.parse(__pakpos_send(JSON.stringify({ url: __replaceIn(url), method: s.method || "GET", headers, body })));
+  if (out.error) return done(new Error(out.error), null);
+  return done(null, __makeResponse(out));
+}
+
 const pm = {
-  info: { requestName: __in.info.requestName, eventName: __in.info.eventName, iteration: 0 },
+  info: { requestName: __in.info.requestName, eventName: __in.info.eventName, iteration: __in.info.iteration },
+  iterationData: {
+    get: (k) => __in.data[k],
+    has: (k) => k in __in.data,
+    toObject: () => Object.assign({}, __in.data),
+  },
   environment: __env,
   collectionVariables: __coll,
   globals: __glob,
@@ -182,6 +222,7 @@ const pm = {
   request,
   response,
   expect,
+  sendRequest: __sendRequest,
   test(name, fn) {
     try {
       fn();
@@ -190,7 +231,6 @@ const pm = {
       __out.tests.push({ name: String(name), passed: false, message: String((e && e.message) || e) });
     }
   },
-  sendRequest() { throw new Error("pm.sendRequest is not available in the PakPos sandbox (no network access). Use a separate request with Extract instead."); },
 };
 globalThis.pm = pm;
 globalThis.expect = expect;

@@ -184,7 +184,12 @@ impl Server {
                     "properties": {
                         "collection": { "type": "string" },
                         "environment": env_prop,
-                        "filter": { "type": "string", "description": "Only requests whose folder/name contains this." }
+                        "filter": { "type": "string", "description": "Only requests whose folder/name contains this." },
+                        "data": {
+                            "type": "array",
+                            "items": { "type": "object" },
+                            "description": "Data-driven run: the collection runs once per object, with its fields as {{variables}}."
+                        }
                     },
                     "required": ["collection"]
                 },
@@ -312,6 +317,11 @@ impl Server {
                     allowed_hosts: self.config.allowed_hosts.clone(),
                     tokens: ws.tokens.clone(),
                     allow_scripts: self.config.allow_scripts && ws.is_trusted(&c.id),
+                    allow_network: self.config.allow_scripts && ws.has_network(&c.id),
+                    data: match args.get("data") {
+                        Some(d @ Value::Array(_)) => pakpos_core::data::parse_json(&d.to_string())?,
+                        _ => Vec::new(),
+                    },
                     ..Default::default()
                 };
                 let report = run_collection(&c, env.as_mut(), &options, |_| {});
@@ -328,8 +338,10 @@ impl Server {
                     report.total_ms
                 );
                 for r in &report.requests {
+                    let iteration =
+                        if report.iterations > 1 { format!(" [#{}]", r.iteration + 1) } else { String::new() };
                     text.push_str(&format!(
-                        "\n{} {} {} → {}",
+                        "\n{} {} {}{iteration} → {}",
                         if r.passed() { "✔" } else { "✘" },
                         r.method,
                         r.name,
@@ -396,7 +408,7 @@ impl Server {
                 self.config.allowed_hosts.join(", ")
             );
         }
-        let client = http::build_client(&self.settings())?;
+        let client = http::client_for(&self.settings(), &prepared.url)?;
         let resp = http::send(&client, &prepared)?;
         let mut body = resp.pretty_body();
         if body.chars().count() > MAX_BODY_CHARS {
