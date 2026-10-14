@@ -963,8 +963,8 @@ impl Collection {
 
     /// Inserts an item at a drop position. Returns the item back when the
     /// target does not exist.
-    pub fn insert_item(&mut self, item: Item, at: &DropTarget) -> Result<(), Item> {
-        fn walk(items: &mut Vec<Item>, item: Item, at: &DropTarget) -> Result<(), Item> {
+    pub fn insert_item(&mut self, item: Item, at: &DropTarget) -> Result<(), Box<Item>> {
+        fn walk(items: &mut Vec<Item>, item: Item, at: &DropTarget) -> Result<(), Box<Item>> {
             match at {
                 DropTarget::Before(id) | DropTarget::After(id) => {
                     if let Some(pos) = items.iter().position(|i| i.id() == id) {
@@ -989,11 +989,11 @@ impl Collection {
                 if let Item::Folder(f) = child {
                     match walk(&mut f.items, item, at) {
                         Ok(()) => return Ok(()),
-                        Err(back) => item = back,
+                        Err(back) => item = *back,
                     }
                 }
             }
-            Err(item)
+            Err(Box::new(item))
         }
         walk(&mut self.items, item, at)
     }
@@ -1035,7 +1035,7 @@ pub fn move_item(collections: &mut [Collection], from: &str, item_id: &str, to: 
         Ok(()) => true,
         Err(item) => {
             // Target vanished: put it back at the end of the source.
-            collections[src].items.push(item);
+            collections[src].items.push(*item);
             false
         }
     }
