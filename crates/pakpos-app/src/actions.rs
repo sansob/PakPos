@@ -149,6 +149,16 @@ pub fn apply(app: &mut PakPosApp, action: Action, ctx: &egui::Context) {
             let _ = app.ws.save_history();
         }
         Action::Dialog(d) => app.dialog = Some(d),
+        Action::StartMock(id) => {
+            app.stop_mock();
+            app.start_mock(&id);
+        }
+        Action::StopMock => app.stop_mock(),
+        Action::ShowMock => {
+            if let Some(m) = &mut app.mock {
+                m.open = true;
+            }
+        }
     }
 }
 

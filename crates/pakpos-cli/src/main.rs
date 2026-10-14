@@ -78,6 +78,19 @@ enum Command {
         #[arg(long)]
         timeout: Option<u64>,
     },
+    /// Serve the saved examples of a collection as a mock API.
+    Mock {
+        /// Collection file (PakPos or Postman JSON) or workspace collection name.
+        collection: String,
+        #[arg(short, long, default_value_t = 8000)]
+        port: u16,
+        /// Interface to bind; use 0.0.0.0 to expose it on your network.
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Extra latency per response, in milliseconds.
+        #[arg(long, default_value_t = 0)]
+        delay: u64,
+    },
     /// Print the workspace location and its contents.
     Workspace,
     /// Start a Model Context Protocol (MCP) server on stdio, so AI agents
@@ -288,6 +301,7 @@ fn run(cli: Cli, style: &Style) -> Result<ExitCode> {
         Command::Ws { url, headers, environment, vars, send, timeout } => {
             cmd_ws(url, headers, environment, vars, send, timeout, style)
         }
+        Command::Mock { collection, port, host, delay } => cmd_mock(&collection, &host, port, delay, style),
         Command::Workspace => {
             let (ws, errors) = Workspace::load(storage::default_root());
             println!("{} {}", style.bold("Workspace:"), ws.root.display());
@@ -585,4 +599,59 @@ fn cmd_ws(
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(ExitCode::from(1)),
         }
     }
+}
+
+fn load_collection_arg(arg: &str) -> Result<pakpos_core::Collection> {
+    let path = PathBuf::from(arg);
+    if path.exists() {
+        return Ok(storage::load_collection_file(&path).map_err(anyhow::Error::msg)?.0);
+    }
+    let (ws, _) = Workspace::load(storage::default_root());
+    ws.collections
+        .iter()
+        .find(|c| c.name.eq_ignore_ascii_case(arg))
+        .cloned()
+        .with_context(|| format!("collection `{arg}` not found"))
+}
+
+fn cmd_mock(collection: &str, host: &str, port: u16, delay: u64, style: &Style) -> Result<ExitCode> {
+    let c = load_collection_arg(collection)?;
+    let addr: std::net::SocketAddr =
+        format!("{host}:{port}").parse().with_context(|| format!("invalid address {host}:{port}"))?;
+    let server = pakpos_core::mock::start(
+        &c,
+        pakpos_core::mock::MockOptions { addr, delay: std::time::Duration::from_millis(delay) },
+    )
+    .with_context(|| format!("cannot listen on {addr}"))?;
+    let routes = server.routes();
+    println!(
+        "\n{} {}  {}\n",
+        style.bold("PakPos mock ▸"),
+        style.bold(&c.name),
+        style.green(&format!("http://{}", server.addr))
+    );
+    if routes.is_empty() {
+        println!("{}", style.paint("33", "No examples in this collection yet: save a response as an example first."));
+    }
+    for r in &routes {
+        let names: Vec<String> = r.examples.iter().map(|e| format!("{} {}", e.status, e.name)).collect();
+        println!("  {}  {}", style.bold(&r.pattern), style.dim(&names.join(" · ")));
+    }
+    println!(
+        "\n{}\n",
+        style.dim("Pick an example with the x-mock-response-name or x-mock-response-code header. Ctrl+C to stop.")
+    );
+    for hit in server.hits.iter() {
+        let time = hit.at.with_timezone(&chrono::Local).format("%H:%M:%S");
+        let matched = hit.matched.unwrap_or_else(|| style.red("no match"));
+        println!(
+            "{} {} {} {}  {}",
+            style.dim(&time.to_string()),
+            style.status(hit.status),
+            hit.method,
+            hit.path,
+            style.dim(&matched)
+        );
+    }
+    Ok(ExitCode::SUCCESS)
 }

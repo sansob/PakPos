@@ -21,6 +21,10 @@ All notable changes to this project are documented here. The format follows
   Imported collections must be trusted before their scripts run; the CLI needs
   `--allow-scripts`. Postman scripts are now imported instead of dropped.
 - Collection settings dialog: description, collection variables and scripts.
+- Saved examples and a mock server that serves them (`pakpos-cli mock`, or
+  "Start mock server" in the app) with path parameters, example selection via
+  `x-mock-response-code` / `x-mock-response-name`, CORS and a request log.
+  Postman examples are imported and exported.
 
 ## [0.1.0-rc.1] - 2026-10-14
 

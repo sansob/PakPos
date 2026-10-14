@@ -21,6 +21,7 @@
 - [OAuth 2.0](reference/oauth2.md)
 - [GraphQL](reference/graphql.md)
 - [WebSocket](reference/websocket.md)
+- [Mock server](reference/mock.md)
 - [Command-line interface](reference/cli.md)
 - [MCP server](reference/mcp.md)
 - [Workspace file format](reference/workspace.md)

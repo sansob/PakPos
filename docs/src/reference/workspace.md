@@ -52,6 +52,8 @@ stopping the app.
 - `url` never contains the query string; query parameters live in `params`.
 - `protocol` is omitted for HTTP; `"websocket"` marks a WebSocket request (its raw
   `body` is the message draft).
+- `examples` is a list of saved responses (`name`, `status`, `headers`, `body`)
+  served by the mock server.
 - `scripts` (`pre_request`, `test`) holds JavaScript; it may also appear on
   folders and the collection.
 - `body.mode`: `none`, `raw` (`language`: `json`, `text`, `xml`, `html`, `javascript`),

@@ -18,6 +18,7 @@ impl PakPosApp {
         let mut copy: Option<String> = None;
         let mut cancel = false;
         let mut save_to_file: Option<Vec<u8>> = None;
+        let mut save_example = false;
 
         match &tab.response {
             ResponseState::Empty => {
@@ -76,6 +77,14 @@ impl PakPosApp {
                         widgets::pill(ui, format!("Tests {passed}/{}", outcome.tests.len()), c, c.gamma_multiply(0.16));
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add_enabled(tab.source.is_some(), egui::Button::new("＋ Example"))
+                            .on_hover_text("Save as an example of this request (used by the mock server)")
+                            .on_disabled_hover_text("Save the request to a collection first")
+                            .clicked()
+                        {
+                            save_example = true;
+                        }
                         if ui.button("⬇ Save").on_hover_text("Save response body to a file").clicked() {
                             save_to_file = Some(resp.body.clone());
                         }
@@ -270,6 +279,9 @@ impl PakPosApp {
 
         if cancel {
             tab.response = ResponseState::Empty;
+        }
+        if save_example {
+            self.save_example(idx);
         }
         if let Some(text) = copy {
             ui.ctx().copy_text(text);

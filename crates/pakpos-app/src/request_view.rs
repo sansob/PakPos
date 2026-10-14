@@ -302,10 +302,13 @@ impl PakPosApp {
             (ReqSection::Tests, widgets::counted("Tests", r.assertions.len())),
             (ReqSection::Extract, widgets::counted("Extract", r.extractions.len())),
             (ReqSection::Scripts, if r.scripts.is_empty() { "Scripts".to_string() } else { "Scripts ●".to_string() }),
+            (ReqSection::Examples, widgets::counted("Examples", r.examples.len())),
             (ReqSection::Docs, "Docs".to_string()),
         ];
         if r.kind == RequestKind::WebSocket {
-            items.retain(|(s, _)| !matches!(s, ReqSection::Tests | ReqSection::Extract | ReqSection::Scripts));
+            items.retain(|(s, _)| {
+                !matches!(s, ReqSection::Tests | ReqSection::Extract | ReqSection::Scripts | ReqSection::Examples)
+            });
             items[3].1 = "Message".to_string();
         }
         widgets::tab_bar(ui, &mut tab.section, &items);
@@ -378,6 +381,9 @@ impl PakPosApp {
                         &p,
                         &mut script_action,
                     );
+                }
+                ReqSection::Examples => {
+                    changed |= crate::mock_view::examples_editor(ui, &mut tab.request.examples, tab.uid, &p);
                 }
                 ReqSection::Docs => {
                     widgets::section_title(ui, "Description (Markdown)");

@@ -505,6 +505,38 @@ pub struct Extraction {
     pub source: String,
 }
 
+/// A saved response, served by the mock server and shown as documentation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Example {
+    #[serde(default = "new_id")]
+    pub id: String,
+    pub name: String,
+    pub status: u16,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub headers: Vec<KeyValue>,
+    #[serde(default)]
+    pub body: String,
+}
+
+impl Example {
+    pub fn from_response(name: impl Into<String>, r: &crate::http::Response) -> Self {
+        // Hop-by-hop / length headers would be wrong when re-served.
+        let skip = ["content-length", "transfer-encoding", "connection", "date", "content-encoding", "keep-alive"];
+        Example {
+            id: new_id(),
+            name: name.into(),
+            status: r.status,
+            headers: r
+                .headers
+                .iter()
+                .filter(|(k, _)| !skip.contains(&k.to_ascii_lowercase().as_str()))
+                .map(|(k, v)| KeyValue::new(k, v))
+                .collect(),
+            body: r.text(),
+        }
+    }
+}
+
 /// JavaScript run before the request is sent and after the response arrives.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Scripts {
@@ -563,6 +595,9 @@ pub struct Request {
     pub extractions: Vec<Extraction>,
     #[serde(default, skip_serializing_if = "Scripts::is_empty")]
     pub scripts: Scripts,
+    /// Saved responses (served by the mock server).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub examples: Vec<Example>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 }
@@ -582,6 +617,7 @@ impl Default for Request {
             assertions: Vec::new(),
             extractions: Vec::new(),
             scripts: Scripts::default(),
+            examples: Vec::new(),
             description: String::new(),
         }
     }

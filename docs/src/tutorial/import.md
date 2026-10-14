@@ -16,6 +16,7 @@ What is converted:
 | GraphQL body | ✅ GraphQL body (query + variables) |
 | auth: noauth, basic, bearer, apikey (at any level) | ✅ |
 | collection variables | ✅ |
+| saved responses (examples) | ✅ served by the [mock server](../reference/mock.md) |
 | pre-request & test **scripts** (collection, folder, request) | ✅ imported; they run after you [trust the collection](../reference/scripts.md#trust). `pm.sendRequest` and `require` are not available |
 | OAuth 2.0 (client credentials, password, authorization code) | ✅ (implicit is imported as authorization code) |
 | AWS, Digest, NTLM… auth | ❌ skipped, with a warning |

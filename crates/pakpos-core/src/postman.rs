@@ -250,6 +250,30 @@ fn parse_body(v: Option<&Value>, warnings: &mut Vec<String>) -> Body {
     }
 }
 
+/// Postman saved responses → examples.
+fn parse_examples(v: Option<&Value>) -> Vec<crate::model::Example> {
+    v.and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .map(|r| crate::model::Example {
+                    id: crate::model::new_id(),
+                    name: {
+                        let n = s(r, "name");
+                        if n.is_empty() {
+                            "Example".into()
+                        } else {
+                            n
+                        }
+                    },
+                    status: r.get("code").and_then(Value::as_u64).unwrap_or(200) as u16,
+                    headers: kv_list(r.get("header")),
+                    body: s(r, "body"),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Postman `event` array → pre-request / test scripts.
 fn parse_events(v: Option<&Value>) -> Scripts {
     let mut scripts = Scripts::default();
@@ -332,6 +356,7 @@ fn parse_items(items: Option<&Value>, warnings: &mut Vec<String>) -> Vec<Item> {
                     auth,
                     description: desc,
                     scripts: parse_events(it.get("event")),
+                    examples: parse_examples(it.get("response")),
                     ..Default::default()
                 })
             }
@@ -510,6 +535,10 @@ fn body_to_json(body: &Body) -> Option<Value> {
     }
 }
 
+fn http_reason(code: u16) -> &'static str {
+    reqwest::StatusCode::from_u16(code).ok().and_then(|c| c.canonical_reason()).unwrap_or("")
+}
+
 fn raw_url(req: &Request) -> String {
     let q: Vec<String> = req.params.iter().filter(|p| p.enabled).map(|p| format!("{}={}", p.key, p.value)).collect();
     if q.is_empty() {
@@ -554,6 +583,22 @@ fn items_to_json(items: &[Item]) -> Value {
                         req.insert("description".into(), json!(r.description));
                     }
                     let mut item = json!({ "name": r.name, "request": Value::Object(req) });
+                    if !r.examples.is_empty() {
+                        item["response"] = Value::Array(
+                            r.examples
+                                .iter()
+                                .map(|e| {
+                                    json!({
+                                        "name": e.name,
+                                        "code": e.status,
+                                        "status": http_reason(e.status),
+                                        "header": kv_to_json(&e.headers),
+                                        "body": e.body,
+                                    })
+                                })
+                                .collect(),
+                        );
+                    }
                     if let Some(ev) = events_to_json(&r.scripts) {
                         item["event"] = ev;
                     }

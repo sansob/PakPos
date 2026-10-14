@@ -53,7 +53,33 @@
                 }
               }
             }
-          }
+          },
+          "response": [
+            {
+              "name": "Created",
+              "code": 201,
+              "status": "Created",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"usr_1001\",\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\"\n}"
+            },
+            {
+              "name": "Validation error",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"name is required\"\n}"
+            }
+          ]
         },
         {
           "name": "Submit form",
@@ -338,7 +364,21 @@
               "raw": "{{base_url}}/uuid",
               "query": []
             }
-          }
+          },
+          "response": [
+            {
+              "name": "Random UUID",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{ \"uuid\": \"0f8e6a7c-2b1d-4c3e-9f5a-8d7b6c5e4f3a\" }"
+            }
+          ]
         },
         {
           "name": "JSON document",

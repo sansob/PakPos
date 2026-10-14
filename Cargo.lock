@@ -2570,6 +2570,7 @@ dependencies = [
  "egui_extras",
  "image",
  "pakpos-core",
+ "reqwest",
  "rfd",
  "serde",
  "serde_json",
@@ -2582,6 +2583,7 @@ name = "pakpos-cli"
 version = "0.1.0-rc.1"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "pakpos-core",
  "serde_json",

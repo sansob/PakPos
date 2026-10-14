@@ -24,6 +24,7 @@ pub enum ReqSection {
     Tests,
     Extract,
     Scripts,
+    Examples,
     Docs,
 }
 
@@ -168,6 +169,9 @@ pub enum Action {
     EditEnvironment(Option<String>),
     NewEnvironment,
     ClearHistory,
+    StartMock(String),
+    StopMock,
+    ShowMock,
     Dialog(Dialog),
 }
 
@@ -187,6 +191,7 @@ pub struct PakPosApp {
     pub runner: Option<RunnerState>,
     pub oauth_job: Option<crate::oauth_view::OAuthJob>,
     pub graphql: crate::graphql_view::GqlState,
+    pub mock: Option<crate::mock_view::MockState>,
     applied_theme: Option<(Theme, u32)>,
     next_uid: u64,
     pub actions: Vec<Action>,
@@ -210,6 +215,7 @@ impl PakPosApp {
             runner: None,
             oauth_job: None,
             graphql: Default::default(),
+            mock: None,
             applied_theme: None,
             next_uid: 1,
             actions: Vec::new(),
@@ -556,6 +562,26 @@ impl PakPosApp {
                 self.toast_error(e.to_string());
             }
         }
+        self.reload_mock(id);
+    }
+
+    /// Stores the tab's current response as an example of its saved request.
+    pub fn save_example(&mut self, idx: usize) {
+        let Some(tab) = self.tabs.get(idx) else { return };
+        let ResponseState::Done(outcome) = &tab.response else { return };
+        let Some((cid, rid)) = tab.source.clone() else {
+            self.toast_error("Save the request to a collection first, then save examples.");
+            return;
+        };
+        let r = &outcome.response;
+        let example =
+            pakpos_core::model::Example::from_response(format!("{} {}", r.status, r.status_text).trim().to_string(), r);
+        self.tabs[idx].request.examples.push(example.clone());
+        if let Some(saved) = self.collection_mut(&cid).and_then(|c| c.find_request_mut(&rid)) {
+            saved.examples.push(example);
+        }
+        self.persist_collection(&cid);
+        self.toast("Saved as example (served by the mock server)");
     }
 
     pub fn persist_environments(&mut self) {
@@ -770,6 +796,18 @@ impl PakPosApp {
                     ui.label(
                         RichText::new(format!("Workspace: {}", self.ws.root.display())).small().color(p.text_weak),
                     );
+                    if let Some(m) = &self.mock {
+                        ui.separator();
+                        let label =
+                            RichText::new(format!("● Mock http://{}", m.server.addr)).small().color(theme::GREEN);
+                        if ui
+                            .add(egui::Label::new(label).sense(egui::Sense::click()))
+                            .on_hover_text("Show mock server")
+                            .clicked()
+                        {
+                            self.actions.push(Action::ShowMock);
+                        }
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .add(
@@ -856,6 +894,7 @@ impl eframe::App for PakPosApp {
         self.poll_oauth();
         self.poll_graphql();
         self.poll_ws();
+        self.poll_mock();
         if let Some(t) = self.env_dirty {
             if t.elapsed() > Duration::from_millis(600) {
                 self.persist_environments();
@@ -888,6 +927,7 @@ impl eframe::App for PakPosApp {
 
         self.dialogs(&ctx);
         self.runner_window(&ctx);
+        self.mock_window(&ctx);
         self.show_toasts(&ctx);
         self.apply_actions(&ctx);
 

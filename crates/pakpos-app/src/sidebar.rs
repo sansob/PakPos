@@ -170,6 +170,13 @@ impl PakPosApp {
                             tab: crate::app::CollectionTab::General,
                         }));
                     }
+                    if self.mock.as_ref().is_some_and(|m| m.collection == c.id) {
+                        if ui.button("■ Stop mock server").clicked() {
+                            pending.push(Action::StopMock);
+                        }
+                    } else if ui.button("◉ Start mock server").clicked() {
+                        pending.push(Action::StartMock(c.id.clone()));
+                    }
                     if ui.button("▶ Run collection").clicked() {
                         pending.push(Action::RunCollection(c.id.clone()));
                     }

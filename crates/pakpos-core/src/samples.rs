@@ -38,6 +38,22 @@ pub fn demo_collection() -> Collection {
         test("header.Content-Type", Operator::Contains, "json"),
     ];
 
+    let example = |name: &str, status: u16, body: &str| crate::model::Example {
+        id: crate::model::new_id(),
+        name: name.into(),
+        status,
+        headers: vec![KeyValue::new("Content-Type", "application/json")],
+        body: body.into(),
+    };
+    post.examples = vec![
+        example(
+            "Created",
+            201,
+            "{\n  \"id\": \"usr_1001\",\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\"\n}",
+        ),
+        example("Validation error", 422, "{\n  \"error\": \"name is required\"\n}"),
+    ];
+
     let mut form = req("Submit form", HttpMethod::Post, "{{base_url}}/post");
     form.body =
         Body::FormUrlEncoded { fields: vec![KeyValue::new("username", "budi"), KeyValue::new("remember", "true")] };
@@ -60,6 +76,13 @@ pub fn demo_collection() -> Collection {
     let mut uuid = req("Get UUID (extract)", HttpMethod::Get, "{{base_url}}/uuid");
     uuid.extractions = vec![Extraction { enabled: true, variable: "last_uuid".into(), source: "json.uuid".into() }];
     uuid.assertions = vec![test("json.uuid", Operator::Exists, "")];
+    uuid.examples = vec![crate::model::Example {
+        id: crate::model::new_id(),
+        name: "Random UUID".into(),
+        status: 200,
+        headers: vec![KeyValue::new("Content-Type", "application/json")],
+        body: "{ \"uuid\": \"0f8e6a7c-2b1d-4c3e-9f5a-8d7b6c5e4f3a\" }".into(),
+    }];
     let mut json = req("JSON document", HttpMethod::Get, "{{base_url}}/json");
     json.assertions = vec![test("json.slideshow.author", Operator::Exists, "")];
     let mut not_found = req("Expect 404", HttpMethod::Get, "{{base_url}}/status/404");

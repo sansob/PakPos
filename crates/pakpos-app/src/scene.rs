@@ -102,6 +102,23 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             app.tabs[app.active].section = ReqSection::Auth;
             app.send(app.active, ctx);
         }
+        "mock" => {
+            open_by_name(app, "Create user (JSON)");
+            app.tabs[app.active].section = ReqSection::Examples;
+            let id = app.ws.collections[0].id.clone();
+            app.start_mock(&id);
+            if let Some(m) = &app.mock {
+                let base = format!("http://{}", m.server.addr);
+                std::thread::spawn(move || {
+                    let c = reqwest::blocking::Client::new();
+                    std::thread::sleep(Duration::from_millis(300));
+                    let _ = c.post(format!("{base}/post")).body("{}").send();
+                    let _ = c.post(format!("{base}/post")).header("x-mock-response-code", "422").send();
+                    let _ = c.get(format!("{base}/uuid")).send();
+                    let _ = c.get(format!("{base}/orders/42")).send();
+                });
+            }
+        }
         "scripts" => {
             open_by_name(app, "Scripted checks (JavaScript)");
             app.tabs[app.active].section = ReqSection::Scripts;
@@ -141,6 +158,7 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
     match name {
         "runner" => app.runner.as_ref().is_some_and(|r| r.report.is_some()),
         "environments" | "curl" | "snippet" | "settings" => true,
+        "mock" => app.mock.as_ref().is_some_and(|m| m.hits.len() >= 4),
         "websocket" => app.tabs.get(app.active).is_some_and(|t| t.ws.log.iter().any(|e| e.text.contains("\"tick\""))),
         "graphql" => {
             app.graphql.job.is_none()

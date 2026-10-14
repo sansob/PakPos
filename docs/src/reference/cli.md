@@ -10,6 +10,7 @@ Commands:
   export     Export a PakPos collection as Postman v2.1
   curl       Convert a cURL command into a PakPos request (JSON) or a code snippet
   ws         Open a WebSocket: stdin lines are sent, messages are printed
+  mock       Serve the saved examples of a collection as a mock API
   workspace  Print the workspace location and its contents
   mcp        Start a Model Context Protocol (MCP) server on stdio
 ```
@@ -58,6 +59,14 @@ pakpos-cli ws <URL> [-H 'Name: value']... [-e ENV] [--var k=v]... [-s MESSAGE]..
 ```
 
 See [WebSocket](websocket.md).
+
+## mock
+
+```text
+pakpos-cli mock <COLLECTION> [-p PORT] [--host 127.0.0.1] [--delay MS]
+```
+
+See [Mock server](mock.md).
 
 ## mcp
 
