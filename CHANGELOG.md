@@ -51,6 +51,10 @@ All notable changes to this project are documented here. The format follows
 - Drag & drop in the sidebar: reorder requests and folders, move them into
   folders or to another collection; open tabs follow moved requests.
 
+### Changed
+- Dark theme: neutral near-black surfaces instead of navy (the light theme keeps
+  its navy header).
+
 ## [0.2.0-rc.1] - 2026-10-14
 
 Release candidate for the first public release.
