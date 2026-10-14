@@ -102,7 +102,7 @@ impl PakPosApp {
         let label = format!("{} ▾", self.workspace_name());
         let button = ui.add(
             egui::Button::new(RichText::new(label).color(p.header_text))
-                .fill(theme::NAVY_600)
+                .fill(p.header_button)
                 .stroke(egui::Stroke::NONE),
         );
         let button = button

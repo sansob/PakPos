@@ -21,10 +21,10 @@ fn tree_row(ui: &mut Ui, p: &Palette, s: RowStyle<'_>) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), Sense::click_and_drag());
     let painter = ui.painter();
     if s.selected {
-        painter.rect_filled(rect, 5.0, if p.dark { theme::NAVY_700 } else { p.surface_alt });
+        painter.rect_filled(rect, 5.0, p.row_selected);
         painter.rect_filled(egui::Rect::from_min_size(rect.min, egui::vec2(3.0, rect.height())), 1.5, theme::ORANGE);
     } else if resp.hovered() {
-        painter.rect_filled(rect, 5.0, if p.dark { theme::NAVY_850 } else { p.surface_alt });
+        painter.rect_filled(rect, 5.0, p.row_hover);
     }
     let mut x = rect.left() + 8.0 + s.depth as f32 * 14.0;
     let cy = rect.center().y;

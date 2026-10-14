@@ -44,6 +44,7 @@ impl PakPosApp {
         let p = self.palette;
         let mut close = None;
         let mut select = None;
+        let mut menu = None;
         egui::Frame::new().fill(p.bg).inner_margin(Margin { left: 8, right: 8, top: 6, bottom: 0 }).show(ui, |ui| {
             egui::ScrollArea::horizontal().id_salt("tabs").show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -88,9 +89,43 @@ impl PakPosApp {
                                 Stroke::new(2.0, theme::ORANGE),
                             );
                         }
-                        if ui.interact(resp.rect, egui::Id::new(("tab", tab.uid)), Sense::click()).clicked() {
+                        let tab_resp = ui.interact(resp.rect, egui::Id::new(("tab", tab.uid)), Sense::click());
+                        if tab_resp.clicked() {
                             select = Some(i);
                         }
+                        if tab_resp.middle_clicked() {
+                            close = Some(i);
+                        }
+                        let count = self.tabs.len();
+                        tab_resp.context_menu(|ui| {
+                            let tr = crate::i18n::tr;
+                            if ui.button(tr("New tab")).clicked() {
+                                menu = Some(TabMenu::New);
+                            }
+                            if ui.button(tr("Duplicate tab")).clicked() {
+                                menu = Some(TabMenu::Duplicate(i));
+                            }
+                            ui.separator();
+                            if ui.button(tr("Close tab")).clicked() {
+                                menu = Some(TabMenu::Close(i, false));
+                            }
+                            if ui.button(tr("Force close tab")).clicked() {
+                                menu = Some(TabMenu::Close(i, true));
+                            }
+                            if ui.add_enabled(count > 1, egui::Button::new(tr("Close other tabs"))).clicked() {
+                                menu = Some(TabMenu::CloseOthers(i));
+                            }
+                            if ui.add_enabled(i + 1 < count, egui::Button::new(tr("Close tabs to the right"))).clicked()
+                            {
+                                menu = Some(TabMenu::CloseRight(i));
+                            }
+                            if ui.button(tr("Close all tabs")).clicked() {
+                                menu = Some(TabMenu::CloseAll(false));
+                            }
+                            if ui.button(tr("Force close all tabs")).clicked() {
+                                menu = Some(TabMenu::CloseAll(true));
+                            }
+                        });
                     }
                     if ui
                         .add(egui::Button::new(RichText::new(" + ").strong()).frame(false))
@@ -110,7 +145,31 @@ impl PakPosApp {
             }
         }
         if let Some(i) = close {
-            self.close_tab(i);
+            menu = Some(TabMenu::Close(i, false));
+        }
+        let uids = |pick: &dyn Fn(usize) -> bool, tabs: &[crate::app::Tab]| -> Vec<u64> {
+            tabs.iter().enumerate().filter(|(j, _)| pick(*j)).map(|(_, t)| t.uid).collect()
+        };
+        match menu {
+            None => {}
+            Some(TabMenu::New) => self.new_blank_tab(),
+            Some(TabMenu::Duplicate(i)) => self.duplicate_tab(i),
+            Some(TabMenu::Close(i, force)) => {
+                let u = uids(&|j| j == i, &self.tabs);
+                self.request_close(u, force);
+            }
+            Some(TabMenu::CloseOthers(i)) => {
+                let u = uids(&|j| j != i, &self.tabs);
+                self.request_close(u, false);
+            }
+            Some(TabMenu::CloseRight(i)) => {
+                let u = uids(&|j| j > i, &self.tabs);
+                self.request_close(u, false);
+            }
+            Some(TabMenu::CloseAll(force)) => {
+                let u = uids(&|_| true, &self.tabs);
+                self.request_close(u, force);
+            }
         }
     }
 
@@ -180,7 +239,7 @@ impl PakPosApp {
 
         // URL bar.
         egui::Frame::new()
-            .fill(if p.dark { theme::INK } else { egui::Color32::WHITE })
+            .fill(p.input)
             .stroke(Stroke::new(1.0, p.border))
             .corner_radius(8)
             .inner_margin(Margin::symmetric(6, 4))
@@ -1051,4 +1110,15 @@ fn extract_editor(ui: &mut Ui, ex: &mut Vec<Extraction>, p: &crate::theme::Palet
         changed = true;
     }
     changed
+}
+
+/// What the tab context menu (or the × / middle click) asked for.
+enum TabMenu {
+    New,
+    Duplicate(usize),
+    /// Tab index, force (skip the unsaved-changes question).
+    Close(usize, bool),
+    CloseOthers(usize),
+    CloseRight(usize),
+    CloseAll(bool),
 }
