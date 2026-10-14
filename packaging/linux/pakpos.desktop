@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PakPos
+GenericName=API Client
+Comment=Fast, native, open-source API client
+Exec=pakpos
+Icon=pakpos
+Terminal=false
+Categories=Development;Network;
+Keywords=api;http;rest;postman;client;
+StartupWMClass=dev.pakpos.PakPos

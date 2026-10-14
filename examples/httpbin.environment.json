@@ -1,0 +1,16 @@
+{
+  "id": "httpbin",
+  "name": "Demo (httpbin)",
+  "variables": [
+    {
+      "key": "base_url",
+      "value": "https://httpbin.org",
+      "enabled": true
+    },
+    {
+      "key": "token",
+      "value": "pakpos-demo-token",
+      "enabled": true
+    }
+  ]
+}

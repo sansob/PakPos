@@ -1,0 +1,11 @@
+[book]
+title = "PakPos Documentation"
+authors = ["PakPos contributors"]
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/sansob/PakPos"
+edit-url-template = "https://github.com/sansob/PakPos/edit/main/docs/{path}"
+default-theme = "navy"
+preferred-dark-theme = "navy"

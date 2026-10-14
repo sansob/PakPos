@@ -1,0 +1,173 @@
+name: Release
+
+# Push a tag like v0.2.0 (see docs/src/contributing/releasing.md) to build
+# installers for Windows, macOS and Linux and publish a GitHub Release.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - id: v
+        name: Check tag matches Cargo.toml version
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [ "$VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag $TAG does not match workspace version $CARGO_VERSION"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi >> "$GITHUB_OUTPUT"
+
+  linux:
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x86_64
+          - runner: ubuntu-22.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.arch }}
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      - run: cargo build --release --locked --workspace
+      - name: Package tar.gz
+        run: |
+          V=${{ needs.meta.outputs.version }}
+          NAME=pakpos-$V-linux-${{ matrix.arch }}
+          mkdir -p dist/$NAME
+          cp target/release/pakpos target/release/pakpos-cli README.md LICENSE-MIT LICENSE-APACHE dist/$NAME/
+          cp packaging/linux/pakpos.desktop assets/icon-256.png dist/$NAME/
+          tar -C dist -czf dist/$NAME.tar.gz $NAME
+          rm -rf dist/$NAME
+      - name: Package .deb
+        run: |
+          cargo install cargo-deb --locked
+          cargo deb -p pakpos --no-build --no-strip -o dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*
+
+  windows:
+    needs: meta
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: ilammy/setup-nasm@v1
+      - run: cargo build --release --locked --workspace
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $v = "${{ needs.meta.outputs.version }}"
+          $name = "pakpos-$v-windows-x64"
+          New-Item -ItemType Directory -Force -Path "dist\$name" | Out-Null
+          Copy-Item target\release\pakpos.exe, target\release\pakpos-cli.exe, README.md, LICENSE-MIT, LICENSE-APACHE "dist\$name\"
+          Compress-Archive -Path "dist\$name\*" -DestinationPath "dist\$name.zip"
+          Remove-Item -Recurse "dist\$name"
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ needs.meta.outputs.version }}" "/DSourceDir=..\..\target\release" packaging\windows\pakpos.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*
+
+  macos:
+    needs: meta
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked --workspace --target aarch64-apple-darwin
+      - run: cargo build --release --locked --workspace --target x86_64-apple-darwin
+      - run: packaging/macos/make-dmg.sh ${{ needs.meta.outputs.version }} dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: dist/*
+
+  publish:
+    needs: [meta, linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Release notes from CHANGELOG
+        run: |
+          V=${{ needs.meta.outputs.version }}
+          awk -v v="$V" '
+            $0 ~ "^## \\[" v "\\]" {found=1; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Release $V" > notes.md
+          cat >> notes.md <<'NOTES'
+
+          ### Downloads
+          | Platform | File |
+          |---|---|
+          | Windows 10/11 (x64) | `PakPos-*-windows-x64-setup.exe` (installer) or `pakpos-*-windows-x64.zip` (portable) |
+          | macOS 11+ (Apple Silicon & Intel) | `PakPos-*-macos-universal.dmg` |
+          | Linux x86_64 / arm64 | `.deb` (Debian/Ubuntu) or `.tar.gz` |
+
+          Verify downloads with `SHA256SUMS.txt`. Builds are not code-signed yet; see the installation guide for the first-launch steps on macOS and Windows.
+          NOTES
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: PakPos ${{ needs.meta.outputs.version }}
+          body_path: notes.md
+          prerelease: ${{ needs.meta.outputs.prerelease == 'true' }}
+          files: dist/*

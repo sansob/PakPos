@@ -1,0 +1,327 @@
+{
+  "id": "pakpos-demo",
+  "name": "PakPos Demo",
+  "description": "Sample requests against an httpbin-compatible API. Select the “Demo (httpbin)” environment and press Send.",
+  "items": [
+    {
+      "kind": "folder",
+      "id": "6de6aa83-9f3e-4f0e-b91a-2ee0ea7ed9f1",
+      "name": "Basics",
+      "items": [
+        {
+          "kind": "request",
+          "id": "c9e717a1-8724-4399-a63c-d1bd3f994622",
+          "name": "Get with query params",
+          "method": "GET",
+          "url": "{{base_url}}/get",
+          "params": [
+            {
+              "key": "lang",
+              "value": "id",
+              "enabled": true
+            },
+            {
+              "key": "app",
+              "value": "pakpos",
+              "enabled": true
+            }
+          ],
+          "headers": [
+            {
+              "key": "Accept",
+              "value": "application/json",
+              "enabled": true
+            }
+          ],
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "200"
+            },
+            {
+              "enabled": true,
+              "target": "json.args.lang",
+              "op": "equals",
+              "expected": "id"
+            },
+            {
+              "enabled": true,
+              "target": "time",
+              "op": "less_than",
+              "expected": "3000"
+            }
+          ],
+          "description": "Sends query parameters and checks they are echoed back."
+        },
+        {
+          "kind": "request",
+          "id": "30fdb55c-b138-47ac-9f4e-8d7e2f3dcbe2",
+          "name": "Create user (JSON)",
+          "method": "POST",
+          "url": "{{base_url}}/post",
+          "body": {
+            "mode": "raw",
+            "content": "{\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\",\n  \"request_id\": \"{{$guid}}\"\n}",
+            "language": "json"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "200"
+            },
+            {
+              "enabled": true,
+              "target": "json.json.city",
+              "op": "equals",
+              "expected": "Jakarta"
+            },
+            {
+              "enabled": true,
+              "target": "header.Content-Type",
+              "op": "contains",
+              "expected": "json"
+            }
+          ]
+        },
+        {
+          "kind": "request",
+          "id": "acf4656e-94b6-49e9-b872-86278966bb1a",
+          "name": "Submit form",
+          "method": "POST",
+          "url": "{{base_url}}/post",
+          "body": {
+            "mode": "form_url_encoded",
+            "fields": [
+              {
+                "key": "username",
+                "value": "budi",
+                "enabled": true
+              },
+              {
+                "key": "remember",
+                "value": "true",
+                "enabled": true
+              }
+            ]
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "json.form.username",
+              "op": "equals",
+              "expected": "budi"
+            }
+          ]
+        },
+        {
+          "kind": "request",
+          "id": "6f7835cf-1c86-4bba-b579-a8c36aab38c8",
+          "name": "Update user",
+          "method": "PUT",
+          "url": "{{base_url}}/put",
+          "body": {
+            "mode": "raw",
+            "content": "{ \"city\": \"Bandung\" }",
+            "language": "json"
+          },
+          "auth": {
+            "type": "inherit"
+          }
+        },
+        {
+          "kind": "request",
+          "id": "3ad0480e-1498-45e0-a5f2-0908d1bafd99",
+          "name": "Patch user",
+          "method": "PATCH",
+          "url": "{{base_url}}/patch",
+          "body": {
+            "mode": "raw",
+            "content": "{ \"active\": true }",
+            "language": "json"
+          },
+          "auth": {
+            "type": "inherit"
+          }
+        },
+        {
+          "kind": "request",
+          "id": "0c980c76-08f4-4ad5-80d4-558dd34c0b97",
+          "name": "Delete user",
+          "method": "DELETE",
+          "url": "{{base_url}}/delete",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "200"
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "inherit"
+      }
+    },
+    {
+      "kind": "folder",
+      "id": "8c5e0936-6399-4e91-83bf-332bc83e81c1",
+      "name": "Auth",
+      "items": [
+        {
+          "kind": "request",
+          "id": "3911aa60-1831-4e23-b53d-ba4084114622",
+          "name": "Bearer token",
+          "method": "GET",
+          "url": "{{base_url}}/bearer",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "bearer",
+            "token": "{{token}}"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "json.authenticated",
+              "op": "equals",
+              "expected": "true"
+            }
+          ]
+        },
+        {
+          "kind": "request",
+          "id": "e8f52d78-6830-49d2-9f77-e94dd9c1c5cb",
+          "name": "Basic auth",
+          "method": "GET",
+          "url": "{{base_url}}/basic-auth/pakpos/rahasia",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "basic",
+            "username": "pakpos",
+            "password": "rahasia"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "200"
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "inherit"
+      }
+    },
+    {
+      "kind": "folder",
+      "id": "bad1e518-e126-4391-8036-81249478806f",
+      "name": "Responses",
+      "items": [
+        {
+          "kind": "request",
+          "id": "b8c6a00b-213b-4a29-b3c9-fb3b3e1a13e5",
+          "name": "Get UUID (extract)",
+          "method": "GET",
+          "url": "{{base_url}}/uuid",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "json.uuid",
+              "op": "exists",
+              "expected": ""
+            }
+          ],
+          "extractions": [
+            {
+              "enabled": true,
+              "variable": "last_uuid",
+              "source": "json.uuid"
+            }
+          ]
+        },
+        {
+          "kind": "request",
+          "id": "f21cfb4b-fc01-4ac5-8346-69f2b3a5f104",
+          "name": "JSON document",
+          "method": "GET",
+          "url": "{{base_url}}/json",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "json.slideshow.author",
+              "op": "exists",
+              "expected": ""
+            }
+          ]
+        },
+        {
+          "kind": "request",
+          "id": "dab159dc-bd17-4d3a-850d-ab04403f7188",
+          "name": "Expect 404",
+          "method": "GET",
+          "url": "{{base_url}}/status/404",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "status",
+              "op": "equals",
+              "expected": "404"
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "inherit"
+      }
+    }
+  ],
+  "auth": {
+    "type": "none"
+  }
+}

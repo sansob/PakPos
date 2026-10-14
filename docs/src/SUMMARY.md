@@ -1,0 +1,32 @@
+# Summary
+
+[Introduction](introduction.md)
+
+- [Installation](installation.md)
+
+# Tutorials
+
+- [1. Your first request](tutorial/first-request.md)
+- [2. Collections, environments & variables](tutorial/collections-environments.md)
+- [3. Tests and request chaining](tutorial/tests-chaining.md)
+- [4. Moving from Postman or cURL](tutorial/import.md)
+- [5. Running collections in CI](tutorial/ci.md)
+- [6. Using PakPos from AI agents (MCP)](tutorial/mcp.md)
+
+# Reference
+
+- [Test & extraction language](reference/tests.md)
+- [Variables](reference/variables.md)
+- [Command-line interface](reference/cli.md)
+- [MCP server](reference/mcp.md)
+- [Workspace file format](reference/workspace.md)
+- [Keyboard shortcuts](reference/shortcuts.md)
+
+# Project
+
+- [Architecture](architecture.md)
+- [Roadmap](roadmap.md)
+- [FAQ](faq.md)
+- [Contributing](contributing/development.md)
+  - [Branching model](contributing/branching.md)
+  - [Releasing](contributing/releasing.md)

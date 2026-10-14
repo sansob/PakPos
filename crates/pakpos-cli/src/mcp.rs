@@ -356,6 +356,17 @@ impl Server {
     ) -> Result<String> {
         let scope =
             VarScope::new().with_environment(env).with_collection_vars(collection_vars).with_globals(&ws.globals);
+        let missing = scope.unresolved(&format!(
+            "{} {}",
+            req.url,
+            req.params.iter().map(|p| p.value.as_str()).collect::<Vec<_>>().join(" ")
+        ));
+        if !missing.is_empty() {
+            anyhow::bail!(
+                "unresolved variables: {}. Pass `environment` (see list_environments) or activate one in PakPos.",
+                missing.join(", ")
+            );
+        }
         let prepared = http::prepare(req, &scope, None)?;
         if !http::host_allowed(&prepared.url, &self.config.allowed_hosts) {
             anyhow::bail!(

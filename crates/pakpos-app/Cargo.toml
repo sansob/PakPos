@@ -3,13 +3,15 @@ name = "pakpos"
 description = "PakPos: a fast, native, open-source API client written in Rust."
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+rust-version = "1.95" # egui 0.36
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
+
+build = "build.rs"
 
 [[bin]]
 name = "pakpos"
@@ -27,12 +29,16 @@ rfd = "0.17"
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
 [package.metadata.deb]
 name = "pakpos"
 maintainer = "PakPos contributors"
 section = "devel"
 priority = "optional"
-extended-description = "PakPos is a fast, native, open-source API client written in Rust."
+extended-description = "PakPos is a fast, native, open-source API client written in Rust. Includes the desktop app (pakpos) and the CLI runner / MCP server (pakpos-cli)."
+depends = "$auto"
 assets = [
   ["target/release/pakpos", "usr/bin/", "755"],
   ["target/release/pakpos-cli", "usr/bin/", "755"],
