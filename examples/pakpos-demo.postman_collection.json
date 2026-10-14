@@ -155,6 +155,17 @@
               "query": []
             }
           }
+        },
+        {
+          "name": "Set a cookie",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cookies/set?flavour=kopi-susu",
+              "query": []
+            }
+          }
         }
       ]
     },

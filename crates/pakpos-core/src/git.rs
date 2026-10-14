@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 /// Files that are personal or secret and should not be shared.
-pub const GITIGNORE: &str = "# PakPos: personal and secret files stay local\nhistory.json\nsettings.json\ntokens.json\nui-state.ron\n*.json.tmp\n";
+pub const GITIGNORE: &str = "# PakPos: personal and secret files stay local\nhistory.json\nsettings.json\ntokens.json\ncookies.json\nui-state.ron\n*.json.tmp\n";
 
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {

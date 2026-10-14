@@ -497,6 +497,8 @@ fn cmd_run(args: RunArgs, style: &Style) -> Result<ExitCode> {
         allow_scripts: args.allow_scripts || ws.is_trusted(&collection.id),
         data,
         iterations: args.iterations,
+        // Each CLI run starts with an empty jar, so CI runs are reproducible.
+        cookies: Default::default(),
     };
     let iteration_count = options.iteration_count();
 

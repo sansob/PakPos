@@ -127,6 +127,7 @@ pub enum Dialog {
     NewCollection { name: String },
     Environments { selected: Option<String> },
     Settings,
+    Cookies(crate::cookies_view::CookiesDialog),
     Snippet { lang: SnippetLang },
     About,
 }
@@ -234,6 +235,8 @@ pub struct PakPosApp {
     pub collection_dirty: Option<(String, Instant)>,
     pub runner: Option<RunnerState>,
     pub runner_setup: Option<RunnerSetup>,
+    /// Cookie jar shared by every request (mirrored into `ws.cookies` to save it).
+    pub cookie_jar: std::sync::Arc<pakpos_core::cookies::SharedJar>,
     pub oauth_job: Option<crate::oauth_view::OAuthJob>,
     pub graphql: crate::graphql_view::GqlState,
     pub mock: Option<crate::mock_view::MockState>,
@@ -246,7 +249,9 @@ pub struct PakPosApp {
 impl PakPosApp {
     pub fn new(cc: &eframe::CreationContext<'_>, ws: Workspace, load_errors: Vec<String>) -> Self {
         let palette = Palette::of(ws.settings.theme);
+        let cookie_jar = pakpos_core::cookies::SharedJar::new(ws.cookies.clone());
         let mut app = PakPosApp {
+            cookie_jar,
             ws,
             palette,
             tabs: Vec::new(),
@@ -413,6 +418,7 @@ impl PakPosApp {
         let fallback = self.inherited_auth(tab);
         let settings = self.ws.settings.http.clone();
         let mut tokens = self.ws.tokens.clone();
+        let jar = self.cookie_jar.clone();
         let collection = tab.source.as_ref().and_then(|(c, _)| self.collection(c));
         let chain = pakpos_core::scripts::chain_for(collection, &req);
         // Unsaved requests are the user's own; saved ones follow collection trust.
@@ -457,8 +463,9 @@ impl PakPosApp {
                 }
             };
             let result = http::prepare(&req, &scope, fallback.as_ref())
-                .and_then(|p| {
-                    let client = http::client_for(&settings, &p.url)?;
+                .and_then(|mut p| {
+                    jar.with(|j| j.merge_into_manual(&mut p));
+                    let client = http::client_with_jar(&settings, &p.url, &jar)?;
                     http::send(&client, &p).map(|r| (p, r))
                 })
                 .map(|(prepared, response)| {
@@ -500,6 +507,7 @@ impl PakPosApp {
             match result {
                 Ok(outcome) => {
                     self.ws.push_history(req, Some(outcome.response.status), Some(outcome.response.elapsed_ms));
+                    self.sync_cookies();
                     if let Some((key, token)) = outcome.new_token.clone() {
                         self.ws.tokens.insert(key, token);
                         let _ = self.ws.save_tokens();
@@ -661,6 +669,15 @@ impl PakPosApp {
 
     // ----- runner -------------------------------------------------------------
 
+    /// Saves the shared cookie jar when it changed.
+    pub fn sync_cookies(&mut self) {
+        let snapshot = self.cookie_jar.snapshot();
+        if snapshot != self.ws.cookies {
+            self.ws.cookies = snapshot;
+            let _ = self.ws.save_cookies();
+        }
+    }
+
     /// Runs a collection with default options.
     pub fn start_runner(&mut self, collection_id: &str, ctx: &egui::Context) {
         let Some(name) = self.collection(collection_id).map(|c| c.name.clone()) else { return };
@@ -674,6 +691,7 @@ impl PakPosApp {
             settings: self.ws.settings.http.clone(),
             globals: self.ws.globals.clone(),
             tokens: self.ws.tokens.clone(),
+            cookies: self.cookie_jar.snapshot(),
             allow_scripts: self.ws.is_trusted(&collection.id),
             data: setup.data.clone(),
             iterations: setup.iterations,
@@ -711,6 +729,7 @@ impl PakPosApp {
 
     fn poll_runner(&mut self) {
         let mut done_env = None;
+        let mut done_cookies = false;
         if let Some(r) = &mut self.runner {
             while let Ok(msg) = r.rx.try_recv() {
                 match msg {
@@ -720,11 +739,17 @@ impl PakPosApp {
                             self.ws.tokens = report.tokens.clone();
                             let _ = self.ws.save_tokens();
                         }
+                        let cookies = report.cookies.clone();
+                        self.cookie_jar.with(|j| *j = cookies);
+                        done_cookies = true;
                         r.report = Some(report);
                         done_env = env;
                     }
                 }
             }
+        }
+        if done_cookies {
+            self.sync_cookies();
         }
         if let Some(env) = done_env {
             if let Some(slot) = self.ws.environments.iter_mut().find(|e| e.id == env.id) {
@@ -817,6 +842,20 @@ impl PakPosApp {
                         {
                             self.git.open = true;
                             self.git.last_refresh = None;
+                        }
+                        let cookie_count = self.ws.cookies.cookies.len();
+                        let cookies_label =
+                            if cookie_count > 0 { format!("Cookies ({cookie_count})") } else { "Cookies".to_string() };
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new(cookies_label).color(white))
+                                    .fill(theme::NAVY_600)
+                                    .stroke(egui::Stroke::NONE),
+                            )
+                            .on_hover_text("View and edit the cookie jar")
+                            .clicked()
+                        {
+                            self.dialog = Some(Dialog::Cookies(Default::default()));
                         }
                         let import = ui.add(
                             egui::Button::new(RichText::new("Import").color(white))

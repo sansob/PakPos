@@ -5,12 +5,12 @@
   "items": [
     {
       "kind": "folder",
-      "id": "e8807e2e-22f1-47fb-bc1f-b1c420437623",
+      "id": "90c2d78d-a5a9-4f56-8192-c34d2dd2075a",
       "name": "Basics",
       "items": [
         {
           "kind": "request",
-          "id": "b49357c0-4a2a-495e-b2ac-3bb7cf601ada",
+          "id": "522ea7a4-6bf3-4b81-b4eb-f841ad6b0a0b",
           "name": "Get with query params",
           "method": "GET",
           "url": "{{base_url}}/get",
@@ -63,7 +63,7 @@
         },
         {
           "kind": "request",
-          "id": "00cfb6c3-f9ea-4e49-9546-d338383d69bd",
+          "id": "5ca4429d-3b9b-4e92-9d96-09b08698e4cd",
           "name": "Create user (JSON)",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -97,7 +97,7 @@
           ],
           "examples": [
             {
-              "id": "7c2e8f25-c9a0-4348-a42b-3838abf9f59b",
+              "id": "2d2b6d6a-deb8-4c15-aa63-f9688da1faaa",
               "name": "Created",
               "status": 201,
               "headers": [
@@ -110,7 +110,7 @@
               "body": "{\n  \"id\": \"usr_1001\",\n  \"name\": \"Budi Santoso\",\n  \"city\": \"Jakarta\"\n}"
             },
             {
-              "id": "8ba45eb3-3358-473f-ab5e-22a2a0e17b81",
+              "id": "257a2c0f-4517-40c2-ae9a-594c2742b947",
               "name": "Validation error",
               "status": 422,
               "headers": [
@@ -126,7 +126,7 @@
         },
         {
           "kind": "request",
-          "id": "c6a9cdf8-d702-4393-a7cc-2ad6d532f028",
+          "id": "3ddb2a40-4373-4b6a-b9ce-dfe9e84dde4a",
           "name": "Submit form",
           "method": "POST",
           "url": "{{base_url}}/post",
@@ -159,7 +159,7 @@
         },
         {
           "kind": "request",
-          "id": "452e8781-50e6-4a5f-90af-3fefa6e9050c",
+          "id": "edaf5133-063b-4388-bc4d-5fc085e0751d",
           "name": "Update user",
           "method": "PUT",
           "url": "{{base_url}}/put",
@@ -174,7 +174,7 @@
         },
         {
           "kind": "request",
-          "id": "c8b2266c-5b0b-48bd-a3a8-4400e5c7d496",
+          "id": "0c8ac293-e0bf-4ca6-b503-1bf179beec81",
           "name": "Patch user",
           "method": "PATCH",
           "url": "{{base_url}}/patch",
@@ -189,7 +189,7 @@
         },
         {
           "kind": "request",
-          "id": "757e89bf-8f5f-4f1c-8aee-bf67c7aa29e2",
+          "id": "c3e318ec-2e8b-4b8c-ab81-2cf9e9d67ca7",
           "name": "Delete user",
           "method": "DELETE",
           "url": "{{base_url}}/delete",
@@ -207,6 +207,27 @@
               "expected": "200"
             }
           ]
+        },
+        {
+          "kind": "request",
+          "id": "5cfdc3e1-5a78-48e3-a134-5b8a44335c68",
+          "name": "Set a cookie",
+          "method": "GET",
+          "url": "{{base_url}}/cookies/set?flavour=kopi-susu",
+          "body": {
+            "mode": "none"
+          },
+          "auth": {
+            "type": "inherit"
+          },
+          "assertions": [
+            {
+              "enabled": true,
+              "target": "json.cookies.flavour",
+              "op": "equals",
+              "expected": "kopi-susu"
+            }
+          ]
         }
       ],
       "auth": {
@@ -215,12 +236,12 @@
     },
     {
       "kind": "folder",
-      "id": "81249e95-3313-4aad-a277-ee397a1ddea4",
+      "id": "ed4642e5-3a4c-47e8-bc21-e75cc9cb3f87",
       "name": "Auth",
       "items": [
         {
           "kind": "request",
-          "id": "ecd0ae5a-7aff-4d3e-8b44-9eebdb0aa883",
+          "id": "716c6321-0ca7-4a92-aea0-d87d734d5017",
           "name": "Bearer token",
           "method": "GET",
           "url": "{{base_url}}/bearer",
@@ -242,7 +263,7 @@
         },
         {
           "kind": "request",
-          "id": "b985594d-dd6b-4aa0-a2c9-caf9334f995f",
+          "id": "8f88e521-f3ad-47ec-8e34-9f2d35fbc137",
           "name": "Basic auth",
           "method": "GET",
           "url": "{{base_url}}/basic-auth/pakpos/rahasia",
@@ -265,7 +286,7 @@
         },
         {
           "kind": "request",
-          "id": "f0ce23e9-82d4-4574-859f-a54099c38e0b",
+          "id": "75972b87-df46-4707-bced-c2fa1ecb9d81",
           "name": "Digest auth",
           "method": "GET",
           "url": "{{base_url}}/digest-auth/auth/pakpos/rahasia",
@@ -288,7 +309,7 @@
         },
         {
           "kind": "request",
-          "id": "a42339b4-a047-40bd-94ff-2270745ce6dc",
+          "id": "24e07704-2530-4877-95d4-ddf022261079",
           "name": "Profile (OAuth 2.0)",
           "method": "GET",
           "url": "{{base_url}}/oauth/me",
@@ -331,12 +352,12 @@
     },
     {
       "kind": "folder",
-      "id": "f1cedf78-883a-4dc7-ac26-52296a7eaeb3",
+      "id": "84ba9796-307e-4b93-b2a1-7650c92bed73",
       "name": "GraphQL",
       "items": [
         {
           "kind": "request",
-          "id": "ebf43d74-d3b5-47cb-aade-a8d2af4f2ae0",
+          "id": "fc7e1380-c92c-4336-b07e-a6a69e5a334b",
           "name": "Users by city (GraphQL)",
           "method": "POST",
           "url": "{{base_url}}/graphql",
@@ -371,12 +392,12 @@
     },
     {
       "kind": "folder",
-      "id": "1573eed2-e6d6-408d-b65d-d7f462819c6f",
+      "id": "a4ac12f1-c88f-49da-a1ec-4b9260889e13",
       "name": "Realtime",
       "items": [
         {
           "kind": "request",
-          "id": "01ca2d60-32a7-4fe7-a22f-29a9cb416a9c",
+          "id": "d7b120b7-3150-452d-bee6-3a1c239d8df9",
           "name": "Live prices (WebSocket)",
           "protocol": "websocket",
           "method": "GET",
@@ -394,7 +415,7 @@
         },
         {
           "kind": "request",
-          "id": "45f17d77-d9d6-40a2-87aa-6a6b747dcef0",
+          "id": "699dd250-9917-4999-bf6e-2811b0f5df72",
           "name": "Health check (gRPC)",
           "protocol": "grpc",
           "method": "POST",
@@ -433,12 +454,12 @@
     },
     {
       "kind": "folder",
-      "id": "53d731c2-2ef5-4be8-8cef-c459268d83e6",
+      "id": "e6858d7b-d493-4a5d-9836-2baec39935d3",
       "name": "Responses",
       "items": [
         {
           "kind": "request",
-          "id": "7d9bd419-117f-4c6d-8c05-5aad9d7be982",
+          "id": "f035ef47-0ea3-4f9c-97a4-1bf24210e12f",
           "name": "Get UUID (extract)",
           "method": "GET",
           "url": "{{base_url}}/uuid",
@@ -465,7 +486,7 @@
           ],
           "examples": [
             {
-              "id": "16774e7c-c3f8-4909-9f67-d86f4d61e51a",
+              "id": "b1b1b855-f2a8-430f-b670-321d036d783e",
               "name": "Random UUID",
               "status": 200,
               "headers": [
@@ -481,7 +502,7 @@
         },
         {
           "kind": "request",
-          "id": "e4c0266d-5401-4c7a-a6b7-1b3b60496c07",
+          "id": "cef38857-b314-468f-ad19-f9f0f859413d",
           "name": "JSON document",
           "method": "GET",
           "url": "{{base_url}}/json",
@@ -502,7 +523,7 @@
         },
         {
           "kind": "request",
-          "id": "67a57dba-941c-4f44-b643-c36674daf27c",
+          "id": "d8e12a26-ca88-4a8b-b6ec-ccac52deada3",
           "name": "Expect 404",
           "method": "GET",
           "url": "{{base_url}}/status/404",
@@ -523,7 +544,7 @@
         },
         {
           "kind": "request",
-          "id": "b0763a79-e75b-46b6-856a-5604fb7b1128",
+          "id": "4a23f2c6-534f-4d0d-a885-e5422c1dd2e3",
           "name": "Scripted checks (JavaScript)",
           "method": "GET",
           "url": "{{base_url}}/json",

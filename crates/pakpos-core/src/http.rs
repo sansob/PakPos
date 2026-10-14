@@ -366,30 +366,45 @@ fn encode_form(fields: &[(String, String)]) -> String {
 
 /// Builds a blocking client for the given settings, without a client certificate.
 pub fn build_client(settings: &HttpSettings) -> Result<reqwest::blocking::Client, HttpError> {
-    build_client_with(settings, None)
+    build_client_with(settings, None, None)
 }
 
 /// Builds a client presenting the certificate configured for `url`'s host, if any.
 pub fn client_for(settings: &HttpSettings, url: &str) -> Result<reqwest::blocking::Client, HttpError> {
-    build_client_with(settings, settings.client_cert_for(url))
+    build_client_with(settings, settings.client_cert_for(url), None)
+}
+
+/// Like [`client_for`], with cookies read from and stored into `jar`.
+pub fn client_with_jar(
+    settings: &HttpSettings,
+    url: &str,
+    jar: &std::sync::Arc<crate::cookies::SharedJar>,
+) -> Result<reqwest::blocking::Client, HttpError> {
+    build_client_with(settings, settings.client_cert_for(url), Some(jar.clone()))
 }
 
 /// Clients per client certificate, for callers sending many requests.
 pub struct Clients {
     settings: HttpSettings,
+    jar: Option<std::sync::Arc<crate::cookies::SharedJar>>,
     cache: std::collections::HashMap<Option<usize>, reqwest::blocking::Client>,
 }
 
 impl Clients {
     pub fn new(settings: HttpSettings) -> Self {
-        Self { settings, cache: Default::default() }
+        Self { settings, jar: None, cache: Default::default() }
+    }
+
+    /// Clients that share one cookie jar.
+    pub fn with_jar(settings: HttpSettings, jar: std::sync::Arc<crate::cookies::SharedJar>) -> Self {
+        Self { settings, jar: Some(jar), cache: Default::default() }
     }
 
     pub fn for_url(&mut self, url: &str) -> Result<&reqwest::blocking::Client, HttpError> {
         let cert = self.settings.client_cert_for(url);
         let key = cert.and_then(|c| self.settings.client_certs.iter().position(|x| x == c));
         if !self.cache.contains_key(&key) {
-            let client = build_client_with(&self.settings, cert)?;
+            let client = build_client_with(&self.settings, cert, self.jar.clone())?;
             self.cache.insert(key, client);
         }
         Ok(&self.cache[&key])
@@ -399,6 +414,7 @@ impl Clients {
 fn build_client_with(
     settings: &HttpSettings,
     cert: Option<&ClientCert>,
+    jar: Option<std::sync::Arc<crate::cookies::SharedJar>>,
 ) -> Result<reqwest::blocking::Client, HttpError> {
     let redirect = if settings.follow_redirects {
         reqwest::redirect::Policy::limited(settings.max_redirects)
@@ -409,8 +425,11 @@ fn build_client_with(
         .timeout(Duration::from_secs(settings.timeout_secs.max(1)))
         .redirect(redirect)
         .user_agent(settings.user_agent.clone())
-        .cookie_store(true)
         .tls_danger_accept_invalid_certs(!settings.verify_tls);
+    builder = match jar {
+        Some(jar) => builder.cookie_provider(jar),
+        None => builder.cookie_store(true),
+    };
     if !settings.proxy.trim().is_empty() {
         let proxy = reqwest::Proxy::all(settings.proxy.trim())
             .map_err(|e| HttpError::InvalidUrl(settings.proxy.clone(), e.to_string()))?;

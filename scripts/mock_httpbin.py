@@ -192,6 +192,22 @@ class Handler(BaseHTTPRequestHandler):
             expected = "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()
             ok = self.headers.get("Authorization") == expected
             return self._send(200 if ok else 401, {"authenticated": ok, "user": user})
+        if path == "/cookies/set":
+            # httpbin-compatible: set every query parameter as a cookie, then redirect.
+            self.send_response(302)
+            for k, v in parse_qsl(urlsplit(self.path).query):
+                self.send_header("Set-Cookie", f"{k}={v}; Path=/")
+            self.send_header("Location", "/cookies")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if path == "/cookies":
+            jar = {}
+            for part in self.headers.get("Cookie", "").split(";"):
+                if "=" in part:
+                    k, v = part.strip().split("=", 1)
+                    jar[k] = v
+            return self._send(200, {"cookies": jar})
         if path.startswith("/digest-auth/"):
             # httpbin-compatible: /digest-auth/<qop>/<user>/<password>
             _, _, qop, user, pw = path.split("/", 4)

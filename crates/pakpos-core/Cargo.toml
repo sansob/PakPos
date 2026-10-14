@@ -26,6 +26,7 @@ sha2.workspace = true
 hmac.workspace = true
 md-5.workspace = true
 md4.workspace = true
+cookie.workspace = true
 rquickjs.workspace = true
 tonic.workspace = true
 prost-types.workspace = true

@@ -17,6 +17,9 @@ All notable changes to this project are documented here. The format follows
   `pakpos-cli run --data / --iterations`, a run options dialog in the app and a
   `data` argument for the MCP `run_collection` tool.
 - gRPC requests run in the collection runner (app, CLI and MCP).
+- Persistent cookie jar (`cookies.json`, git-ignored) with RFC 6265 matching,
+  cookies from redirects included, and a viewer/editor (**Cookies** in the top
+  bar). Runs share the jar between requests.
 
 ## [0.2.0-rc.1] - 2026-10-14
 

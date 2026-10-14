@@ -31,6 +31,7 @@ sha2 = "0.10"
 hmac = "0.12"
 md-5 = "0.10"
 md4 = "0.10"
+cookie = "0.18"
 rquickjs = "0.14"
 tonic = { version = "0.14", default-features = false, features = ["channel", "codegen", "tls-aws-lc", "tls-native-roots"] }
 tonic-reflection = { version = "0.14", default-features = false }

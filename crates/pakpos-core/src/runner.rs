@@ -49,6 +49,9 @@ pub struct RunReport {
     /// Variable changes made by scripts (collection / global ones are for the caller to persist).
     #[serde(skip)]
     pub script_changes: crate::scripts::VarChanges,
+    /// Cookie jar after the run.
+    #[serde(skip)]
+    pub cookies: crate::cookies::CookieJar,
 }
 
 impl RunReport {
@@ -147,6 +150,8 @@ pub struct RunOptions {
     pub data: Vec<crate::data::Row>,
     /// Number of iterations; `0` means one per data row (or a single run).
     pub iterations: usize,
+    /// Cookies sent with the requests; cookies the server sets are added.
+    pub cookies: crate::cookies::CookieJar,
 }
 
 impl RunOptions {
@@ -180,7 +185,8 @@ pub fn run_collection(
         scope.runtime.insert(k.clone(), v.clone());
     }
 
-    let mut clients = http::Clients::new(options.settings.clone());
+    let jar = crate::cookies::SharedJar::new(options.cookies.clone());
+    let mut clients = http::Clients::with_jar(options.settings.clone(), jar.clone());
     let mut report = RunReport {
         collection: collection.name.clone(),
         environment: environment.as_ref().map(|e| e.name.clone()),
@@ -258,13 +264,14 @@ pub fn run_collection(
                 Ok(_) if req.kind == crate::model::RequestKind::Grpc => {
                     run_grpc(&req, &scope, options, &mut grpc_pools).map_err(http::HttpError::Transport)
                 }
-                Ok(_) => http::prepare(&req, &scope, None).and_then(|p| {
+                Ok(_) => http::prepare(&req, &scope, None).and_then(|mut p| {
                     if !http::host_allowed(&p.url, &options.allowed_hosts) {
                         return Err(http::HttpError::Transport(format!(
                             "host of `{}` is not in the allow-list",
                             p.url
                         )));
                     }
+                    jar.with(|j| j.merge_into_manual(&mut p));
                     let client = clients.for_url(&p.url)?;
                     http::send(client, &p).map(|r| (p, r))
                 }),
@@ -309,6 +316,7 @@ pub fn run_collection(
             }
         }
     }
+    report.cookies = jar.snapshot();
     report.total_ms = started.elapsed().as_millis();
     report
 }
@@ -412,6 +420,7 @@ mod tests {
             total_ms: 20,
             tokens: Default::default(),
             script_changes: Default::default(),
+            cookies: Default::default(),
         };
         let xml = report.to_junit();
         assert!(xml.contains("tests=\"3\" failures=\"2\""));

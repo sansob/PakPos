@@ -72,6 +72,8 @@ pub fn demo_collection() -> Collection {
     let mut basic = req("Basic auth", HttpMethod::Get, "{{base_url}}/basic-auth/pakpos/rahasia");
     basic.auth = Auth::Basic { username: "pakpos".into(), password: "rahasia".into() };
     basic.assertions = vec![test("status", Operator::Equals, "200")];
+    let mut cookies = req("Set a cookie", HttpMethod::Get, "{{base_url}}/cookies/set?flavour=kopi-susu");
+    cookies.assertions = vec![test("json.cookies.flavour", Operator::Equals, "kopi-susu")];
     let mut digest = req("Digest auth", HttpMethod::Get, "{{base_url}}/digest-auth/auth/pakpos/rahasia");
     digest.auth = Auth::Digest { username: "pakpos".into(), password: "rahasia".into() };
     digest.assertions = vec![test("json.authenticated", Operator::Equals, "true")];
@@ -141,7 +143,7 @@ pub fn demo_collection() -> Collection {
     grpc_req.description = "Start the demo server with `cargo run -p pakpos-core --example grpc_demo_server`, then Load methods (server reflection) and Send.".into();
 
     let mut basics = Folder::new("Basics");
-    basics.items = [get, post, form, put, patch, del].into_iter().map(Item::Request).collect();
+    basics.items = [get, post, form, put, patch, del, cookies].into_iter().map(Item::Request).collect();
     let mut auth = Folder::new("Auth");
     auth.items = vec![Item::Request(bearer), Item::Request(basic), Item::Request(digest), Item::Request(oauth)];
     let mut responses = Folder::new("Responses");
@@ -180,7 +182,7 @@ mod tests {
     #[test]
     fn demo_has_requests() {
         let c = super::demo_collection();
-        assert_eq!(c.request_count(), 17);
+        assert_eq!(c.request_count(), 18);
         assert_eq!(super::demo_environment("x").get("base_url"), Some("x"));
     }
 }

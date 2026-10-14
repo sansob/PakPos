@@ -17,6 +17,7 @@
 pub mod assertions;
 pub mod auth;
 pub mod codegen;
+pub mod cookies;
 pub mod data;
 pub mod git;
 pub mod graphql;

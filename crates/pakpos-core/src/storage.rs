@@ -94,6 +94,8 @@ pub struct Workspace {
     pub settings: Settings,
     /// OAuth 2.0 tokens (`tokens.json`, keep it out of git).
     pub tokens: crate::oauth2::TokenStore,
+    /// Cookie jar (`cookies.json`, kept out of git).
+    pub cookies: crate::cookies::CookieJar,
 }
 
 /// Default workspace location (overridable with `PAKPOS_HOME`).
@@ -170,7 +172,8 @@ impl Workspace {
         let history = take(read_json(&root.join("history.json")), &mut errors).unwrap_or_default();
         let settings = take(read_json(&root.join("settings.json")), &mut errors).unwrap_or_default();
         let tokens = take(read_json(&root.join("tokens.json")), &mut errors).unwrap_or_default();
-        (Workspace { root, collections, environments, globals, history, settings, tokens }, errors)
+        let cookies = take(read_json(&root.join("cookies.json")), &mut errors).unwrap_or_default();
+        (Workspace { root, collections, environments, globals, history, settings, tokens, cookies }, errors)
     }
 
     pub fn collections_dir(&self) -> PathBuf {
@@ -203,6 +206,10 @@ impl Workspace {
 
     pub fn save_history(&self) -> Result<(), StorageError> {
         write_json(&self.root.join("history.json"), &self.history)
+    }
+
+    pub fn save_cookies(&self) -> Result<(), StorageError> {
+        write_json(&self.root.join("cookies.json"), &self.cookies)
     }
 
     pub fn save_tokens(&self) -> Result<(), StorageError> {

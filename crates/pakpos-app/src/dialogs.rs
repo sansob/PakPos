@@ -9,11 +9,11 @@ use pakpos_core::model::Item;
 use pakpos_core::storage::Theme;
 use pakpos_core::Collection;
 
-fn modal_frame(p: &theme::Palette) -> egui::Frame {
+pub(crate) fn modal_frame(p: &theme::Palette) -> egui::Frame {
     egui::Frame::new().fill(p.surface).stroke(egui::Stroke::new(1.0, p.border)).corner_radius(12).inner_margin(20)
 }
 
-fn title(ui: &mut egui::Ui, text: &str) {
+pub(crate) fn title(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text).heading().strong());
     ui.add_space(8.0);
 }
@@ -382,6 +382,9 @@ impl PakPosApp {
                 if r.should_close() {
                     keep = false;
                 }
+            }
+            Dialog::Cookies(st) => {
+                keep = self.cookies_dialog(ctx, st);
             }
             Dialog::About => {
                 let r = egui::Modal::new(Id::new("about")).frame(modal_frame(&p)).show(ctx, |ui| {
