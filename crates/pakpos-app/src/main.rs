@@ -7,6 +7,7 @@ mod app;
 mod body_view;
 mod cookies_view;
 mod dialogs;
+mod fonts;
 mod git_view;
 mod graphql_view;
 mod grpc_view;
@@ -79,12 +80,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            // Hack has arrows and shapes (▸ ▾ ● →) missing from the UI font.
-            let mut fonts = egui::FontDefinitions::default();
-            if let Some(list) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
-                list.push("Hack".to_owned());
-            }
-            cc.egui_ctx.set_fonts(fonts);
+            cc.egui_ctx.set_fonts(fonts::definitions());
             Ok(Box::new(app::PakPosApp::new(cc, ws, errors)))
         }),
     )

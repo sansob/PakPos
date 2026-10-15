@@ -9,7 +9,7 @@ Each package contains both the desktop app (`pakpos`) and the CLI (`pakpos-cli`)
   ARM devices such as Snapdragon laptops). You can tick *Add pakpos-cli to PATH*.
 - **Portable:** unzip `pakpos-x.y.z-windows-x64.zip` (or `-arm64.zip`) anywhere and run `pakpos.exe`.
 
-Builds are not code-signed yet, so SmartScreen may warn: click **More info → Run anyway**.
+Builds are not code-signed yet (see the [code signing policy](code-signing-policy.md)), so SmartScreen may warn: click **More info → Run anyway**.
 
 ## macOS 11+ (Apple Silicon and Intel)
 
