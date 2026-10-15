@@ -78,6 +78,18 @@ jobs:
         run: |
           cargo install cargo-deb --locked
           cargo deb -p pakpos --no-build --no-strip -o dist/
+      - name: Package .rpm
+        run: |
+          cargo install cargo-generate-rpm --locked
+          cargo generate-rpm -p crates/pakpos-app -o dist/
+      # Install both packages on clean distributions and start the app (under
+      # Xvfb) to catch missing runtime dependencies, not just packaging errors.
+      - name: Test .deb on Ubuntu and .rpm on Fedora
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" -v "$PWD/packaging/linux/smoke-test.sh:/smoke.sh:ro" ubuntu:24.04 bash -c \
+            'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /dist/*.deb xvfb xauth >/dev/null && bash /smoke.sh'
+          docker run --rm -v "$PWD/dist:/dist" -v "$PWD/packaging/linux/smoke-test.sh:/smoke.sh:ro" fedora:41 bash -c \
+            'dnf install -y -q /dist/*.rpm xorg-x11-server-Xvfb xauth >/dev/null && bash /smoke.sh'
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
@@ -240,7 +252,7 @@ jobs:
           | Windows 10/11 x64 | `PakPos-*-windows-x64-setup.exe` (installer) or `pakpos-*-windows-x64.zip` (portable) |
           | Windows 11 ARM64 | `PakPos-*-windows-arm64-setup.exe` or `pakpos-*-windows-arm64.zip` |
           | macOS 11+ (Apple Silicon & Intel) | `PakPos-*-macos-universal.dmg` |
-          | Linux x86_64 / arm64 | `.deb` (Debian/Ubuntu) or `.tar.gz` |
+          | Linux x86_64 / arm64 | `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL/openSUSE) or `.tar.gz` |
 
           Verify downloads with `SHA256SUMS.txt`. Builds are not code-signed yet; see the installation guide for the first-launch steps on macOS and Windows.
           NOTES

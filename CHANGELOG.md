@@ -9,6 +9,9 @@ All notable changes to this project are documented here. The format follows
 ## [0.3.0-rc.2] - 2026-10-15
 
 ### Added
+- `.rpm` packages for Fedora, RHEL and openSUSE (x86_64 and aarch64). Each
+  release installs the `.deb` on Ubuntu and the `.rpm` on Fedora in clean
+  containers and starts the app before publishing.
 - Code signing policy and privacy policy (docs), and Windows signing through
   SignPath in the release workflow: off until the project is accepted and the
   SignPath settings exist, then the executables and the installer are signed
@@ -23,6 +26,11 @@ All notable changes to this project are documented here. The format follows
 - Docs site: black "coal" theme and the Pak Pos favicon.
 - Dependencies: rand 0.10, base64 0.23, and the RustCrypto 0.11 generation
   together (sha2 0.11, hmac 0.13, md-5 0.11, md4 0.11).
+
+### Fixed
+- Linux packages now depend on the libraries the app loads at runtime
+  (xkbcommon, EGL/OpenGL, X11 or Wayland); before, the `.deb` only required
+  libc and could install on a system where the app could not start.
 
 ## [0.3.0-rc.1] - 2026-10-14
 
