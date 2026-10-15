@@ -450,7 +450,19 @@ fn build_client_with(
             }
         }
     }
-    builder.build().map_err(|e| HttpError::Transport(e.to_string()))
+    builder.build().map_err(|e| HttpError::Transport(client_build_error(&e)))
+}
+
+/// Why a client could not be built. The usual cause on Linux is a system
+/// without CA certificates (minimal installs, containers): say how to fix it.
+fn client_build_error(e: &reqwest::Error) -> String {
+    let msg = describe_error(e);
+    let lower = msg.to_lowercase();
+    if lower.contains("certificate") || lower.contains("root") || lower.contains("trust") {
+        format!("{msg}. Install the CA certificates (the ca-certificates package on Linux) or point SSL_CERT_FILE at a PEM bundle.")
+    } else {
+        msg
+    }
 }
 
 /// An async client for long-lived streams (Server-Sent Events): same TLS,
@@ -477,7 +489,7 @@ pub fn streaming_client_for(settings: &HttpSettings, url: &str) -> Result<reqwes
             }
         }
     }
-    builder.build().map_err(|e| HttpError::Transport(describe_error(&e)))
+    builder.build().map_err(|e| HttpError::Transport(client_build_error(&e)))
 }
 
 /// Sends a prepared request with an existing client, answering a Digest or

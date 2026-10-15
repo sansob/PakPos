@@ -129,3 +129,34 @@ jobs:
             if ($final -ne $before) { throw "$($c.Mode): PATH changed by install + uninstall:`n$before`n$final" }
             Write-Host "$($c.Mode): ok"
           }
+
+  # Builds the .deb, .rpm and AppImage and installs them on clean Ubuntu and
+  # Fedora containers (same scripts as the release). Screenshots of the app
+  # started from each package are uploaded as an artifact.
+  linux-packages:
+    name: Linux packages (.deb, .rpm, AppImage)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-packages
+      - name: Install dependencies and packaging tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev desktop-file-utils
+          cargo install cargo-deb cargo-generate-rpm --locked
+          curl -sSLf -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+      - run: cargo build --release --locked --workspace
+      - name: Package
+        run: |
+          V=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          APPIMAGETOOL=$PWD/appimagetool packaging/linux/build-packages.sh "$V" x86_64 dist
+      - name: Install and start on Ubuntu and Fedora
+        run: packaging/linux/test-packages.sh dist
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-package-screenshots
+          path: dist/screenshots/*

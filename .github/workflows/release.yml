@@ -74,10 +74,24 @@ jobs:
           mkdir -p dist/$NAME/licenses && cp assets/fonts/OFL-*.txt dist/$NAME/licenses/
           tar -C dist -czf dist/$NAME.tar.gz $NAME
           rm -rf dist/$NAME
-      - name: Package .deb
+      - name: Install packaging tools
         run: |
-          cargo install cargo-deb --locked
-          cargo deb -p pakpos --no-build --no-strip -o dist/
+          sudo apt-get install -y desktop-file-utils
+          cargo install cargo-deb cargo-generate-rpm --locked
+          curl -sSLf -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-${{ matrix.arch }}.AppImage
+          chmod +x appimagetool
+      - name: Package .deb, .rpm and AppImage
+        run: APPIMAGETOOL=$PWD/appimagetool packaging/linux/build-packages.sh ${{ needs.meta.outputs.version }} ${{ matrix.arch }} dist
+      # Install the packages on clean distributions and start the app (under
+      # Xvfb) to catch missing runtime dependencies, not just packaging errors.
+      - name: Test the packages on Ubuntu and Fedora
+        run: |
+          packaging/linux/test-packages.sh dist
+          mkdir -p screenshots && mv dist/screenshots/* screenshots/ && rmdir dist/screenshots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}-screenshots
+          path: screenshots/*
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
@@ -212,6 +226,9 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Keep release files only
+        # The package-test screenshots (PNG) stay workflow artifacts.
+        run: rm -f dist/*.png
       - name: Checksums
         run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Package manager manifests (Homebrew, winget, AUR, Flatpak)
@@ -240,7 +257,7 @@ jobs:
           | Windows 10/11 x64 | `PakPos-*-windows-x64-setup.exe` (installer) or `pakpos-*-windows-x64.zip` (portable) |
           | Windows 11 ARM64 | `PakPos-*-windows-arm64-setup.exe` or `pakpos-*-windows-arm64.zip` |
           | macOS 11+ (Apple Silicon & Intel) | `PakPos-*-macos-universal.dmg` |
-          | Linux x86_64 / arm64 | `.deb` (Debian/Ubuntu) or `.tar.gz` |
+          | Linux x86_64 / arm64 | `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL/openSUSE), `.AppImage` (any distro) or `.tar.gz` |
 
           Verify downloads with `SHA256SUMS.txt`. Builds are not code-signed yet; see the installation guide for the first-launch steps on macOS and Windows.
           NOTES
