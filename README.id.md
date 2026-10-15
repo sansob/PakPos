@@ -158,3 +158,4 @@ pastikan `cargo fmt`, `clippy`, dan test lolos, lalu buka PR ke `develop`.
 MIT atau Apache-2.0, pilih yang cocok.
 
 PakPos adalah proyek independen dan tidak berafiliasi dengan Postman, Inc.
+Lihat [kebijakan code signing](docs/src/code-signing-policy.md) (termasuk kebijakan privasi).

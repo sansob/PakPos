@@ -174,3 +174,4 @@ The [architecture notes](docs/src/architecture.md) explain how the three crates
 MIT or Apache-2.0, whichever suits you.
 
 PakPos is an independent project and isn't affiliated with Postman, Inc.
+See the [code signing policy](docs/src/code-signing-policy.md) (including the privacy policy).

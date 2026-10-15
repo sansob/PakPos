@@ -7,5 +7,5 @@ src = "src"
 [output.html]
 git-repository-url = "https://github.com/sansob/PakPos"
 edit-url-template = "https://github.com/sansob/PakPos/edit/main/docs/{path}"
-default-theme = "navy"
-preferred-dark-theme = "navy"
+default-theme = "coal"
+preferred-dark-theme = "coal"
