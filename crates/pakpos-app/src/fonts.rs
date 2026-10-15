@@ -24,9 +24,7 @@ pub fn definitions() -> FontDefinitions {
     for (name, bytes) in FONTS {
         defs.font_data.insert((*name).to_owned(), Arc::new(FontData::from_static(bytes)));
     }
-    let family = |first: &[&str]| -> Vec<String> {
-        first.iter().chain(FALLBACKS).map(|s| (*s).to_owned()).collect()
-    };
+    let family = |first: &[&str]| -> Vec<String> { first.iter().chain(FALLBACKS).map(|s| (*s).to_owned()).collect() };
     defs.families.insert(FontFamily::Proportional, family(&["Inter"]));
     // Box drawing (─) and other code glyphs Inter lacks come from JetBrains Mono.
     defs.families.insert(FontFamily::Monospace, family(&["JetBrainsMono", "Inter"]));
