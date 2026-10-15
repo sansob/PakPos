@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "executables": the app and the CLI,
+     uploaded by release.yml as one GitHub artifact (a zip). -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="pakpos.exe">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="pakpos-cli.exe">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

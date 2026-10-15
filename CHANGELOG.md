@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0-rc.2] - 2026-10-15
+
+### Added
+- `.rpm` packages for Fedora, RHEL and openSUSE, and an AppImage for any
+  distribution (x86_64 and aarch64; `PakPos.AppImage cli …` runs pakpos-cli).
+  Each release installs the `.deb` on Ubuntu and the `.rpm` on Fedora, runs the
+  AppImage, all in clean containers, and starts the app before publishing.
+- Code signing policy and privacy policy (docs), and Windows signing through
+  SignPath in the release workflow: off until the project is accepted and the
+  SignPath settings exist, then the executables and the installer are signed
+  and checked before the release is published.
+
+### Changed
+- The app bundles its own fonts, all under the SIL Open Font License: Inter
+  (UI), JetBrains Mono (code) and Noto Emoji / Symbols 2 / Math (icons and
+  arrows). egui's default fonts (Ubuntu-Light, Hack) are no longer included, so
+  every component of a release is under an OSI-approved licence. Font licences
+  ship in every package.
+- Docs site: black "coal" theme and the Pak Pos favicon.
+- Dependencies: rand 0.10, base64 0.23, and the RustCrypto 0.11 generation
+  together (sha2 0.11, hmac 0.13, md-5 0.11, md4 0.11).
+
+### Fixed
+- Linux packages now depend on the libraries the app loads at runtime
+  (xkbcommon, EGL/OpenGL, X11 or Wayland) and on `ca-certificates`; before,
+  the `.deb` only required libc and could install on a system where the app
+  could not start, or where every request failed.
+- On a system without CA certificates, requests failed with a bare
+  "builder error"; the message now says to install them or set `SSL_CERT_FILE`.
+- "postman" is no longer a search keyword (crate keywords, desktop entry):
+  Postman is only mentioned where PakPos imports its formats.
+- The desktop entry listed two main categories (Development and Network), so
+  some menus showed PakPos twice; it is now Development / WebDevelopment.
+
 ## [0.3.0-rc.1] - 2026-10-14
 
 ### Added
@@ -123,6 +157,7 @@ Release candidate for the first public release.
   (rebase, auto-reload), push, or one-click Sync, scoped to the workspace folder,
   using the installed git and its credentials; personal files are git-ignored.
 
-[Unreleased]: https://github.com/sansob/PakPos/compare/v0.3.0-rc.1...HEAD
+[Unreleased]: https://github.com/sansob/PakPos/compare/v0.3.0-rc.2...HEAD
+[0.3.0-rc.2]: https://github.com/sansob/PakPos/compare/v0.3.0-rc.1...v0.3.0-rc.2
 [0.3.0-rc.1]: https://github.com/sansob/PakPos/compare/v0.2.0-rc.1...v0.3.0-rc.1
 [0.2.0-rc.1]: https://github.com/sansob/PakPos/releases/tag/v0.2.0-rc.1

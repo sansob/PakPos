@@ -121,7 +121,7 @@ dengan `--allow-host` dan sebutkan hanya API yang boleh disentuh.
 
 Ambil build untuk OS kamu di [halaman releases](https://github.com/sansob/PakPos/releases):
 installer atau zip portable untuk Windows (x64 dan ARM64), `.dmg` untuk macOS
-(Apple Silicon dan Intel jadi satu), dan `.deb` atau tarball untuk Linux (x86_64 dan arm64).
+(Apple Silicon dan Intel jadi satu), dan `.deb`, `.rpm`, AppImage, atau tarball untuk Linux (x86_64 dan arm64).
 
 Build-nya nggak di-code-sign, jadi OS kamu akan protes saat pertama dibuka. Di
 macOS 15 ke atas buka **System Settings → Privacy & Security** lalu klik
@@ -158,3 +158,4 @@ pastikan `cargo fmt`, `clippy`, dan test lolos, lalu buka PR ke `develop`.
 MIT atau Apache-2.0, pilih yang cocok.
 
 PakPos adalah proyek independen dan tidak berafiliasi dengan Postman, Inc.
+Lihat [kebijakan code signing](docs/src/code-signing-policy.md) (termasuk kebijakan privasi).

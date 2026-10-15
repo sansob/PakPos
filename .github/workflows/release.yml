@@ -71,12 +71,27 @@ jobs:
           mkdir -p dist/$NAME
           cp target/release/pakpos target/release/pakpos-cli README.md LICENSE-MIT LICENSE-APACHE dist/$NAME/
           cp packaging/linux/pakpos.desktop assets/icon-256.png dist/$NAME/
+          mkdir -p dist/$NAME/licenses && cp assets/fonts/OFL-*.txt dist/$NAME/licenses/
           tar -C dist -czf dist/$NAME.tar.gz $NAME
           rm -rf dist/$NAME
-      - name: Package .deb
+      - name: Install packaging tools
         run: |
-          cargo install cargo-deb --locked
-          cargo deb -p pakpos --no-build --no-strip -o dist/
+          sudo apt-get install -y desktop-file-utils
+          cargo install cargo-deb cargo-generate-rpm --locked
+          curl -sSLf -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-${{ matrix.arch }}.AppImage
+          chmod +x appimagetool
+      - name: Package .deb, .rpm and AppImage
+        run: APPIMAGETOOL=$PWD/appimagetool packaging/linux/build-packages.sh ${{ needs.meta.outputs.version }} ${{ matrix.arch }} dist
+      # Install the packages on clean distributions and start the app (under
+      # Xvfb) to catch missing runtime dependencies, not just packaging errors.
+      - name: Test the packages on Ubuntu and Fedora
+        run: |
+          packaging/linux/test-packages.sh dist
+          mkdir -p screenshots && mv dist/screenshots/* screenshots/ && rmdir dist/screenshots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}-screenshots
+          path: screenshots/*
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
@@ -105,13 +120,39 @@ jobs:
         if: matrix.arch == 'x64'
         uses: ilammy/setup-nasm@v1
       - run: cargo build --release --locked --workspace
+      # Code signing through SignPath (docs/src/code-signing-policy.md). It runs
+      # once the repository variable SIGNPATH_ORGANIZATION_ID and the secret
+      # SIGNPATH_API_TOKEN exist; until then the release is built unsigned.
+      - name: Upload executables for signing
+        id: unsigned-exe
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe-${{ matrix.arch }}
+          path: |
+            target/release/pakpos.exe
+            target/release/pakpos-cli.exe
+      - name: Sign executables (SignPath)
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'PakPos' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
+          artifact-configuration-slug: executables
+          github-artifact-id: ${{ steps.unsigned-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: target/release
       - name: Package zip
         shell: pwsh
         run: |
           $v = "${{ needs.meta.outputs.version }}"
           $name = "pakpos-$v-windows-${{ matrix.arch }}"
-          New-Item -ItemType Directory -Force -Path "dist\$name" | Out-Null
+          New-Item -ItemType Directory -Force -Path "dist\$name\licenses" | Out-Null
           Copy-Item target\release\pakpos.exe, target\release\pakpos-cli.exe, README.md, LICENSE-MIT, LICENSE-APACHE "dist\$name\"
+          Copy-Item assets\fonts\OFL-*.txt "dist\$name\licenses\"
           Compress-Archive -Path "dist\$name\*" -DestinationPath "dist\$name.zip"
           Remove-Item -Recurse "dist\$name"
       - name: Build installer (Inno Setup)
@@ -121,6 +162,35 @@ jobs:
             choco install innosetup -y --no-progress
           }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ needs.meta.outputs.version }}" "/DArch=${{ matrix.arch }}" "/DSourceDir=..\..\target\release" packaging\windows\pakpos.iss
+      - name: Upload installer for signing
+        id: unsigned-setup
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup-${{ matrix.arch }}
+          path: dist/*-setup.exe
+      - name: Sign installer (SignPath)
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'PakPos' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.unsigned-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: dist
+      - name: Check signatures
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          foreach ($f in @("target\release\pakpos.exe", "target\release\pakpos-cli.exe") + (Get-ChildItem dist\*-setup.exe).FullName) {
+            $s = Get-AuthenticodeSignature $f
+            if ($s.Status -ne "Valid") { throw "$f is not signed: $($s.Status)" }
+            Write-Host "$f signed by $($s.SignerCertificate.Subject)"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-${{ matrix.arch }}
@@ -156,6 +226,9 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Keep release files only
+        # The package-test screenshots (PNG) stay workflow artifacts.
+        run: rm -f dist/*.png
       - name: Checksums
         run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Package manager manifests (Homebrew, winget, AUR, Flatpak)
@@ -184,7 +257,7 @@ jobs:
           | Windows 10/11 x64 | `PakPos-*-windows-x64-setup.exe` (installer) or `pakpos-*-windows-x64.zip` (portable) |
           | Windows 11 ARM64 | `PakPos-*-windows-arm64-setup.exe` or `pakpos-*-windows-arm64.zip` |
           | macOS 11+ (Apple Silicon & Intel) | `PakPos-*-macos-universal.dmg` |
-          | Linux x86_64 / arm64 | `.deb` (Debian/Ubuntu) or `.tar.gz` |
+          | Linux x86_64 / arm64 | `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL/openSUSE), `.AppImage` (any distro) or `.tar.gz` |
 
           Verify downloads with `SHA256SUMS.txt`. Builds are not code-signed yet; see the installation guide for the first-launch steps on macOS and Windows.
           NOTES

@@ -9,7 +9,7 @@ Each package contains both the desktop app (`pakpos`) and the CLI (`pakpos-cli`)
   ARM devices such as Snapdragon laptops). You can tick *Add pakpos-cli to PATH*.
 - **Portable:** unzip `pakpos-x.y.z-windows-x64.zip` (or `-arm64.zip`) anywhere and run `pakpos.exe`.
 
-Builds are not code-signed yet, so SmartScreen may warn: click **More info → Run anyway**.
+Builds are not code-signed yet (see the [code signing policy](code-signing-policy.md)), so SmartScreen may warn: click **More info → Run anyway**.
 
 ## macOS 11+ (Apple Silicon and Intel)
 
@@ -33,6 +33,28 @@ sudo ln -s /Applications/PakPos.app/Contents/MacOS/pakpos-cli /usr/local/bin/pak
 ```sh
 sudo apt install ./pakpos_x.y.z-1_amd64.deb   # or _arm64.deb
 ```
+
+**Fedora / RHEL / openSUSE:**
+
+```sh
+sudo dnf install ./pakpos-x.y.z-1.x86_64.rpm      # or .aarch64.rpm
+sudo zypper install ./pakpos-x.y.z-1.x86_64.rpm   # openSUSE
+```
+
+Both packages pull in the libraries the app loads at runtime (EGL/OpenGL,
+xkbcommon, and X11 or Wayland), and every release installs them on clean
+Ubuntu and Fedora containers and starts the app before it is published.
+
+**Any distribution (AppImage):** one file, no installation and no root:
+
+```sh
+chmod +x PakPos-x.y.z-x86_64.AppImage     # or -aarch64.AppImage
+./PakPos-x.y.z-x86_64.AppImage            # the app
+./PakPos-x.y.z-x86_64.AppImage cli --help # pakpos-cli
+```
+
+It needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later)
+and FUSE; without FUSE, set `APPIMAGE_EXTRACT_AND_RUN=1`.
 
 **Other distributions:** extract the tarball and copy the binaries:
 

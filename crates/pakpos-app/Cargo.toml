@@ -22,8 +22,8 @@ pakpos-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
-egui = "0.36"
-eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "wayland", "x11", "persistence"] }
+egui = { version = "0.36", default-features = false }
+eframe = { version = "0.36", default-features = false, features = ["glow", "wayland", "x11", "persistence"] }
 egui_extras = { version = "0.36", features = ["syntect", "image"] }
 rfd = "0.17"
 directories.workspace = true
@@ -42,10 +42,44 @@ maintainer = "PakPos contributors"
 section = "devel"
 priority = "optional"
 extended-description = "PakPos is a fast, native, open-source API client written in Rust. Includes the desktop app (pakpos) and the CLI runner / MCP server (pakpos-cli)."
-depends = "$auto"
+# The GUI libraries are loaded at runtime (dlopen), so $auto only finds libc:
+# list them. Either X11 or Wayland is enough.
+depends = "$auto, ca-certificates, libxkbcommon0, libegl1 | libgl1, libx11-6 | libwayland-client0"
+recommends = "libxkbcommon-x11-0, libxcursor1, libxi6, libwayland-egl1"
 assets = [
   ["target/release/pakpos", "usr/bin/", "755"],
   ["target/release/pakpos-cli", "usr/bin/", "755"],
   ["../../packaging/linux/pakpos.desktop", "usr/share/applications/", "644"],
   ["../../assets/icon-256.png", "usr/share/icons/hicolor/256x256/apps/pakpos.png", "644"],
+  ["../../assets/fonts/OFL-*.txt", "usr/share/doc/pakpos/fonts/", "644"],
 ]
+
+[package.metadata.generate-rpm]
+name = "pakpos"
+summary = "Fast, native, open-source API client"
+license = "MIT OR Apache-2.0"
+url = "https://github.com/sansob/PakPos"
+assets = [
+  { source = "target/release/pakpos", dest = "/usr/bin/pakpos", mode = "755" },
+  { source = "target/release/pakpos-cli", dest = "/usr/bin/pakpos-cli", mode = "755" },
+  { source = "packaging/linux/pakpos.desktop", dest = "/usr/share/applications/pakpos.desktop", mode = "644" },
+  { source = "assets/icon-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/pakpos.png", mode = "644" },
+  { source = "LICENSE-MIT", dest = "/usr/share/licenses/pakpos/LICENSE-MIT", mode = "644", doc = true },
+  { source = "LICENSE-APACHE", dest = "/usr/share/licenses/pakpos/LICENSE-APACHE", mode = "644", doc = true },
+  { source = "assets/fonts/OFL-*.txt", dest = "/usr/share/licenses/pakpos/fonts/", mode = "644", doc = true },
+]
+
+# Same reason as for the .deb: the GUI libraries are loaded at runtime. Sonames
+# work on Fedora, RHEL and openSUSE alike.
+[package.metadata.generate-rpm.requires]
+ca-certificates = "*"
+"libxkbcommon.so.0()(64bit)" = "*"
+"libEGL.so.1()(64bit)" = "*"
+
+[package.metadata.generate-rpm.recommends]
+"libX11.so.6()(64bit)" = "*"
+"libXcursor.so.1()(64bit)" = "*"
+"libXi.so.6()(64bit)" = "*"
+"libxkbcommon-x11.so.0()(64bit)" = "*"
+"libwayland-client.so.0()(64bit)" = "*"
+"libwayland-egl.so.1()(64bit)" = "*"

@@ -46,3 +46,39 @@ Unsigned builds trigger SmartScreen/Gatekeeper warnings. To sign later:
 - **macOS:** add an Apple Developer ID certificate as secrets, replace the
   ad-hoc `codesign -s -` in `packaging/macos/make-dmg.sh`, then `notarytool submit` + `stapler staple`.
 - **Windows:** sign `pakpos.exe` and the installer with `signtool` (or Azure Trusted Signing) in the windows job.
+
+## Windows code signing (SignPath)
+
+Windows builds are signed through the [SignPath Foundation](https://signpath.org/)
+once the project is accepted (see the [code signing policy](../code-signing-policy.md)).
+`release.yml` already contains the steps; they are skipped until the repository
+has the settings below, so releases keep working unsigned in the meantime.
+
+One-time setup, after SignPath approves the project:
+
+1. Install the SignPath GitHub App on `sansob/PakPos` (origin verification:
+   SignPath checks that each request comes from this repository's release
+   workflow on a tagged commit).
+2. In SignPath, create the project (slug `PakPos`) with two artifact
+   configurations, pasting the files from `.signpath/artifact-configurations/`:
+   `executables` (pakpos.exe and pakpos-cli.exe) and `installer`
+   (the Inno Setup installer). Use the signing policy `release-signing` with
+   manual approval.
+3. Create a CI user in SignPath and copy its API token.
+4. In GitHub → Settings → Secrets and variables → Actions:
+   - secret `SIGNPATH_API_TOKEN`: the token;
+   - variable `SIGNPATH_ORGANIZATION_ID`: your SignPath organization ID;
+   - optional variables `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY`
+     if you chose other slugs than `PakPos` and `release-signing`.
+5. Update the status line at the top of `docs/src/code-signing-policy.md` and the
+   "not code-signed" notes in `installation.md` and the READMEs.
+
+During a release the Windows jobs then wait (up to an hour) for you to approve
+two signing requests per architecture in SignPath: the executables, then the
+installer built from the signed executables. A last step fails the job if any of
+them is not validly signed.
+
+The uninstaller that Inno Setup writes (`unins000.exe`) is not signed: it is
+generated inside the installer build, after the executables come back from
+SignPath. Signing it too would need a SignPath call from Inno Setup's `SignTool`
+hook (one more approval per build).

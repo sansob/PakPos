@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFA73A"/><stop offset="1" stop-color="#F07F0C"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="110" fill="url(#g)"/>
+  <!-- cap -->
+  <path d="M96 236 C88 150 160 84 256 84 C352 84 424 150 416 236 Z" fill="#18295B"/>
+  <rect x="96" y="212" width="320" height="26" fill="#0F1B3F"/>
+  <path d="M78 246 C150 222 362 222 434 246 C440 266 426 276 410 272 C330 254 182 254 102 272 C86 276 72 266 78 246 Z" fill="#0A132E"/>
+  <g transform="translate(220 122)">
+    <rect width="72" height="52" rx="8" fill="#fff"/>
+    <path d="M5 7 L36 32 L67 7" fill="none" stroke="#F7941D" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <!-- eyes -->
+  <ellipse cx="196" cy="330" rx="30" ry="40" fill="#0F1B3F"/>
+  <ellipse cx="316" cy="330" rx="30" ry="40" fill="#0F1B3F"/>
+  <circle cx="185" cy="314" r="11" fill="#fff"/>
+  <circle cx="305" cy="314" r="11" fill="#fff"/>
+  <circle cx="206" cy="348" r="5" fill="#fff"/>
+  <circle cx="326" cy="348" r="5" fill="#fff"/>
+  <!-- mustache + smile -->
+  <path d="M256 398 C234 384 196 386 184 406 C208 402 230 412 256 410 C282 412 304 402 328 406 C316 386 278 384 256 398 Z" fill="#0F1B3F"/>
+  <path d="M226 420 C236 444 276 444 286 420 Z" fill="#0F1B3F"/>
+  <!-- blush -->
+  <ellipse cx="150" cy="392" rx="24" ry="12" fill="#fff" opacity="0.35"/>
+  <ellipse cx="362" cy="392" rx="24" ry="12" fill="#fff" opacity="0.35"/>
+</svg>
