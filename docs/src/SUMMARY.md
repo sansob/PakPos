@@ -38,6 +38,7 @@
 - [Architecture](architecture.md)
 - [Roadmap](roadmap.md)
 - [FAQ](faq.md)
+- [Code signing policy](code-signing-policy.md)
 - [Contributing](contributing/development.md)
   - [Branching model](contributing/branching.md)
   - [Releasing](contributing/releasing.md)

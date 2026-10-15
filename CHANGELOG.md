@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The app bundles its own fonts, all under the SIL Open Font License: Inter
+  (UI), JetBrains Mono (code) and Noto Emoji / Symbols 2 / Math (icons and
+  arrows). egui's default fonts (Ubuntu-Light, Hack) are no longer included, so
+  every component of a release is under an OSI-approved licence. Font licences
+  ship in every package.
+- Docs site: black "coal" theme and the Pak Pos favicon.
+
+### Added
+- Code signing policy and privacy policy (docs), and Windows signing through
+  SignPath in the release workflow: off until the project is accepted and the
+  SignPath settings exist, then the executables and the installer are signed
+  and checked before the release is published.
+
 ## [0.3.0-rc.1] - 2026-10-14
 
 ### Added

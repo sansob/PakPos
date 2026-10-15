@@ -22,8 +22,8 @@ pakpos-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
-egui = "0.36"
-eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "wayland", "x11", "persistence"] }
+egui = { version = "0.36", default-features = false }
+eframe = { version = "0.36", default-features = false, features = ["glow", "wayland", "x11", "persistence"] }
 egui_extras = { version = "0.36", features = ["syntect", "image"] }
 rfd = "0.17"
 directories.workspace = true
@@ -48,4 +48,5 @@ assets = [
   ["target/release/pakpos-cli", "usr/bin/", "755"],
   ["../../packaging/linux/pakpos.desktop", "usr/share/applications/", "644"],
   ["../../assets/icon-256.png", "usr/share/icons/hicolor/256x256/apps/pakpos.png", "644"],
+  ["../../assets/fonts/OFL-*.txt", "usr/share/doc/pakpos/fonts/", "644"],
 ]
