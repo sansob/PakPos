@@ -3,7 +3,7 @@
 //! The handshake is: negotiate (type 1) → server challenge (type 2) →
 //! authenticate (type 3), all on one keep-alive connection.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use md4::{Digest, Md4};
 use md5::Md5;
 

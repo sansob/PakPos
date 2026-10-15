@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Code signing policy and privacy policy (docs), and Windows signing through
+  SignPath in the release workflow: off until the project is accepted and the
+  SignPath settings exist, then the executables and the installer are signed
+  and checked before the release is published.
+
 ### Changed
 - The app bundles its own fonts, all under the SIL Open Font License: Inter
   (UI), JetBrains Mono (code) and Noto Emoji / Symbols 2 / Math (icons and
@@ -13,12 +19,8 @@ All notable changes to this project are documented here. The format follows
   every component of a release is under an OSI-approved licence. Font licences
   ship in every package.
 - Docs site: black "coal" theme and the Pak Pos favicon.
-
-### Added
-- Code signing policy and privacy policy (docs), and Windows signing through
-  SignPath in the release workflow: off until the project is accepted and the
-  SignPath settings exist, then the executables and the installer are signed
-  and checked before the release is published.
+- Dependencies: rand 0.10, base64 0.23, and the RustCrypto 0.11 generation
+  together (sha2 0.11, hmac 0.13, md-5 0.11, md4 0.11).
 
 ## [0.3.0-rc.1] - 2026-10-14
 

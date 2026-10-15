@@ -10,7 +10,7 @@ use crate::model::{Auth, ClientAuthMethod, OAuth2Config, OAuth2Grant};
 use crate::vars::VarScope;
 use base64::Engine;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
