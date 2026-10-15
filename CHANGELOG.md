@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Dependencies: rand 0.10, base64 0.23, and the RustCrypto 0.11 generation
+  together (sha2 0.11, hmac 0.13, md-5 0.11, md4 0.11).
+
 ## [0.3.0-rc.1] - 2026-10-14
 
 ### Added

@@ -5,7 +5,7 @@ pub mod digest;
 pub mod ntlm;
 pub mod sigv4;
 
-use rand::Rng;
+use rand::RngExt;
 
 /// Credentials for schemes answered after the server's `401` challenge.
 #[derive(Debug, Clone, PartialEq, Eq)]

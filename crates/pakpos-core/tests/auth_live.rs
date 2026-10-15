@@ -1,5 +1,6 @@
 //! Digest and NTLM handshakes against local servers.
 
+use hmac::KeyInit;
 use md5::{Digest, Md5};
 use pakpos_core::auth::ntlm;
 use pakpos_core::http::{self, HttpSettings};

@@ -10,7 +10,7 @@
 //! Unknown variables are left untouched so the user can see what is missing.
 
 use crate::model::{Environment, KeyValue};
-use rand::Rng;
+use rand::RngExt;
 use std::collections::{BTreeSet, HashMap};
 
 /// Layered variable lookup.
