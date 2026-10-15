@@ -9,9 +9,10 @@ All notable changes to this project are documented here. The format follows
 ## [0.3.0-rc.2] - 2026-10-15
 
 ### Added
-- `.rpm` packages for Fedora, RHEL and openSUSE (x86_64 and aarch64). Each
-  release installs the `.deb` on Ubuntu and the `.rpm` on Fedora in clean
-  containers and starts the app before publishing.
+- `.rpm` packages for Fedora, RHEL and openSUSE, and an AppImage for any
+  distribution (x86_64 and aarch64; `PakPos.AppImage cli …` runs pakpos-cli).
+  Each release installs the `.deb` on Ubuntu and the `.rpm` on Fedora, runs the
+  AppImage, all in clean containers, and starts the app before publishing.
 - Code signing policy and privacy policy (docs), and Windows signing through
   SignPath in the release workflow: off until the project is accepted and the
   SignPath settings exist, then the executables and the installer are signed
@@ -29,8 +30,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 - Linux packages now depend on the libraries the app loads at runtime
-  (xkbcommon, EGL/OpenGL, X11 or Wayland); before, the `.deb` only required
-  libc and could install on a system where the app could not start.
+  (xkbcommon, EGL/OpenGL, X11 or Wayland) and on `ca-certificates`; before,
+  the `.deb` only required libc and could install on a system where the app
+  could not start, or where every request failed.
+- On a system without CA certificates, requests failed with a bare
+  "builder error"; the message now says to install them or set `SSL_CERT_FILE`.
+- The desktop entry listed two main categories (Development and Network), so
+  some menus showed PakPos twice; it is now Development / WebDevelopment.
 
 ## [0.3.0-rc.1] - 2026-10-14
 

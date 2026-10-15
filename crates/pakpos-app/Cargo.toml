@@ -44,7 +44,7 @@ priority = "optional"
 extended-description = "PakPos is a fast, native, open-source API client written in Rust. Includes the desktop app (pakpos) and the CLI runner / MCP server (pakpos-cli)."
 # The GUI libraries are loaded at runtime (dlopen), so $auto only finds libc:
 # list them. Either X11 or Wayland is enough.
-depends = "$auto, libxkbcommon0, libegl1 | libgl1, libx11-6 | libwayland-client0"
+depends = "$auto, ca-certificates, libxkbcommon0, libegl1 | libgl1, libx11-6 | libwayland-client0"
 recommends = "libxkbcommon-x11-0, libxcursor1, libxi6, libwayland-egl1"
 assets = [
   ["target/release/pakpos", "usr/bin/", "755"],
@@ -72,6 +72,7 @@ assets = [
 # Same reason as for the .deb: the GUI libraries are loaded at runtime. Sonames
 # work on Fedora, RHEL and openSUSE alike.
 [package.metadata.generate-rpm.requires]
+ca-certificates = "*"
 "libxkbcommon.so.0()(64bit)" = "*"
 "libEGL.so.1()(64bit)" = "*"
 

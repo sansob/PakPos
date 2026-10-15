@@ -6,6 +6,6 @@ Comment=Fast, native, open-source API client
 Exec=pakpos
 Icon=pakpos
 Terminal=false
-Categories=Development;Network;
+Categories=Development;WebDevelopment;
 Keywords=api;http;rest;postman;client;
 StartupWMClass=dev.pakpos.PakPos
