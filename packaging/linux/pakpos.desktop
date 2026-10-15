@@ -7,5 +7,5 @@ Exec=pakpos
 Icon=pakpos
 Terminal=false
 Categories=Development;WebDevelopment;
-Keywords=api;http;rest;postman;client;
+Keywords=api;http;rest;client;graphql;grpc;
 StartupWMClass=dev.pakpos.PakPos

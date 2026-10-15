@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/sansob/PakPos"
 homepage = "https://github.com/sansob/PakPos"
 authors = ["PakPos contributors"]
-keywords = ["http", "api", "rest", "postman", "client"]
+keywords = ["http", "api", "rest", "client", "testing"]
 categories = ["development-tools", "web-programming::http-client"]
 
 [workspace.dependencies]

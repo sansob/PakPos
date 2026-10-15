@@ -35,6 +35,8 @@ All notable changes to this project are documented here. The format follows
   could not start, or where every request failed.
 - On a system without CA certificates, requests failed with a bare
   "builder error"; the message now says to install them or set `SSL_CERT_FILE`.
+- "postman" is no longer a search keyword (crate keywords, desktop entry):
+  Postman is only mentioned where PakPos imports its formats.
 - The desktop entry listed two main categories (Development and Network), so
   some menus showed PakPos twice; it is now Development / WebDevelopment.
 
