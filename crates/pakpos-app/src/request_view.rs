@@ -52,44 +52,51 @@ impl PakPosApp {
                     for (i, tab) in self.tabs.iter().enumerate() {
                         let selected = i == self.active;
                         let fill = if selected { p.surface } else { p.bg };
-                        let resp = egui::Frame::new()
-                            .fill(fill)
-                            .corner_radius(egui::CornerRadius { nw: 7, ne: 7, sw: 0, se: 0 })
-                            .inner_margin(Margin::symmetric(10, 7))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 6.0;
-                                    widgets::method_label(ui, &tab.request);
-                                    let mut name = tab.request.name.clone();
-                                    if name.chars().count() > 26 {
-                                        name = format!("{}…", name.chars().take(26).collect::<String>());
-                                    }
-                                    let color = if selected { p.text } else { p.text_weak };
-                                    ui.add(egui::Label::new(RichText::new(name).color(color)).selectable(false));
-                                    if tab.dirty {
-                                        ui.label(RichText::new("●").size(9.0).color(theme::ORANGE));
-                                    }
-                                    if ui
-                                        .add(
-                                            egui::Button::new(RichText::new("×").size(11.0).color(p.text_weak))
-                                                .frame(false),
-                                        )
-                                        .on_hover_text(crate::i18n::tr("Close (Ctrl+W)"))
-                                        .clicked()
-                                    {
-                                        close = Some(i);
-                                    }
-                                });
+                        // The tab senses clicks through its scope, which is registered
+                        // before its children, so the close button stays on top of it.
+                        let builder = egui::UiBuilder::new().id_salt(("tab", tab.uid)).sense(Sense::click());
+                        let tab_resp = ui
+                            .scope_builder(builder, |ui| {
+                                egui::Frame::new()
+                                    .fill(fill)
+                                    .corner_radius(egui::CornerRadius { nw: 7, ne: 7, sw: 0, se: 0 })
+                                    .inner_margin(Margin::symmetric(10, 7))
+                                    .show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.spacing_mut().item_spacing.x = 6.0;
+                                            widgets::method_label(ui, &tab.request);
+                                            let mut name = tab.request.name.clone();
+                                            if name.chars().count() > 26 {
+                                                name = format!("{}…", name.chars().take(26).collect::<String>());
+                                            }
+                                            let color = if selected { p.text } else { p.text_weak };
+                                            ui.add(
+                                                egui::Label::new(RichText::new(name).color(color)).selectable(false),
+                                            );
+                                            if tab.dirty {
+                                                ui.label(RichText::new("●").size(9.0).color(theme::ORANGE));
+                                            }
+                                            if ui
+                                                .add(
+                                                    egui::Button::new(RichText::new("×").size(11.0).color(p.text_weak))
+                                                        .frame(false),
+                                                )
+                                                .on_hover_text(crate::i18n::tr("Close (Ctrl+W)"))
+                                                .clicked()
+                                            {
+                                                close = Some(i);
+                                            }
+                                        });
+                                    });
                             })
                             .response;
                         if selected {
-                            let r = resp.rect;
+                            let r = tab_resp.rect;
                             ui.painter().line_segment(
                                 [r.left_top() + egui::vec2(6.0, 0.0), r.right_top() - egui::vec2(6.0, 0.0)],
                                 Stroke::new(2.0, theme::ORANGE),
                             );
                         }
-                        let tab_resp = ui.interact(resp.rect, egui::Id::new(("tab", tab.uid)), Sense::click());
                         if tab_resp.clicked() {
                             select = Some(i);
                         }
@@ -218,7 +225,7 @@ impl PakPosApp {
                 .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                 .vertical_align(egui::Align::Center)
                 .frame(egui::Frame::NONE)
-                .font(egui::TextStyle::Heading)
+                .font(egui::TextStyle::Body)
                 .desired_width(ui.available_width() - 200.0);
             changed |= ui.add(name).changed();
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

@@ -291,6 +291,7 @@ pub struct PakPosApp {
     pub registry: pakpos_core::storage::WorkspaceRegistry,
     /// Open tabs of the other workspaces, by workspace folder.
     pub sessions: std::collections::HashMap<String, SavedSession>,
+    pub update: crate::update_view::UpdateState,
 }
 
 impl PakPosApp {
@@ -325,6 +326,7 @@ impl PakPosApp {
             actions: Vec::new(),
             registry: pakpos_core::storage::WorkspaceRegistry::load(),
             sessions: Default::default(),
+            update: Default::default(),
         };
         for c in &app.ws.collections {
             app.open_nodes.insert(c.id.clone());
@@ -347,6 +349,9 @@ impl PakPosApp {
         }
         for e in load_errors {
             app.toast_error(e);
+        }
+        if restore && app.ws.settings.check_updates {
+            app.check_for_updates(&cc.egui_ctx, false);
         }
         app
     }
@@ -1075,6 +1080,20 @@ impl PakPosApp {
                         {
                             self.dialog = Some(Dialog::About);
                         }
+                        if let Some(r) = self.update.available() {
+                            let text = crate::i18n::trf("Update available: {v}", &[("v", &r.version)]);
+                            if ui
+                                .add(
+                                    egui::Label::new(RichText::new(text).small().strong().color(theme::ORANGE))
+                                        .sense(egui::Sense::click()),
+                                )
+                                .on_hover_text(crate::i18n::tr("Show release details"))
+                                .clicked()
+                            {
+                                self.dialog = Some(Dialog::About);
+                            }
+                            ui.separator();
+                        }
                         ui.label(
                             RichText::new(crate::i18n::tr(crate::i18n::tr(
                                 "Ctrl+Enter send  ·  Ctrl+S save  ·  Ctrl+T new tab  ·  Ctrl+I import cURL",
@@ -1193,6 +1212,7 @@ impl eframe::App for PakPosApp {
         self.runner_window(&ctx);
         self.mock_window(&ctx);
         self.git_window(&ctx);
+        self.poll_updates();
         self.show_toasts(&ctx);
         self.apply_actions();
 

@@ -18,6 +18,28 @@ pub(crate) fn title(ui: &mut egui::Ui, text: &str) {
     ui.add_space(8.0);
 }
 
+/// Whether Enter was pressed in this single-line field. Check it before
+/// [`focus_once`], which would otherwise take the focus straight back.
+pub(crate) fn submitted(ui: &egui::Ui, resp: &egui::Response) -> bool {
+    resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+}
+
+/// Focuses the field on the first frame it is shown, then leaves the focus
+/// alone so Enter, Tab and clicks elsewhere behave normally.
+pub(crate) fn focus_once(ui: &egui::Ui, resp: &egui::Response) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let id = resp.id.with("focus_once");
+    let last: Option<u64> = ui.data_mut(|d| {
+        let last = d.get_temp(id);
+        d.insert_temp(id, pass);
+        last
+    });
+    // Not shown on the previous pass: the dialog has just opened.
+    if last.is_none_or(|l| l + 1 < pass) {
+        resp.request_focus();
+    }
+}
+
 impl PakPosApp {
     pub fn dialogs(&mut self, ctx: &egui::Context) {
         let Some(mut dialog) = self.dialog.take() else { return };
@@ -79,12 +101,14 @@ impl PakPosApp {
                     ui.set_width(440.0);
                     title(ui, crate::i18n::tr("Save request"));
                     ui.label(crate::i18n::tr("Name"));
-                    ui.add(
+                    let name_resp = ui.add(
                         egui::TextEdit::singleline(name)
                             .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                             .vertical_align(egui::Align::Center)
                             .desired_width(f32::INFINITY),
                     );
+                    let mut save = submitted(ui, &name_resp);
+                    focus_once(ui, &name_resp);
                     ui.add_space(8.0);
                     ui.label(crate::i18n::tr("Collection"));
                     egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
@@ -94,18 +118,18 @@ impl PakPosApp {
                         ui.radio_value(collection, None, crate::i18n::tr("New collection…"));
                     });
                     if collection.is_none() {
-                        ui.add(
+                        let resp = ui.add(
                             egui::TextEdit::singleline(new_collection)
                                 .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                                 .vertical_align(egui::Align::Center)
                                 .hint_text(crate::i18n::tr("Collection name"))
                                 .desired_width(f32::INFINITY),
                         );
+                        save |= submitted(ui, &resp);
                     }
                     ui.add_space(10.0);
-                    let mut save = false;
                     ui.horizontal(|ui| {
-                        save = widgets::primary_button(ui, crate::i18n::tr("Save")).clicked();
+                        save |= widgets::primary_button(ui, crate::i18n::tr("Save")).clicked();
                         if ui.button(crate::i18n::tr("Cancel")).clicked() {
                             keep = false;
                         }
@@ -166,9 +190,9 @@ impl PakPosApp {
                             .hint_text(crate::i18n::tr("e.g. Payments API"))
                             .desired_width(f32::INFINITY),
                     );
-                    resp.request_focus();
+                    let mut ok = submitted(ui, &resp);
+                    focus_once(ui, &resp);
                     ui.add_space(10.0);
-                    let mut ok = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.horizontal(|ui| {
                         ok |= widgets::primary_button(ui, crate::i18n::tr("Create")).clicked();
                         if ui.button(crate::i18n::tr("Cancel")).clicked() {
@@ -201,9 +225,9 @@ impl PakPosApp {
                             .vertical_align(egui::Align::Center)
                             .desired_width(f32::INFINITY),
                     );
-                    resp.request_focus();
+                    let mut ok = submitted(ui, &resp);
+                    focus_once(ui, &resp);
                     ui.add_space(10.0);
-                    let mut ok = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.horizontal(|ui| {
                         ok |= widgets::primary_button(ui, crate::i18n::tr("Rename")).clicked();
                         if ui.button(crate::i18n::tr("Cancel")).clicked() {
@@ -368,6 +392,9 @@ impl PakPosApp {
                         ui.label(crate::i18n::tr("Verify TLS certificates"));
                         changed |= ui.checkbox(&mut s.http.verify_tls, "").changed();
                         ui.end_row();
+                        ui.label(crate::i18n::tr("Check for updates at startup"));
+                        changed |= ui.checkbox(&mut s.check_updates, "").changed();
+                        ui.end_row();
                         ui.label(crate::i18n::tr("Proxy"));
                         changed |= ui
                             .add(
@@ -490,14 +517,14 @@ impl PakPosApp {
             }
             Dialog::About => {
                 let r = egui::Modal::new(Id::new("about")).frame(modal_frame(&p)).show(ctx, |ui| {
-                    ui.set_width(420.0);
+                    ui.set_width(520.0);
                     ui.vertical_centered(|ui| {
                         ui.add(
                             egui::Image::new(egui::include_image!("../../../assets/icon-256.png"))
                                 .fit_to_exact_size(egui::vec2(96.0, 96.0)),
                         );
                         ui.horizontal(|ui| {
-                            ui.add_space(130.0);
+                            ui.add_space(180.0);
                             ui.label(RichText::new("Pak").size(30.0).strong().color(theme::ORANGE));
                             ui.add_space(-8.0);
                             ui.label(RichText::new("Pos").size(30.0).strong().color(if p.dark {
@@ -515,7 +542,13 @@ impl PakPosApp {
                                 .small()
                                 .color(p.text_weak),
                         );
-                        ui.add_space(10.0);
+                        ui.add_space(8.0);
+                        self.update_section(ui);
+                    });
+                    ui.add_space(6.0);
+                    crate::update_view::credits_section(ui, &p);
+                    ui.add_space(10.0);
+                    ui.vertical_centered(|ui| {
                         if ui.button(crate::i18n::tr("Close")).clicked() {
                             keep = false;
                         }
@@ -572,7 +605,7 @@ impl PakPosApp {
                         let scope = pakpos_core::vars::VarScope::new();
                         match selected.clone() {
                             None => {
-                                ui.label(RichText::new(crate::i18n::tr("Globals")).strong().size(16.0));
+                                ui.label(RichText::new(crate::i18n::tr("Globals")).strong());
                                 ui.label(
                                     RichText::new(crate::i18n::tr("Available in every request, lowest priority."))
                                         .small()
@@ -596,7 +629,7 @@ impl PakPosApp {
                                                 egui::TextEdit::singleline(&mut env.name)
                                                     .min_size(egui::vec2(0.0, crate::theme::CONTROL_HEIGHT))
                                                     .vertical_align(egui::Align::Center)
-                                                    .font(egui::TextStyle::Heading)
+                                                    .font(egui::TextStyle::Body)
                                                     .desired_width(260.0),
                                             )
                                             .changed();

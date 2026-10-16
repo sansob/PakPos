@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// Coloured method label, e.g. `GET` in green.
 pub fn method_label(ui: &mut Ui, r: &pakpos_core::Request) -> egui::Response {
     let (text, color) = theme::badge(r);
-    ui.add(egui::Label::new(RichText::new(text).color(color).strong().monospace().size(11.5)).selectable(false))
+    ui.add(egui::Label::new(RichText::new(text).color(color).strong().font(theme::small_mono(ui))).selectable(false))
 }
 
 /// A filled rounded "pill" with text.
@@ -20,7 +20,7 @@ pub fn pill(ui: &mut Ui, text: impl Into<String>, fg: Color32, bg: Color32) -> e
         .corner_radius(CornerRadius::same(10))
         .inner_margin(Margin::symmetric(8, 2))
         .show(ui, |ui| {
-            ui.add(egui::Label::new(RichText::new(text.into()).color(fg).strong().size(12.5)).selectable(false))
+            ui.add(egui::Label::new(RichText::new(text.into()).color(fg).strong().small()).selectable(false))
         })
         .inner
 }
@@ -46,7 +46,7 @@ pub fn ghost_button(ui: &mut Ui, text: &str, tooltip: &str) -> egui::Response {
 
 /// Section heading in weak colour.
 pub fn section_title(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(text.to_uppercase()).size(11.0).strong().color(ui.visuals().weak_text_color()));
+    ui.label(RichText::new(text.to_uppercase()).small().strong().color(ui.visuals().weak_text_color()));
 }
 
 /// Tab-like selector row. Returns true if the selection changed.
@@ -181,7 +181,10 @@ pub fn kv_table(ui: &mut Ui, id: &str, rows: &mut Vec<KeyValue>, scope: &VarScop
             ui.push_id(i, |ui| {
                 ui.horizontal(|ui| {
                     if last {
-                        ui.allocate_exact_size(egui::vec2(22.0, 22.0), Sense::hover());
+                        // Same footprint as the checkbox, so the blank row lines up.
+                        ui.add_visible(false, |ui: &mut Ui| {
+                            ui.add_sized([22.0, 22.0], egui::Checkbox::without_text(&mut true))
+                        });
                     } else {
                         changed |= ui.add_sized([22.0, 22.0], egui::Checkbox::without_text(&mut row.enabled)).changed();
                     }
@@ -228,7 +231,10 @@ pub fn form_table(ui: &mut Ui, rows: &mut Vec<FormField>, scope: &VarScope) -> b
             ui.push_id(i, |ui| {
                 ui.horizontal(|ui| {
                     if last {
-                        ui.allocate_exact_size(egui::vec2(22.0, 22.0), Sense::hover());
+                        // Same footprint as the checkbox, so the blank row lines up.
+                        ui.add_visible(false, |ui: &mut Ui| {
+                            ui.add_sized([22.0, 22.0], egui::Checkbox::without_text(&mut true))
+                        });
                     } else {
                         changed |= ui.add_sized([22.0, 22.0], egui::Checkbox::without_text(&mut row.enabled)).changed();
                     }
@@ -288,7 +294,7 @@ pub fn trim_blank_fields(rows: &mut Vec<FormField>) {
 pub fn empty_state(ui: &mut Ui, p: &Palette, title: &str, hint: &str) {
     ui.vertical_centered(|ui| {
         ui.add_space(ui.available_height() * 0.25);
-        ui.label(RichText::new(title).size(17.0).strong().color(p.text));
+        ui.label(RichText::new(title).heading().strong().color(p.text));
         ui.add_space(4.0);
         ui.label(RichText::new(hint).color(p.text_weak));
     });

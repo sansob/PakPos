@@ -155,8 +155,7 @@ pub fn editor(
                                                 .add(
                                                     egui::Label::new(
                                                         RichText::new(format!("{}{args}: {}", f.name, f.ty))
-                                                            .monospace()
-                                                            .size(12.0),
+                                                            .monospace(),
                                                     )
                                                     .sense(egui::Sense::click()),
                                                 )
