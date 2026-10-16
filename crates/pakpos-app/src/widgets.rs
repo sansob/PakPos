@@ -128,6 +128,80 @@ pub fn highlight_vars(text: &str, scope: &VarScope, font: FontId, base: Color32)
     job
 }
 
+/// Multi-line code editor with line numbers in a gutter on the left.
+///
+/// `configure` sets up the [`egui::TextEdit`] as usual (id, rows, layouter…);
+/// only its left margin is taken over for the gutter. A wrapped line gets one
+/// number, on its first row.
+pub fn code_editor<'t>(
+    ui: &mut Ui,
+    text: &'t mut dyn egui::TextBuffer,
+    configure: impl FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+) -> egui::Response {
+    numbered(ui, text, false, configure)
+}
+
+/// [`code_editor`] without a frame or background, for read-only views.
+pub fn code_view<'t>(
+    ui: &mut Ui,
+    text: &'t mut dyn egui::TextBuffer,
+    configure: impl FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+) -> egui::Response {
+    numbered(ui, text, true, configure)
+}
+
+fn numbered<'t>(
+    ui: &mut Ui,
+    text: &'t mut dyn egui::TextBuffer,
+    frameless: bool,
+    configure: impl FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+) -> egui::Response {
+    let lines = text.as_str().split('\n').count();
+    let font = theme::small_mono(ui);
+    let digit_w = ui.ctx().fonts_mut(|f| f.glyph_width(&font, '0'));
+    let digits = lines.to_string().len().max(2) as f32;
+    let gutter = (digits * digit_w + 16.0).round();
+    let margin = Margin { left: gutter as i8, right: 4, top: 2, bottom: 2 };
+    let edit = configure(egui::TextEdit::multiline(text).code_editor());
+    // A custom frame replaces the margin when painting, so the gutter goes into
+    // the frame too; the margin is still used for the wrap width.
+    let edit = edit.margin(margin);
+    let edit = if frameless { edit.frame(egui::Frame::NONE.inner_margin(margin)) } else { edit };
+    let out = edit.show(ui);
+    let rect = out.response.response.rect;
+    let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+    let weak = ui.visuals().weak_text_color();
+    let line_x = rect.left() + gutter - 6.0;
+    painter.line_segment(
+        [egui::pos2(line_x, rect.top() + 2.0), egui::pos2(line_x, rect.bottom() - 2.0)],
+        Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color),
+    );
+    let current = out.cursor_range.map(|c| c.primary.index.0);
+    let mut line = 1;
+    let mut starts_line = true;
+    let mut offset = 0; // chars before this row
+    for row in &out.galley.rows {
+        let chars = row.glyphs.len() + usize::from(row.ends_with_newline);
+        if starts_line {
+            let r = row.rect().translate(out.galley_pos.to_vec2());
+            if r.bottom() >= painter.clip_rect().top() && r.top() <= painter.clip_rect().bottom() {
+                let here = current.is_some_and(|c| c >= offset && c < offset + chars.max(1));
+                painter.text(
+                    egui::pos2(line_x - 6.0, r.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    line.to_string(),
+                    font.clone(),
+                    if here { ui.visuals().text_color() } else { weak },
+                );
+            }
+            line += 1;
+        }
+        offset += chars;
+        starts_line = row.ends_with_newline;
+    }
+    out.response.response
+}
+
 /// Single-line text edit with `{{var}}` highlighting.
 pub fn var_text_edit(ui: &mut Ui, value: &mut String, scope: &VarScope, hint: &str, width: f32) -> egui::Response {
     let font = egui::TextStyle::Body.resolve(ui.style());

@@ -71,17 +71,10 @@ fn editor(
         job.wrap.max_width = wrap_width;
         ui.ctx().fonts_mut(|f| f.layout_job(job))
     };
-    changed |= ui
-        .add(
-            egui::TextEdit::multiline(code)
-                .id_salt(id)
-                .code_editor()
-                .desired_rows(5)
-                .desired_width(f32::INFINITY)
-                .hint_text(hint)
-                .layouter(&mut layouter),
-        )
-        .changed();
+    changed |= crate::widgets::code_editor(ui, code, |e| {
+        e.id_salt(id).desired_rows(5).desired_width(f32::INFINITY).hint_text(hint).layouter(&mut layouter)
+    })
+    .changed();
     changed
 }
 

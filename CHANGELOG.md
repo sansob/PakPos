@@ -17,6 +17,10 @@ All notable changes to this project are documented here. The format follows
   releases list.
 - The About dialog lists the open-source libraries and fonts PakPos is built
   on, with their licences.
+- Line numbers in every code editor (body, GraphQL query and variables,
+  scripts, gRPC, WebSocket, MCP and mock example bodies) and in the response
+  body. The current line's number is highlighted; a wrapped line keeps one
+  number. Drawn next to the existing syntax highlighting, no new dependency.
 
 ### Changed
 - Text sizes are consistent: section titles, badges, method labels, the empty

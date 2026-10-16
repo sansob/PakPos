@@ -935,17 +935,14 @@ fn body_editor(
                 job.wrap.max_width = wrap_width;
                 ui.ctx().fonts_mut(|f| f.layout_job(job))
             };
-            changed |= ui
-                .add(
-                    egui::TextEdit::multiline(content)
-                        .id_salt(("body", uid))
-                        .code_editor()
-                        .desired_rows(14)
-                        .desired_width(f32::INFINITY)
-                        .hint_text(crate::i18n::tr("{ \"name\": \"{{username}}\" }"))
-                        .layouter(&mut layouter),
-                )
-                .changed();
+            changed |= crate::widgets::code_editor(ui, content, |e| {
+                e.id_salt(("body", uid))
+                    .desired_rows(14)
+                    .desired_width(f32::INFINITY)
+                    .hint_text(crate::i18n::tr("{ \"name\": \"{{username}}\" }"))
+                    .layouter(&mut layouter)
+            })
+            .changed();
             if *language == RawLanguage::Json && !content.trim().is_empty() {
                 let resolved = scope.resolve(content);
                 if let Err(e) = serde_json::from_str::<serde_json::Value>(&resolved) {
