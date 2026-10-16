@@ -517,22 +517,21 @@ impl PakPosApp {
             }
             Dialog::About => {
                 let r = egui::Modal::new(Id::new("about")).frame(modal_frame(&p)).show(ctx, |ui| {
-                    ui.set_width(520.0);
+                    // Fixed width: opening the libraries list must not resize the dialog.
+                    ui.set_width(640.0);
+                    ui.set_max_width(640.0);
                     ui.vertical_centered(|ui| {
                         ui.add(
                             egui::Image::new(egui::include_image!("../../../assets/icon-256.png"))
                                 .fit_to_exact_size(egui::vec2(96.0, 96.0)),
                         );
-                        ui.horizontal(|ui| {
-                            ui.add_space(180.0);
-                            ui.label(RichText::new("Pak").size(30.0).strong().color(theme::ORANGE));
-                            ui.add_space(-8.0);
-                            ui.label(RichText::new("Pos").size(30.0).strong().color(if p.dark {
-                                egui::Color32::WHITE
-                            } else {
-                                theme::NAVY_700
-                            }));
-                        });
+                        // One label, so it centres like the lines below it.
+                        let mut logo = egui::text::LayoutJob::default();
+                        let font = egui::FontId::proportional(30.0);
+                        let pos = if p.dark { egui::Color32::WHITE } else { theme::NAVY_700 };
+                        logo.append("Pak", 0.0, egui::TextFormat::simple(font.clone(), theme::ORANGE));
+                        logo.append("Pos", 0.0, egui::TextFormat::simple(font, pos));
+                        ui.label(logo);
                         ui.label(crate::i18n::trf("Version {v}", &[("v", pakpos_core::VERSION)]));
                         ui.add_space(6.0);
                         ui.label(crate::i18n::tr("A fast, native, open-source API client written in Rust."));

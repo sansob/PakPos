@@ -12,8 +12,8 @@ All notable changes to this project are documented here. The format follows
 - Update check: PakPos looks for a newer release on GitHub when it starts
   (Settings → "Check for updates at startup", on by default) and from the
   About dialog. Pre-release builds are offered pre-releases too; stable builds
-  only stable releases. A newer version shows in the status bar with a link to
-  its release page. Nothing is sent besides the request for the public
+  only stable releases. A newer version shows in a notification and in the
+  status bar, with a link to its release page. Nothing is sent besides the request for the public
   releases list.
 - The About dialog lists the open-source libraries and fonts PakPos is built
   on, with their licences.

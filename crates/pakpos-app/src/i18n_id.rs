@@ -466,7 +466,8 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Data folders", "Folder data"),
     ("Opening links", "Membuka tautan"),
     ("Command line (pakpos-cli)", "Command line (pakpos-cli)"),
-    ("Fonts", "Font"),
+    ("Protobuf reflection, .proto parsing", "Refleksi Protobuf, parsing .proto"),
+    ("Emoji, symbols, arrows", "Emoji, simbol, panah"),
     ("IDs", "ID"),
 ];
 

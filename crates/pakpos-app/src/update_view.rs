@@ -42,22 +42,18 @@ const CREDITS: &[(&str, &str, &str, &str)] = &[
     ("rustls", "TLS", "Apache-2.0 OR ISC OR MIT", "https://github.com/rustls/rustls"),
     ("tokio", "Async runtime", "MIT", "https://github.com/tokio-rs/tokio"),
     ("tonic", "gRPC", "MIT", "https://github.com/hyperium/tonic"),
+    ("prost", "Protocol Buffers", "Apache-2.0", "https://github.com/tokio-rs/prost"),
     (
-        "prost / prost-reflect / protox",
-        "Protocol Buffers",
-        "Apache-2.0, MIT OR Apache-2.0",
-        "https://github.com/tokio-rs/prost",
+        "prost-reflect / protox",
+        "Protobuf reflection, .proto parsing",
+        "MIT OR Apache-2.0",
+        "https://github.com/andrewhickman/protox",
     ),
     ("tungstenite", "WebSocket", "MIT OR Apache-2.0", "https://github.com/snapview/tungstenite-rs"),
     ("rquickjs (QuickJS)", "JavaScript scripts", "MIT", "https://github.com/DelSkayn/rquickjs"),
     ("serde / serde_json", "JSON", "MIT OR Apache-2.0", "https://github.com/serde-rs/serde"),
     ("yaml-rust2", "YAML (OpenAPI import)", "MIT OR Apache-2.0", "https://github.com/Ethiraric/yaml-rust2"),
-    (
-        "RustCrypto (sha2, hmac, md-5, md4)",
-        "Hashes and signatures",
-        "MIT OR Apache-2.0",
-        "https://github.com/RustCrypto",
-    ),
+    ("RustCrypto hashes", "Hashes and signatures", "MIT OR Apache-2.0", "https://github.com/RustCrypto"),
     ("cookie", "Cookie jar", "MIT OR Apache-2.0", "https://github.com/SergioBenitez/cookie-rs"),
     ("chrono", "Dates and times", "MIT OR Apache-2.0", "https://github.com/chronotope/chrono"),
     ("url", "URL parsing", "MIT OR Apache-2.0", "https://github.com/servo/rust-url"),
@@ -69,7 +65,7 @@ const CREDITS: &[(&str, &str, &str, &str)] = &[
     ("clap", "Command line (pakpos-cli)", "MIT OR Apache-2.0", "https://github.com/clap-rs/clap"),
     ("Inter", "Font", "OFL-1.1", "https://github.com/rsms/inter"),
     ("JetBrains Mono", "Font", "OFL-1.1", "https://github.com/JetBrains/JetBrainsMono"),
-    ("Noto Emoji, Noto Sans Math, Noto Sans Symbols 2", "Fonts", "OFL-1.1", "https://github.com/google/fonts"),
+    ("Noto fonts", "Emoji, symbols, arrows", "OFL-1.1", "https://github.com/google/fonts"),
 ];
 
 impl PakPosApp {
@@ -97,7 +93,12 @@ impl PakPosApp {
         self.update.status = match result {
             Ok(Some(r)) => {
                 if !manual {
-                    self.toast(crate::i18n::trf("PakPos {v} is available", &[("v", &r.version)]));
+                    // Longer than a normal toast: it is easy to miss while the app opens.
+                    self.toasts.push(crate::app::Toast {
+                        text: crate::i18n::trf("PakPos {v} is available", &[("v", &r.version)]),
+                        error: false,
+                        until: std::time::Instant::now() + std::time::Duration::from_secs(12),
+                    });
                 }
                 UpdateStatus::Available(r)
             }
@@ -111,38 +112,35 @@ impl PakPosApp {
     /// Update status line and button, for the About dialog.
     pub fn update_section(&mut self, ui: &mut Ui) {
         let p = self.palette;
-        let mut check = false;
-        ui.horizontal(|ui| {
-            match &self.update.status {
-                UpdateStatus::Idle => {}
-                UpdateStatus::Checking => {
-                    ui.spinner();
-                    ui.label(RichText::new(crate::i18n::tr("Checking for updates…")).color(p.text_weak));
-                }
-                UpdateStatus::UpToDate => {
-                    ui.label(RichText::new(crate::i18n::tr("✔ You have the latest version")).color(theme::GREEN));
-                }
-                UpdateStatus::Available(r) => {
-                    ui.label(
-                        RichText::new(crate::i18n::trf("PakPos {v} is available", &[("v", &r.version)]))
-                            .strong()
-                            .color(theme::ORANGE),
-                    );
-                    if crate::widgets::primary_button(ui, crate::i18n::tr("Download")).clicked() {
-                        let _ = webbrowser::open(&r.url);
-                    }
-                }
-                UpdateStatus::Failed(e) => {
-                    ui.label(RichText::new(crate::i18n::tr("Could not check for updates")).color(theme::RED))
-                        .on_hover_text(e.as_str());
-                }
+        // One widget per line, so each line centres in the About dialog.
+        match &self.update.status {
+            UpdateStatus::Idle => {}
+            UpdateStatus::Checking => {
+                ui.label(RichText::new(crate::i18n::tr("Checking for updates…")).color(p.text_weak));
             }
-            let busy = matches!(self.update.status, UpdateStatus::Checking);
-            if ui.add_enabled(!busy, egui::Button::new(crate::i18n::tr("Check for updates"))).clicked() {
-                check = true;
+            UpdateStatus::UpToDate => {
+                ui.label(RichText::new(crate::i18n::tr("✔ You have the latest version")).color(theme::GREEN));
             }
-        });
-        if check {
+            UpdateStatus::Available(r) => {
+                ui.label(
+                    RichText::new(crate::i18n::trf("PakPos {v} is available", &[("v", &r.version)]))
+                        .strong()
+                        .color(theme::ORANGE),
+                );
+                ui.add_space(4.0);
+                if crate::widgets::primary_button(ui, crate::i18n::tr("Download")).clicked() {
+                    let _ = webbrowser::open(&r.url);
+                }
+                return;
+            }
+            UpdateStatus::Failed(e) => {
+                ui.label(RichText::new(crate::i18n::tr("Could not check for updates")).color(theme::RED))
+                    .on_hover_text(e.as_str());
+            }
+        }
+        ui.add_space(4.0);
+        let busy = matches!(self.update.status, UpdateStatus::Checking);
+        if ui.add_enabled(!busy, egui::Button::new(crate::i18n::tr("Check for updates"))).clicked() {
             self.check_for_updates(ui.ctx(), true);
         }
     }
