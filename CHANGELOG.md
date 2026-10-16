@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-16
+
+### Added
+- Update check: PakPos looks for a newer release on GitHub when it starts
+  (Settings → "Check for updates at startup", on by default) and from the
+  About dialog. Pre-release builds are offered pre-releases too; stable builds
+  only stable releases. A newer version shows in the status bar with a link to
+  its release page. Nothing is sent besides the request for the public
+  releases list.
+- The About dialog lists the open-source libraries and fonts PakPos is built
+  on, with their licences.
+
+### Changed
+- Text sizes are consistent: section titles, badges, method labels, the empty
+  state title and the request and environment names use the theme's text
+  styles instead of hard-coded sizes, so they also follow the font size
+  setting. The request and environment name fields use the body size.
+
+### Fixed
+- The × on a tab did not close it: the tab's own click area sat on top of the
+  button and took the click.
+- Enter did nothing in the New collection and Rename dialogs, because the name
+  field took the focus straight back; Enter now also saves in Save request and
+  creates in New workspace.
+- The empty last row of key/value tables (params, headers, environments, form
+  fields) was shifted left of the rows above it.
+
 ## [0.3.0-rc.2] - 2026-10-15
 
 ### Added
@@ -157,7 +184,8 @@ Release candidate for the first public release.
   (rebase, auto-reload), push, or one-click Sync, scoped to the workspace folder,
   using the installed git and its credentials; personal files are git-ignored.
 
-[Unreleased]: https://github.com/sansob/PakPos/compare/v0.3.0-rc.2...HEAD
+[Unreleased]: https://github.com/sansob/PakPos/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sansob/PakPos/compare/v0.3.0-rc.2...v0.3.0
 [0.3.0-rc.2]: https://github.com/sansob/PakPos/compare/v0.3.0-rc.1...v0.3.0-rc.2
 [0.3.0-rc.1]: https://github.com/sansob/PakPos/compare/v0.2.0-rc.1...v0.3.0-rc.1
 [0.2.0-rc.1]: https://github.com/sansob/PakPos/releases/tag/v0.2.0-rc.1
