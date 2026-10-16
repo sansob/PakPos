@@ -221,6 +221,11 @@ fn setup(app: &mut PakPosApp, name: &str, ctx: &egui::Context) {
             open_by_name(app, "Get with query params");
             app.dialog = Some(Dialog::Settings);
         }
+        "about" => {
+            open_by_name(app, "Get with query params");
+            app.dialog = Some(Dialog::About);
+            app.check_for_updates(ctx, true);
+        }
         "tree" => {
             open_by_name(app, "JSON document");
             let t = &mut app.tabs[app.active];
@@ -281,6 +286,7 @@ fn is_ready(app: &PakPosApp, name: &str) -> bool {
     match name {
         "runner" => app.runner.as_ref().is_some_and(|r| r.report.is_some()),
         "environments" | "curl" | "snippet" | "settings" | "runner-data" => true,
+        "about" => !matches!(app.update.status, crate::update_view::UpdateStatus::Checking),
         "git" => app.git.job.is_none() && app.git.status.as_ref().is_some_and(|s| s.as_ref().is_ok_and(|s| s.is_repo)),
         "grpc" => app.tabs.get(app.active).is_some_and(|t| {
             t.grpc.job.is_none() && matches!(t.response, ResponseState::Done(_) | ResponseState::Error(_))

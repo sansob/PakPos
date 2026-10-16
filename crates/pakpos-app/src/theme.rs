@@ -142,6 +142,12 @@ pub fn method_short(m: HttpMethod) -> &'static str {
     }
 }
 
+/// Monospace at the size of [`TextStyle::Small`], for compact badges. Follows
+/// the font size setting, like every other text style.
+pub fn small_mono(ui: &egui::Ui) -> FontId {
+    FontId::monospace(TextStyle::Small.resolve(ui.style()).size)
+}
+
 /// Height of every button, combo box and single-line input.
 pub const CONTROL_HEIGHT: f32 = 28.0;
 

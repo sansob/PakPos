@@ -202,16 +202,10 @@ pub fn editor(
         job.wrap.max_width = wrap_width;
         ui.ctx().fonts_mut(|f| f.layout_job(job))
     };
-    changed |= ui
-        .add(
-            egui::TextEdit::multiline(content)
-                .id_salt(("grpc_msg", uid))
-                .code_editor()
-                .desired_rows(10)
-                .desired_width(f32::INFINITY)
-                .layouter(&mut layouter),
-        )
-        .changed();
+    changed |= crate::widgets::code_editor(ui, content, |e| {
+        e.id_salt(("grpc_msg", uid)).desired_rows(10).desired_width(f32::INFINITY).layouter(&mut layouter)
+    })
+    .changed();
     changed
 }
 

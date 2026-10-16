@@ -225,15 +225,13 @@ pub fn composer(
         job.wrap.max_width = wrap_width;
         ui.ctx().fonts_mut(|f| f.layout_job(job))
     };
-    let resp = ui.add(
-        egui::TextEdit::multiline(content)
-            .id_salt(("ws_msg", uid))
-            .code_editor()
+    let resp = crate::widgets::code_editor(ui, content, |e| {
+        e.id_salt(("ws_msg", uid))
             .desired_rows(8)
             .desired_width(f32::INFINITY)
             .hint_text(crate::i18n::tr("{ \"type\": \"subscribe\", \"channel\": \"orders\" }"))
-            .layouter(&mut layouter),
-    );
+            .layouter(&mut layouter)
+    });
     changed |= resp.changed();
     let send_shortcut = resp.has_focus() && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
     ui.horizontal(|ui| {

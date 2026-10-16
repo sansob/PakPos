@@ -59,6 +59,13 @@ pub struct Settings {
     /// UI language code ("en", "id"); `None` follows the system locale.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+    /// Look for a newer release on GitHub when the app starts.
+    #[serde(default = "default_true")]
+    pub check_updates: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_theme() -> Theme {
@@ -79,6 +86,7 @@ impl Default for Settings {
             trusted_collections: Vec::new(),
             network_collections: Vec::new(),
             language: None,
+            check_updates: true,
         }
     }
 }

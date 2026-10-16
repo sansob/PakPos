@@ -190,19 +190,19 @@ impl PakPosApp {
                         .vertical_align(egui::Align::Center)
                         .desired_width(f32::INFINITY),
                 );
-                if ui.memory(|m| m.focused().is_none()) {
-                    name_edit.request_focus();
-                }
+                let mut enter = crate::dialogs::submitted(ui, &name_edit);
+                crate::dialogs::focus_once(ui, &name_edit);
                 ui.add_space(6.0);
                 ui.label(crate::i18n::tr("Folder"));
                 ui.horizontal(|ui| {
-                    ui.add(
+                    let path_edit = ui.add(
                         egui::TextEdit::singleline(path)
                             .hint_text(suggested.display().to_string())
                             .min_size(egui::vec2(0.0, theme::CONTROL_HEIGHT))
                             .vertical_align(egui::Align::Center)
                             .desired_width(400.0),
                     );
+                    enter |= crate::dialogs::submitted(ui, &path_edit);
                     if ui.button(crate::i18n::tr("Browse…")).clicked() {
                         if let Some(dir) = rfd::FileDialog::new().pick_folder() {
                             *path = dir.display().to_string();
@@ -223,7 +223,7 @@ impl PakPosApp {
                 let mut create = false;
                 let mut cancel = false;
                 ui.horizontal(|ui| {
-                    create = crate::widgets::primary_button(ui, crate::i18n::tr("Create")).clicked();
+                    create = crate::widgets::primary_button(ui, crate::i18n::tr("Create")).clicked() || enter;
                     cancel = ui.button(crate::i18n::tr("Cancel")).clicked();
                 });
                 (create, cancel)

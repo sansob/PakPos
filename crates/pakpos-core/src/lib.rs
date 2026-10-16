@@ -37,6 +37,7 @@ pub mod scripts;
 pub mod socketio;
 pub mod sse;
 pub mod storage;
+pub mod update;
 pub mod vars;
 pub mod ws;
 

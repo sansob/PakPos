@@ -77,31 +77,25 @@ pub fn editor(
             ui.set_width(editors_w);
             widgets::section_title(ui, crate::i18n::tr("Query"));
             let mut lay = code_layouter("js");
-            changed |= ui
-                .add(
-                    egui::TextEdit::multiline(query)
-                        .id_salt(("gql_query", uid))
-                        .code_editor()
-                        .desired_rows(12)
-                        .desired_width(f32::INFINITY)
-                        .hint_text(crate::i18n::tr("query { me { id name } }"))
-                        .layouter(&mut lay),
-                )
-                .changed();
+            changed |= crate::widgets::code_editor(ui, query, |e| {
+                e.id_salt(("gql_query", uid))
+                    .desired_rows(12)
+                    .desired_width(f32::INFINITY)
+                    .hint_text(crate::i18n::tr("query { me { id name } }"))
+                    .layouter(&mut lay)
+            })
+            .changed();
             ui.add_space(4.0);
             widgets::section_title(ui, crate::i18n::tr("Variables (JSON)"));
             let mut lay = code_layouter("json");
-            changed |= ui
-                .add(
-                    egui::TextEdit::multiline(variables)
-                        .id_salt(("gql_vars", uid))
-                        .code_editor()
-                        .desired_rows(4)
-                        .desired_width(f32::INFINITY)
-                        .hint_text(crate::i18n::tr("{ \"id\": \"{{user_id}}\" }"))
-                        .layouter(&mut lay),
-                )
-                .changed();
+            changed |= crate::widgets::code_editor(ui, variables, |e| {
+                e.id_salt(("gql_vars", uid))
+                    .desired_rows(4)
+                    .desired_width(f32::INFINITY)
+                    .hint_text(crate::i18n::tr("{ \"id\": \"{{user_id}}\" }"))
+                    .layouter(&mut lay)
+            })
+            .changed();
             if !variables.trim().is_empty() && !variables.contains("{{") {
                 if let Err(e) = serde_json::from_str::<serde_json::Value>(variables) {
                     ui.label(
@@ -155,8 +149,7 @@ pub fn editor(
                                                 .add(
                                                     egui::Label::new(
                                                         RichText::new(format!("{}{args}: {}", f.name, f.ty))
-                                                            .monospace()
-                                                            .size(12.0),
+                                                            .monospace(),
                                                     )
                                                     .sense(egui::Sense::click()),
                                                 )

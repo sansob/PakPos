@@ -180,16 +180,10 @@ pub fn editor(
             job.wrap.max_width = wrap_width;
             ui.ctx().fonts_mut(|f| f.layout_job(job))
         };
-        changed |= ui
-            .add(
-                egui::TextEdit::multiline(content)
-                    .id_salt(("mcp_args", uid))
-                    .code_editor()
-                    .desired_rows(8)
-                    .desired_width(f32::INFINITY)
-                    .layouter(&mut layouter),
-            )
-            .changed();
+        changed |= crate::widgets::code_editor(ui, content, |e| {
+            e.id_salt(("mcp_args", uid)).desired_rows(8).desired_width(f32::INFINITY).layouter(&mut layouter)
+        })
+        .changed();
     }
     ui.label(
         RichText::new(crate::i18n::tr(

@@ -22,6 +22,7 @@ mod scene;
 mod scripts_view;
 mod sidebar;
 mod theme;
+mod update_view;
 mod widgets;
 mod workspace_view;
 mod ws_view;
