@@ -60,15 +60,10 @@ pub fn examples_editor(ui: &mut Ui, examples: &mut Vec<Example>, uid: u64, p: &P
                         &pakpos_core::vars::VarScope::new(),
                         "Header",
                     );
-                    changed |= ui
-                        .add(
-                            egui::TextEdit::multiline(&mut ex.body)
-                                .id_salt(("exb", uid, i))
-                                .code_editor()
-                                .desired_rows(6)
-                                .desired_width(f32::INFINITY),
-                        )
-                        .changed();
+                    changed |= crate::widgets::code_editor(ui, &mut ex.body, |e| {
+                        e.id_salt(("exb", uid, i)).desired_rows(6).desired_width(f32::INFINITY)
+                    })
+                    .changed();
                 });
         });
         ui.add_space(4.0);

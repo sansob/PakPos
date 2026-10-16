@@ -268,13 +268,9 @@ impl PakPosApp {
                                         job.wrap.max_width = wrap_width;
                                         ui.ctx().fonts_mut(|f| f.layout_job(job))
                                     };
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut view)
-                                            .code_editor()
-                                            .frame(egui::Frame::NONE)
+                                    crate::widgets::code_view(ui, &mut view, |e| e
                                             .desired_width(f32::INFINITY)
-                                            .layouter(&mut layouter),
-                                    );
+                                            .layouter(&mut layouter));
                                 }
                             },
                         );
