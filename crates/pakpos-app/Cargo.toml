@@ -22,9 +22,9 @@ pakpos-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
-egui = { version = "0.36", default-features = false }
-eframe = { version = "0.36", default-features = false, features = ["glow", "wayland", "x11", "persistence"] }
-egui_extras = { version = "0.36", features = ["syntect", "image"] }
+egui = { version = "0.37", default-features = false }
+eframe = { version = "0.37", default-features = false, features = ["glow", "wayland", "x11", "persistence"] }
+egui_extras = { version = "0.37", features = ["syntect", "image"] }
 rfd = "0.17"
 directories.workspace = true
 webbrowser = "1"
