@@ -76,7 +76,7 @@ jobs:
             -e examples/local.environment.json --reporter junit --out junit.xml
           ./target/debug/pakpos-cli run examples/pakpos-demo.collection.json \
             -e examples/local.environment.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: junit-report
@@ -155,7 +155,7 @@ jobs:
           APPIMAGETOOL=$PWD/appimagetool packaging/linux/build-packages.sh "$V" x86_64 dist
       - name: Install and start on Ubuntu and Fedora
         run: packaging/linux/test-packages.sh dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: linux-package-screenshots
