@@ -88,11 +88,11 @@ jobs:
         run: |
           packaging/linux/test-packages.sh dist
           mkdir -p screenshots && mv dist/screenshots/* screenshots/ && rmdir dist/screenshots
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}-screenshots
           path: screenshots/*
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
           path: dist/*
@@ -126,7 +126,7 @@ jobs:
       - name: Upload executables for signing
         id: unsigned-exe
         if: vars.SIGNPATH_ORGANIZATION_ID != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-exe-${{ matrix.arch }}
           path: |
@@ -165,7 +165,7 @@ jobs:
       - name: Upload installer for signing
         id: unsigned-setup
         if: vars.SIGNPATH_ORGANIZATION_ID != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-setup-${{ matrix.arch }}
           path: dist/*-setup.exe
@@ -191,7 +191,7 @@ jobs:
             if ($s.Status -ne "Valid") { throw "$f is not signed: $($s.Status)" }
             Write-Host "$f signed by $($s.SignerCertificate.Subject)"
           }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-${{ matrix.arch }}
           path: dist/*
@@ -210,7 +210,7 @@ jobs:
       - run: cargo build --release --locked --workspace --target aarch64-apple-darwin
       - run: cargo build --release --locked --workspace --target x86_64-apple-darwin
       - run: packaging/macos/make-dmg.sh ${{ needs.meta.outputs.version }} dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-universal
           path: dist/*
